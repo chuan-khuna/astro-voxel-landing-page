@@ -69,6 +69,7 @@ export const FIXED_COLOURS = {
   metal: oklch(0.62, 0.02, 250),
   metalDark: oklch(0.48, 0.02, 250),
   concrete: oklch(0.76, 0.012, 80),
+  flagRed: oklch(0.56, 0.1, 28),
   // Boats (Clients) and ships (Partners).
   hullRed: oklch(0.52, 0.09, 30),
   hullNavy: oklch(0.4, 0.06, 255),

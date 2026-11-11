@@ -6,7 +6,8 @@
  * from the `pages` collection in a panel over the World; the Station's also
  * lists every Service, the Garden's every Project (each Project's page is
  * `garden/[slug].astro`), the Dock's every Client and Partner, and Team's
- * every Team Member. About links on to Team (as does the developer in the
+ * every Team Member, and Contact's the company's contact details (no form).
+ * About links on to Team (as does the developer in the
  * World's open House).
  */
 import type { GetStaticPaths } from 'astro';
@@ -17,6 +18,7 @@ import ProjectList from '../components/ProjectList.astro';
 import ServiceList from '../components/ServiceList.astro';
 import DockList from '../components/DockList.astro';
 import TeamList from '../components/TeamList.astro';
+import ContactList from '../components/ContactList.astro';
 import { site } from '../data/site';
 
 export const getStaticPaths = (async () => {
@@ -52,48 +54,11 @@ const team = site.landmarks.find((l) => l.id === 'house-interior')!;
       )
     }
     {landmark.id === 'house-interior' && <TeamList />}
-    {
-      landmark.id === 'mailbox' && (
-        <dl class="contact">
-          <dt>Email</dt>
-          <dd>
-            <a href={`mailto:${company.email}`}>{company.email}</a>
-          </dd>
-          <dt>Phone</dt>
-          <dd>
-            <a href={`tel:${company.phone.replaceAll(' ', '')}`}>{company.phone}</a>
-          </dd>
-          <dt>Address</dt>
-          <dd>{company.address}</dd>
-          {company.socials.map((social) => (
-            <>
-              <dt>{social.label}</dt>
-              <dd>
-                <a href={social.url}>{social.url.replace(/^https:\/\//, '')}</a>
-              </dd>
-            </>
-          ))}
-        </dl>
-      )
-    }
+    {landmark.id === 'mailbox' && <ContactList />}
   </SectionPanel>
 </WorldPage>
 
 <style>
-  .contact {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.35rem 1rem;
-    margin: 1rem 0 0;
-  }
-  .contact dt {
-    font-weight: 600;
-  }
-  .contact dd {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-  .contact a,
   .next a {
     color: var(--brand-ink);
   }

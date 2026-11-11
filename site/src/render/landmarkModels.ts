@@ -1,7 +1,7 @@
 /**
- * Landmark models in ¼-unit voxels, one per placed Landmark. The Station's
- * and the House's are real models (tickets 09 and 11; the House's lives in
- * `houseModel.ts`); the others are simple placeholders, which real models
+ * Landmark models in ¼-unit voxels, one per placed Landmark. The Station's,
+ * the House's and the Mailbox's are real models (tickets 09, 11 and 12; the
+ * House's lives in `houseModel.ts`); the others are simple placeholders, which real models
  * replace in later tickets by changing only this module.
  *
  * Each model fills its Landmark's footprint. It is drawn into the detail
@@ -115,11 +115,25 @@ const MODELS: Record<PlacedLandmarkId, Model> = {
       }
     }
   },
-  /** A post with a blue box. */
-  mailbox: ({ box }, { fixed }) => {
-    box(1, 0, 1, 3, 3, 3, fixed('trunk'));
-    box(0, 3, 0, 4, 6, 4, fixed('blueTrim'));
-    box(1, 6, 1, 3, 7, 3, fixed('blueDoor'));
+  /**
+   * The Mailbox (1×1, so 4×4 here; 8 tall): a flagstone pad; a wooden post;
+   * a blue box on it, long front to back, with a darker lid and a darker door
+   * on its front (+z), and a letter poking out above the door; a red flag
+   * raised on its +x side, the side the camera sees, up to the model's top;
+   * and a flower at the pad's front corner.
+   */
+  mailbox: ({ box, set }, { fixed, biome }) => {
+    box(0, 0, 0, 4, 1, 4, fixed('concrete'));
+    box(1, 1, 1, 3, 4, 3, fixed('trunk'));
+    box(1, 4, 0, 3, 6, 3, fixed('blueTrim'));
+    box(1, 6, 0, 3, 7, 3, fixed('blueDoor'));
+    box(1, 4, 3, 3, 6, 4, fixed('blueDoor'));
+    set(1, 6, 3, fixed('sail'));
+    // The flag: an arm up the box's side, its red pennant at the top.
+    box(3, 4, 1, 4, 7, 2, fixed('metalDark'));
+    box(3, 7, 1, 4, 8, 3, fixed('flagRed'));
+    set(0, 1, 3, fixed('bougainvillea'));
+    set(3, 1, 3, biome('foliage', -0.04));
   },
 };
 

@@ -4,12 +4,12 @@
 
 **Blocked by:** 03, 07
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Spec: `.scratch/voxel-world-landing/spec.md`
 
-- [ ] The Mailbox has a voxel model
-- [ ] `/contact` shows email, phone, address and socials from the site data module
-- [ ] There is no form and nothing is submitted
-- [ ] `astro check` and `astro build` pass
-- [ ] Documents under `docs/documents/` and its INDEX are updated for anything this ticket adds or changes
+- [x] The Mailbox has a voxel model
+- [x] `/contact` shows email, phone, address and socials from the site data module
+- [x] There is no form and nothing is submitted
+- [x] `astro check` and `astro build` pass
+- [x] Documents under `docs/documents/` and its INDEX are updated for anything this ticket adds or changes

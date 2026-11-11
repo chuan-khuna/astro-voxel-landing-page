@@ -301,6 +301,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - the Guide's name
 - the Landmark list: id, route, label, Story Order
 - Data Card metrics, each keyed to a Landmark id
+- **Done (ticket 12).** `/contact` (the Mailbox's section) lists the email (`mailto:`), phone (`tel:`), address and each social from `site.company`, in an `<address>`; the list is `contactDetails` in `site/src/lib/contactDetails.ts`. Information only: there is no form and nothing is submitted. The Mailbox (1×1) has its real voxel model: a blue box on a wooden post, a letter at its door and a red flag raised on the side the camera sees.
 
 **Content collections.** They are defined with Astro's content layer, using glob loaders and Zod schemas:
 

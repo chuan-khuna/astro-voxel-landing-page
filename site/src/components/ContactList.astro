@@ -1,0 +1,46 @@
+---
+/**
+ * The Contact panel's details (the Mailbox's section): email, phone,
+ * address and socials, from the site data module (`contactDetails`).
+ * Information only: there is no form and nothing is submitted.
+ */
+import { contactDetails } from '../lib/contactDetails';
+import { site } from '../data/site';
+
+const details = contactDetails(site.company);
+---
+
+<address class="contact">
+  <dl>
+    {
+      details.map(({ label, text, href, external }) => (
+        <>
+          <dt>{label}</dt>
+          <dd>{href ? <a href={href} rel={external ? 'me noopener' : undefined}>{text}</a> : text}</dd>
+        </>
+      ))
+    }
+  </dl>
+</address>
+
+<style>
+  .contact {
+    font-style: normal;
+  }
+  dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.35rem 1rem;
+    margin: 1rem 0 0;
+  }
+  dt {
+    font-family: var(--font-heading);
+  }
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  a {
+    color: var(--brand-ink);
+  }
+</style>

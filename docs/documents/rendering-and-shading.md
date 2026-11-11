@@ -65,7 +65,7 @@ with its origin at the min corner of the Landmark's footprint (see
 above the ground. Each model gets its footprint's size in ¼ voxels
 (`4 × width` by `4 × depth`), its ground height, and, in local ¼ voxels, the
 Garden's tree cells and the Dock's jetty cells, and fills that footprint.
-The Station and the House have their real models (tickets 09 and 11); the others are simple placeholders:
+The Station, the House and the Mailbox have their real models (tickets 09, 11 and 12); the Garden and the Dock are simple placeholders:
 
 | Landmark | Model |
 |---|---|
@@ -73,12 +73,12 @@ The Station and the House have their real models (tickets 09 and 11); the others
 | House (3×3) | its base and room (`houseModel.ts`; see "The House and its room"). Its lid is a mesh of its own, but `landmarkExtent` counts it, shut, so the hotspot covers the whole House. |
 | Garden | one tree per tree cell, each filling its cell (trunk, 4×4 canopy); a flower in every other cell |
 | Dock (2×1) | a plank platform on the land cells; a plank deck level with the ground over each jetty cell, on posts down to the sea floor |
-| Mailbox (1×1) | a post with a blue box the width of the cell |
+| Mailbox (1×1) | a flagstone pad; a wooden post; a blue box on it, long front to back, with a darker lid, a darker door on its front (+z) and a white letter poking up at the door; a red flag (`flagRed`) raised on its +x side, the side the camera sees, to the top (8 ¼ voxels, 2 units, up); a flower at the pad's front corner |
 
 `landmarkModels.test.ts` checks that every model reaches every footprint
 (and jetty) cell and nothing outside it, that each tree's canopy fills
 its cell, and that `treeExtent` (a tree's box, for its link) is its cell up
-to the top of its canopy, 2 units tall. Later tickets replace a model by editing its entry in `MODELS`;
+to the top of its canopy, 2 units tall, and that the Mailbox measures one cell by 2 units tall with its red flag on its +x side, up to its top. Later tickets replace a model by editing its entry in `MODELS`;
 the `variant` field is passed through for when more variants exist.
 
 ## Mesher
@@ -488,4 +488,4 @@ add most of the remaining triangles.
 ## Not yet built
 
 Day/Night lighting, animation of water and trees, boat and ship kinds, the reduced-decoration tier,
-real models for the Garden, Dock and Mailbox, House Variants and one room per Biome, and the Guide's dissolve and re-form on a new Seed.
+real models for the Garden and Dock, House Variants and one room per Biome, and the Guide's dissolve and re-form on a new Seed.

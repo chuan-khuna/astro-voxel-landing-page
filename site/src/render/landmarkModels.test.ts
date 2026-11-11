@@ -67,6 +67,29 @@ describe('landmarkExtent', () => {
   });
 });
 
+describe('the Mailbox', () => {
+  it('measures one cell across and 2 units tall: a box on a post, its flag raised above it', () => {
+    for (const world of worlds) {
+      const mailbox = world.landmarks.find((l) => l.id === 'mailbox')!;
+      expect(landmarkExtent(mailbox), world.seed).toEqual({ min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 2, z: 1 } });
+    }
+  });
+
+  it('raises a red flag on the side the camera sees (+x), up to its top', () => {
+    const world = worlds[0]!;
+    const mailbox = world.landmarks.find((l) => l.id === 'mailbox')!;
+    const grid = new VoxelGrid(1 / DETAIL);
+    const colours = worldColours(world);
+    buildLandmark(mailbox, grid, colours);
+    const red = colours.fixed('flagRed');
+    const flag = [...grid.voxels()].filter((v) => v.colour === red);
+    expect(flag.length).toBeGreaterThan(0);
+    const { x, y } = { x: mailbox.footprint.origin.x * DETAIL, y: mailbox.y * DETAIL };
+    for (const v of flag) expect(v.x - x).toBe(DETAIL - 1);
+    expect(Math.max(...flag.map((v) => v.y - y))).toBe(2 * DETAIL - 1);
+  });
+});
+
 describe('treeExtent', () => {
   it('is the box of one tree: its cell, from the ground up to the top of its canopy', () => {
     for (const world of worlds) {

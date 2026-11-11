@@ -48,6 +48,7 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`), camera rig (pan, zoom and flights), Landmark focus and hotspots. See `rendering-and-shading.md`. |
 | `src/lib/seedUrl.ts` | The Seed in the URL: `seedFromUrl`, `rollSeed` (numeric) and `withSeed` (keep the Seed on a route link). Tested in `seedUrl.test.ts`. |
 | `src/lib/gardenTrees.ts` | `treeOrder(projects)`: Projects sorted by id (tree order). `gardenTrees(world, projectIds)`: the World's tree cells, each paired with its Project (tree `k` is the `k`-th Project by id; none beyond the cap). Tested in `gardenTrees.test.ts`. |
+| `src/lib/contactDetails.ts` | `contactDetails(company)`: the Contact panel's details, from `site.company`: email, phone, address, then each social, each with a label, the text shown and a link (none for the address). Tested in `contactDetails.test.ts`. |
 | `src/lib/landmarkRoutes.ts` | `landmarkForPath(pathname)`: the Landmark a route belongs to, from the Landmark list. A trailing slash and `index.html` are ignored, `/garden/<slug>` belongs to the Garden, and any other route gives `null`. `routeView(id)`: what the World shows for it: the Landmark the camera goes to, and whether the House is open (About and Team both open it and go to the House Interior). Tested in `landmarkRoutes.test.ts`. |
 | `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order: a floating rounded bar, collapsing below 60rem into a menu button that opens the list as a popover (the Popover API, so it needs no JS). Its links carry `data-seed-link`, so they keep a rolled Seed; the current section's link has `aria-current="page"`. |
 | `src/components/Logo.astro` | The logo mark beside the company name: one isometric voxel in three shades of the brand colour. |
@@ -56,10 +57,11 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/components/ProjectList.astro` | The Garden's list of every Project in tree order: title (a link to its page), Client, year and summary. |
 | `src/components/DockList.astro` | The Dock's two lists: Clients (by id) and Partners (closest tier first), each with its logo or initials. |
 | `src/components/TeamList.astro` | Team's list of every Team Member in `order`: avatar or initials, name, role and bio. |
+| `src/components/ContactList.astro` | Contact's details (`contactDetails`) as a definition list in an `<address>`. |
 | `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), Astro's `<ClientRouter />`, the self-hosted Jersey fonts, the colour, card and font tokens, and the inline script that turns on the full-screen layout (`data-world="live"`). |
 | `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's tree links and the Data Cards, and the HUD floating over it (company name, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice button), and the client script that runs the World across routes. |
 | `src/pages/index.astro` | The home page: the World and the home hook. |
-| `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project, the Dock's every Client and Partner, and Team's every Team Member; About links on to Team. |
+| `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project, the Dock's every Client and Partner, Team's every Team Member, and Contact the company's contact details; About links on to Team. |
 | `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. |
 
 Company identity, the fonts, the default Seed, the Landmark list and the
@@ -77,8 +79,7 @@ Partners. Team Members do not change the World.
 - **Section pages:** the same, with the section's panel over the World. The
   panel's heading is the page's `h1` (the company name becomes a link home),
   the title is `<section> · <company>`, and the description comes from the
-  `pages` entry. The Contact panel also lists the email, phone, address and
-  socials from site data.
+  `pages` entry.
 - **Services (`/services`):** the intro copy, then every Service in `order`
   (then by id): an icon, the title, the summary and the body.
 - **Garden (`/garden`):** the intro copy, then every Project in tree order
@@ -96,6 +97,12 @@ Partners. Team Members do not change the World.
 - **Team (`/about/team`):** the intro copy, then every Team Member in
   `order` (then by id): their avatar (or initials), name, role and bio.
   The House stays open, and the developer's link in it is marked current.
+- **Contact (`/contact`):** the intro copy, then the company's contact
+  details from site data (`contactDetails`), in an `<address>`: email
+  (a `mailto:` link), phone (a `tel:` link, digits and a leading `+` only),
+  address (plain text) and each social (a link shown without its scheme,
+  `rel="me noopener"`). Information only: there is no form and nothing is
+  submitted. The camera goes to the Mailbox.
 - **Project pages (`/garden/<id>`):** the panel's heading is the Project's
   title, then a link back to all Projects, the Client and year, the tags, the
   cover image if any, the summary (also the meta description) and the case
