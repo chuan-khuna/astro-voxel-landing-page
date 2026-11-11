@@ -20,14 +20,14 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 
 | File | What it does | three.js? |
 |---|---|---|
-| `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, its room and developer, building materials for the House Variants, placeholder parts, boat and ship hulls and sail, the buoys' lamp) as OKLCH, `oklchToLinear`. The sky and lights are theme tokens (`data/theme.ts`). | no |
+| `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, its room and developer, building materials for the Landmark Variants, placeholder parts, boat and ship hulls and sail, the buoys' lamp) as OKLCH, `oklchToLinear`. The sky and lights are theme tokens (`data/theme.ts`). | no |
 | `voxelTiers.ts` | The voxel sizes of ADR 0006, as voxels per unit: `TERRAIN` 1, `GROUND_DETAIL` 4, `STRUCTURE` 8, `INTERIOR` 16. | no |
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid, the ¼-unit detail grid and the ⅛-unit structure grid with a shared colour list. `drawDetail(world, grid, colours, drawn?)`: the detail grid's parts in order (bridges, stairs, each Landmark, boats, buoys), telling `drawn` after each. `meshWorld(world)`: the three grids meshed. | no |
-| `structureModels.ts` | Structures placed in a World (see `voxel-structures.md`): `structureColour` (a colour role's id), `drawStructure` (a structure, or one part, at a placement, turned to its door), `houseStructure` and `housePlacement` (the World's House Variant and where it stands), `drawStructures` (the structure grid's contents), `houseWindowFaces` (the lit window faces) and `HOUSE_HEIGHT`. | no |
+| `structureModels.ts` | Structures placed in a World (see `voxel-structures.md`): `structureColour` (a colour role's id), `drawStructure` (a structure, or one part, at a placement, turned to its door), `landmarkStructure` and `landmarkPlacement` (a placed Landmark's Variant, and where and which way it stands), `houseStructure` and `housePlacement` (the same for the House), `drawStructures` (the structure grid's contents) and `houseWindowFaces` (the lit window faces). | no |
 | `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, trees, House room, boats, ships, buoys, bridges, stairs), the total and those in the three meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); trees are the voxels in each tree's box (`treeExtent`), the House room all the House draws in the detail grid plus the developer's moving parts; the House's structure (base and lid, ⅛ unit) counts with the Landmarks; ships are `shipVoxels` × ships. About 2 ms. | no |
 | `frameMeter.ts` | `createFrameMeter()`: FPS and frame time from frame timestamps, smoothed (exponential, 0.1); a gap over 250 ms ends a burst and the next starts afresh; `'idle'` with no frame for 500 ms or only a lone frame. | no |
-| `landmarkModels.ts` | The code-built ¼-unit Landmark models (the Station's and the Mailbox's are real models, the Garden's and Dock's placeholders; for the House, only its room), each filling its footprint, and `landmarkExtent(landmark)`: the box a Landmark covers, measured from what its model draws and never smaller than its footprint (for the House, the House's 3×3 up to its roof). | no |
+| `landmarkModels.ts` | The ¼-unit parts of the Landmarks (the Garden's placeholder trees, the Dock's deck and jetty, the House's room), and `landmarkExtent(world, landmark)`: the box a Landmark covers, measured from its ¼-unit parts and its Variant's structure and never smaller than its footprint (for the House, the House's 3×3 up to its roof). | no |
 | `buoyModel.ts` | `drawBuoy(cell, grid, colours)`: a buoy in the detail grid; `buoyLamp(cell)`: its lamp's box, which glows at Night. | no |
 | `houseModel.ts` | The House's room, in ¼ voxels: `drawHouseRoom` (desk, computer, chair, plant, the developer's seated body) in `HOUSE_INTERIOR`, the developer's moving parts (`DEVELOPER_PARTS`, `drawDeveloperPart`), the `SCREEN` rectangle and `developerExtent` (the developer's box, for their link). The House round it is a structure. | no |
 | `houseMotion.ts` | `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame) and `developerPose(seconds)` (typing and reading). | no |
@@ -67,8 +67,8 @@ each in its own integer voxel coordinates (voxel `(x, y, z)` spans world
 | Grid | Voxel size | Contents |
 |---|---|---|
 | terrain | 1 unit (`TERRAIN`) | Every land column from y = 0 to its height. The top voxel takes the surface colour (sand, grass, peak) or the path colour (the path's cells, and the House yard's cell in front of its door); buried voxels take their stratum's colour. |
-| detail | ¼ unit (`GROUND_DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the code-built Landmark models, each filling its footprint, the House's room, the Clients' moored boats and the buoys. |
-| structure | ⅛ unit (`STRUCTURE = 8` per unit) | Placed structures (`structureModels.ts`, `voxel-structures.md`): today the House Variant's base (its lid is a mesh of its own). The Station, Garden, Dock, Mailbox, boats and ships move here as later tickets redraw them. |
+| detail | ¼ unit (`GROUND_DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Garden and the Dock's deck and jetty (`landmarkModels.ts`), the House's room, the Clients' moored boats and the buoys. |
+| structure | ⅛ unit (`STRUCTURE = 8` per unit) | Placed structures (`structureModels.ts`, `voxel-structures.md`): each Landmark's Variant: the House's base (its lid is a mesh of its own), the Station, the Mailbox and the things on the Dock's deck. The Garden, boats and ships move here as later tickets redraw them. |
 
 The House Interior's tier (`INTERIOR`, 1/16 unit) belongs to its own scene
 (polish ticket 04); until then the room stays at ¼ unit.
@@ -87,21 +87,27 @@ with its origin at the min corner of the Landmark's footprint (see
 above the ground. Each model gets its footprint's size in ¼ voxels
 (`4 × width` by `4 × depth`), its ground height, and, in local ¼ voxels, the
 Garden's tree cells and the Dock's jetty cells, and fills that footprint.
-The Station, the House and the Mailbox have their real models (tickets 09, 11 and 12); the Garden and the Dock are simple placeholders:
+Since polish ticket 03 most of what a Landmark shows is its Variant's ⅛-unit
+structure (`structureModels.ts`, `voxel-structures.md`); only these stay at ¼ unit:
 
-| Landmark | Model |
+| Landmark | ¼-unit model |
 |---|---|
-| Station (2×2) | the data station: a concrete pad; a metal control hut with a blue door and windows on the two faces the camera sees, a flat roof and a dish on it; a thin lattice mast at the back corner topped by an accent light (17 ¼ voxels up); two server cabinets with accent status lights and a data tank in the front yard. Tall parts stand at the back, so nothing hides the door. |
-| House (4×4 plot) | only its room (`houseModel.ts`; see "The House and its room"); the House is a structure. `landmarkExtent` is the House's own 3×3 up to its roof (`HOUSE_HEIGHT`, the tallest Variant), not its yard, where the Mailbox has a box of its own. |
-| Garden | one tree per tree cell, each filling its cell (trunk, 4×4 canopy); a flower in every other cell |
-| Dock (2×1) | a plank platform on the land cells; a plank deck level with the ground over each jetty cell, on posts down to the sea floor |
-| Mailbox (1×1, in the House's yard) | a flagstone pad; a wooden post; a blue box on it, long front to back, with a darker lid, a darker door on its front (+z) and a white letter poking up at the door; a red flag (`flagRed`) raised on its +x side, the side the camera sees, to the top (8 ¼ voxels, 2 units, up); a flower at the pad's front corner |
+| Station (2×2) | none: the Station is its Variant's structure |
+| House (4×4 plot) | only its room (`houseModel.ts`; see "The House and its room"); the House is a structure |
+| Garden | one tree per tree cell, each filling its cell (trunk, 4×4 canopy); a flower in every other cell (a placeholder until polish ticket 05) |
+| Dock (2×1) | a plank platform on the land cells (ground detail, ADR 0006), which the Variant's things stand on; a plank deck level with the ground over each jetty cell, on posts down to the sea floor |
+| Mailbox (in the House's yard) | none: the Mailbox is its Variant's structure |
 
-`landmarkModels.test.ts` checks that every model but the House's reaches every footprint
-(and jetty) cell and nothing outside it, that the House draws only its room, within its 3×3, that each tree's canopy fills
-its cell, and that `treeExtent` (a tree's box, for its link) is its cell up
-to the top of its canopy, 2 units tall, and that the Mailbox measures one cell by 2 units tall with its red flag on its +x side, up to its top. Later tickets replace a model by editing its entry in `MODELS`;
-the `variant` field is passed through for when more variants exist.
+`landmarkExtent(world, landmark)` is the box of both: the ¼-unit model and
+the Variant's structure as placed (the House whole, lid on, over its own
+3×3, not its yard, where the Mailbox has a box of its own).
+`landmarkModels.test.ts` checks that the Station and the Mailbox draw nothing
+at ¼ unit, that the Garden and the Dock reach every footprint (and jetty) cell
+and nothing outside it, that the House draws only its room, within its 3×3,
+that each tree's canopy fills its cell, that `treeExtent` (a tree's box, for
+its link) is its cell up to the top of its canopy, 2 units tall, and that each
+Landmark's box stays within `LANDMARK_HEIGHT` (the Station 5–6 units, the
+Mailbox 1–1.25 in its cell, the Dock's things at most 1).
 
 ## Mesher
 
@@ -218,9 +224,10 @@ exactly.
 
 ## The House and its room
 
-The House is a structure (polish ticket 01): one Variant per Biome, drawn as
-an ASCII file at ⅛ unit, 24×24 on the House's 3×3 at its plot's origin (see
-`voxel-structures.md` for the four Variants). It stands with its door
+The House is a structure (polish ticket 01): three Variants per Biome (polish
+ticket 03), the Seed's pick, each drawn as an ASCII file at ⅛ unit, 24×24 on
+the House's 3×3 at its plot's origin (see `voxel-structures.md` for the
+Variants). It stands with its door
 south or east, the way the World says (`world-generator.md`, "House
 plot"), mirrored by swapping x and z (so the front walls stay on the camera side; a chimney or side window swaps sides). Its voxels come in two parts, so the
 roof can lift off and show a room inside, like a doll's house; the room is
@@ -672,12 +679,14 @@ on the site's own content, `data-triangles` reads 7,830–10,832 over `lighthous
 `lanternfish`, `42`, `harbour`, `694157692` and `seed-7`. The camera's pan bounds, zoom range
 and Overview framing need no change: they follow `views.overview` and the Isles' bounds;
 the sun's shadow camera covers the larger grid (about 1.35× wider) with the same map, so shadows are
-about three quarters as sharp. Real tree models and decoration (later tickets) will
+about three quarters as sharp. Polish ticket 03 moved the Station, the Mailbox and the
+Dock's things to ⅛-unit Variants and added two more House Variants per Biome: on the same
+Seeds `data-triangles` now reads 9,240–12,326 (`lighthouse` 9,726, up about 1,000), the
+Station's mast and the round tower's cap costing the most. Real tree models and decoration (later tickets) will
 add most of the remaining triangles.
 
 ## Not yet built
 
 Animation of water and trees, boat and ship kinds, the reduced-decoration tier,
-structures for the Station, Garden, Dock, Mailbox, boats and ships, more
-than one House Variant per Biome (polish ticket 03), and one room per Biome
+structures for the Garden, boats and ships, and one room per Biome
 at 1/16 unit (polish ticket 04).

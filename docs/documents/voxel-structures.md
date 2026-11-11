@@ -5,7 +5,8 @@ Predefined voxel models drawn as ASCII files (ADR 0004) at ⅛ unit (ADR
 structure is placed in a World or repeated with instancing, and how to
 review structures in the Model Gallery.
 
-- Files: `site/src/structures/` (`house/<biome>-<variant>.structure`)
+- Files: `site/src/structures/<kind>/<biome>-<variant>.structure` (`house`,
+  `station`, `mailbox`, `dock`)
 - Code: `site/src/structures/` (parser, roles, registry, Vite plugin),
   `site/src/render/structureModels.ts` (placing), `structureMeshes.ts`
   (instancing), `site/src/dev/` and `site/src/integrations/modelGallery.ts`
@@ -42,12 +43,12 @@ layers 2-7
 
 | Field | Meaning |
 |---|---|
-| `kind` | What the structure is: `house` today; later Station, Mailbox, trees, flowers, boats, ships, Decoration, creatures. |
+| `kind` | What the structure is: a Landmark (`house`, `station`, `mailbox`, `dock`) today; later trees, flowers, boats, ships, Decoration, creatures. |
 | `biome` | The Biome whose style it is (`tropical`, `northern`, `autumn`, `volcanic`), or `any` for one shared by every Biome. |
 | `variant` | Its Variant number within that kind and Biome, from 1 with no gaps. |
 | `footprint` | Its footprint in cells, `<width>x<depth>`; each cell is 8 voxels, so every layer is `8 × width` characters wide and `8 × depth` rows deep. |
 | `door` | The face its door is on, `+x`, `-x`, `+z` or `-z`, or `none`. Draw doors on `+z` (south): a placement turns the structure to face its Landmark's way. |
-| `anchor` | The voxel corner (x, y, z) that stands on the footprint's min corner, on the ground. `0 0 0` for anything that stands on its footprint; a boat's anchor will sit at its waterline. |
+| `anchor` | The voxel corner (x, y, z) that stands on the footprint's min corner, on the ground. `0 0 0` for anything that stands on its footprint; the Dock's things use `0 -2 0`, so their first layer stands on the Dock's ¼-unit deck; a boat's anchor will sit at its waterline. |
 | `interior` | Optional: a box of voxels (min x y z, then max x y z, max exclusive) that must stay empty, for a room. |
 | `key:` | One line per character: the character, a colour role, and optionally a part (`lid`; the default is `base`). |
 | `layer N` / `layers A-B` | One block of rows for layer N, or the same block for every layer A to B. Every layer from 0 to the top appears exactly once. |
@@ -70,10 +71,10 @@ the terrain:
 
 | Group | Roles |
 |---|---|
-| Ground and floors | `plinth`, `floor`, `rug`, `post`, `deck`, `deckDark` |
+| Ground and floors | `plinth`, `concrete`, `floor`, `rug`, `post`, `deck`, `deckDark` |
 | Walls | `wall`, `wallShade`, `bamboo`, `bambooDark`, `timber`, `timberDark`, `brick`, `brickDark`, `mortar`, `stone`, `stoneDark` |
 | Roofs | `roof`, `thatch`, `thatchDark`, `shingle`, `shingleDark`, `tile`, `tileDark`, `slate`, `slateDark`, `snow` |
-| Openings and trim | `door`, `doorWood`, `window`, `frame`, `trim`, `accent` (the Biome's accent), `metal` |
+| Openings and trim | `door`, `doorWood`, `window`, `frame`, `trim`, `accent` (the Biome's accent), `metal`, `metalDark`, `flag` (a mailbox's red flag), `canvas` (sail, awning, rope), `lamp` |
 | Plants | `foliage`, `foliageLight` (the Biome's foliage), `flower`, `flowerLight` |
 
 A new material is a new role in `roles.ts` (and, if needed, a fixed colour
@@ -121,12 +122,18 @@ biome)` lists one kind's Variants for a Biome.
   quarter turn: it keeps the front walls on the camera's two sides, so the
   lid still opens the room to the camera, but a chimney or side window swaps
   sides. The Gallery's **Turn** shows quarter turns, not this mirror.
-- `drawHousePart(world, colours, part, paint)`: one part of the World's
-  House Variant where the House stands.
-- `houseStructure(world)` (the World's Biome's House Variant, by the
-  House's `variant`), `housePlacement(house)` (its plot's origin, on the
-  ground, its door the House's way) and `drawStructures(world, …)` (the
-  World's structure grid: today the House's base).
+- `landmarkStructure(world, landmark)`: the Landmark's Variant, the file of
+  its kind in the World's Biome numbered by the Landmark's `variant` (the
+  generator's pick, `world-generator.md`). The Garden has none yet.
+- `landmarkPlacement(world, landmark)`: its footprint's origin, on the
+  ground. The House faces its door (`housePlacement`: its plot's origin);
+  the Mailbox faces the same way, onto the yard; a Dock whose footprint
+  runs north to south (1×2) is laid along it with the `east` mirror; the
+  Station faces south.
+- `drawHousePart(world, colours, part, paint)` and `houseStructure(world)`:
+  one part of the World's House Variant, and that Variant.
+- `drawStructures(world, …)`: the World's structure grid: the House's base,
+  the Station, the Mailbox and the Dock's things.
 - `houseWindowFaces(world)`: the open +x and +z faces of window glass, lit
   at Night (`rendering-and-shading.md`, "The House and its room").
 
@@ -146,28 +153,97 @@ quarter turn takes +z to +x). Copies move by whole voxels and turn by
 quarter turns, so their seams stay on voxel edges. The Model Gallery uses
 it today; Garden plants (polish ticket 05) are the first World use.
 
-## The House Variants
+## The Landmark Variants
 
-One per Biome for now (polish ticket 03 adds 2–3 per Biome). Each is 24×24
-at ⅛ unit on the House's 3×3, 23–32 layers tall (3.5–4 units with the roof),
-with the door (4×10) in the middle of the +z wall, windows with shutters
-and sills on the two front walls, one window in each back wall, eaves
-overhanging the walls by two voxels, and a shared interior box (x and z
-4–20, y 2–20) that holds the ¼-unit room:
+Each Landmark but the Garden has one style per Biome and a few Variants in
+it (polish ticket 03): the House 3, the Station 2, the Mailbox 3 and the Dock
+2 per Biome, 40 files in all. The counts are `LANDMARK_VARIANTS` in
+`world/landmarks.ts`, which the generator picks from; a data test holds
+the files to it. The Garden's plants come in polish ticket 05.
 
-| Biome | Variant 1 |
-|---|---|
-| tropical | a stilt house: bamboo walls on a plank deck on posts, pink shutters and flower boxes, a steep thatched hip roof with a finial in place of a chimney |
-| northern | a log cabin: alternating log walls on a stone plinth, a steep shingled gable roof under snow, a stone chimney on the back slope |
-| autumn | a brick cottage: running-bond brick on a stone plinth, green door and shutters, flower boxes, a tiled gable roof (gable to the front), a brick chimney |
-| volcanic | a squat stone house: dark stone blocks, a low slate hip roof, a chimney with an ember glowing in it |
+Except the first House of each Biome (polish ticket 01), they were drawn
+with throwaway generator scripts (a roof generator for the House; box, disc
+and cone helpers for the rest) and committed as plain ASCII; edit the files
+directly.
 
-The four were drawn with a throwaway generator script and then committed as
-plain ASCII; edit the files directly. `structures.test.ts` checks every
-House Variant: 3×3, 28–32 layers, the door on +z with a 4×10 opening, an
-interior box per Biome that holds the room and stays empty, a lid over
-every interior column, no base wall on the front sides above the floor,
-glass in the walls, and everything above the walls in the lid.
+### House
+
+24×24 at ⅛ unit on the House's 3×3, 32 layers (4 units with the roof or
+chimney), with the door (4×10) in the middle of the +z wall, windows with
+shutters and sills on the two front walls, one window in each back wall,
+eaves overhanging the walls by two voxels, and a shared interior box (x and
+z 4–20, y 2–20) that holds the ¼-unit room. Variants 2 and 3 keep Variant
+1's walls (layers 0–19) and change the roof, the chimney and the porch:
+
+| Biome | 1 | 2 | 3 |
+|---|---|---|---|
+| tropical | a stilt house: bamboo walls on a plank deck on posts, pink shutters and flower boxes, a steep thatched hip roof with a finial in place of a chimney | a thatched gable roof, its gable to the front (bamboo, with a window), and a thatched porch on bamboo posts over the door | a long thatched gable roof, its ridge east to west, a window in the east gable |
+| northern | a log cabin: alternating log walls on a stone plinth, a steep shingled gable roof (ridge east to west) under snow, a stone chimney on the back slope | a steep shingled hip roof, snow on its top, a shingled porch on log posts, a stone chimney at the back | a shingled gable roof to the front, a window in the gable, a stone chimney on the west slope |
+| autumn | a brick cottage: running-bond brick on a stone plinth, green door and shutters, flower boxes, a tiled gable roof (ridge north to south), a brick chimney | a tiled gable roof, ridge east to west, a tiled porch on wooden posts, a brick chimney at the back | a steep tiled hip roof with a brick chimney at the back corner |
+| volcanic | a squat stone house: dark stone blocks, a low slate hip roof, a chimney with an ember glowing in it | a low slate gable roof to the front, a slate porch on stone posts, an ember in the chimney | a steep slate hip roof, an ember in the chimney at the back corner |
+
+`structures.test.ts` checks every House Variant: 3×3, 28–32 layers, the
+door on +z with a 4×10 opening, an interior box per Biome that holds the
+room and stays empty, a lid over every interior column, no base wall on the
+front sides above the floor, glass in the walls, and everything above the
+walls in the lid. So every House Variant in a Biome has a liftable roof and
+the same interior space (the Biome's room, polish ticket 04, fits them all).
+
+### Station
+
+16×16 on its 2×2, 40–48 layers (5–6 units), door 4×10 on +z, tall parts at
+the back so nothing hides the door:
+
+- **1, a hut and mast:** a 10×10 hut one storey tall in the Biome's walls,
+  its door and a window on the front, a window on the east side; the Biome's
+  roof over it (tropical: thatched hip; northern: steep shingled gable under
+  snow; autumn: tiled gable; volcanic: flat slate with a parapet); a dish on
+  the roof's front corner; a lattice mast at the back corner with the accent
+  light on top (47 layers); two server cabinets with accent status lights
+  and a water tank in the yard, and a planter in the tropical and autumn
+  ones.
+- **2, a round tower:** a round tower three storeys tall in the Biome's
+  walls, its door on the front, a band of windows near the top and a gallery
+  ring; a conical cap (thatch in the tropics, tile in autumn) or a dome (a
+  white observatory dome with a slit in the north, slate with an ember-red
+  slit in the volcanic Biome); an antenna and its light on top; a dish on
+  the ground and a cabinet in the yard.
+
+### Mailbox
+
+8×8 on one cell of the House's yard, the box itself at most 6 voxels
+across, 10 layers (1.25 units), its front on +z (turned the way the House's
+door faces):
+
+- **1, a box on a post**, its flag raised on the +x side, the side the
+  camera sees (tropical: a pink box on bamboo; northern: a red box on a log
+  post under snow; autumn: a green box on wood; volcanic: a metal box on
+  iron, its flag ember red).
+- **2, a pillar** of the Biome's material (bamboo canes, stone, brick, dark
+  stone) with a letter slot and a plate on the front and a cap.
+- **3, a little house:** the box shaped like a house under the Biome's roof,
+  on a post.
+
+### Dock
+
+16×8 on its 2×1, standing on the Dock's ¼-unit plank deck (anchor `0 -2
+0`), at most 6 layers, so at most 1 unit above the ground:
+
+- **1, bollards and crates:** bollards at the four corners, a stack of
+  crates (bamboo, timber or stone) and a coil of rope; snow on the northern
+  crates.
+- **2, a lamp and barrels:** a lamp on a post (an ember lamp in the volcanic
+  Biome), barrels, a bollard, and the Biome's touch: a potted palm in the
+  tropics, pumpkins in autumn, a coil of rope otherwise.
+
+`structures.test.ts` checks every Landmark Variant: as many per Biome as
+`LANDMARK_VARIANTS`, numbered from 1; never taller above the ground than
+`LANDMARK_HEIGHT`; the Station 2×2, 40–48 layers, its door 4 wide and 10
+tall on the front; the Mailbox 1×1, 8–10 layers, its box at most 6 across;
+the Dock 2×1 on its deck, at most 1 unit up. `structureModels.test.ts`
+checks them in the World: each Landmark draws its own Variant from the
+World's Biome, fills its footprint on its ground, the Mailbox faces the
+House's door, and the Dock's things stand on its deck.
 
 ## Data tests
 
@@ -181,7 +257,7 @@ checks the format on a small inline structure, including its errors.
 
 `/dev/models` shows every structure of one kind (a picker) in a grid:
 Biomes across, then structures shared by every Biome, and Variants down,
-each on a patch of its Biome's grass with a label. On a tall screen (a
+each on a patch of its Biome's grass (the Dock's things on a plank deck, as in the World) with a label. On a tall screen (a
 phone) the Biomes wrap two to a band, each band with its Variants down it,
 so the models stay large enough to judge; the grid re-lays when the screen
 turns. It uses the World's

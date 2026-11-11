@@ -5,11 +5,11 @@
  *   the top voxel takes the surface (or path) colour, buried voxels their
  *   stratum's colour, so cliffs show layered bands.
  * - `detail`: ¼-unit voxels (`GROUND_DETAIL`) for what is built on the
- *   terrain and not yet a structure: bridge decks, stairs, the code-built
- *   Landmark models (each filling its footprint), the House's room, the
+ *   terrain and not yet a structure: bridge decks, stairs, the Garden and
+ *   the Dock's deck and jetty (`landmarkModels.ts`), the House's room, the
  *   Clients' moored boats and the buoys.
  * - `structure`: ⅛-unit voxels (`STRUCTURE`) for placed structures
- *   (`structureModels.ts`): today the House's base.
+ *   (`structureModels.ts`): the House's base, the Station, the Mailbox and the Dock's things.
  *
  * The grids index one shared colour list. See `voxelTiers.ts` for the tiers.
  */

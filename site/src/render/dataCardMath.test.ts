@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { generateWorld } from '../world';
+import { generateWorld } from '@/world';
 import { landmarkFocus } from './landmarkFocus';
 import { screenOffsetOf, stateShowing, type CameraLimits, type CameraState } from './cameraMath';
 import { dataCardAnchors, dataCardTransform, nearestDataCard, placeDataCard } from './dataCardMath';
@@ -144,8 +144,8 @@ describe('dataCardTransform', () => {
 describe('dataCardAnchors', () => {
   /** Screen height of a World point (frame units, up); any camera state gives the same order. */
   const height = (p: { x: number; y: number; z: number }) => screenOffsetOf({ target: { x: 0, z: 0 }, zoom: 1 }, p).y;
-  const corners = (l: (typeof worlds)[number]['landmarks'][number]) => {
-    const { min, max } = landmarkExtent(l);
+  const corners = (world: (typeof worlds)[number], l: (typeof worlds)[number]['landmarks'][number]) => {
+    const { min, max } = landmarkExtent(world, l);
     const o = l.footprint.origin;
     return [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
       x: o.x + (i & 1 ? max.x : min.x),
@@ -158,13 +158,13 @@ describe('dataCardAnchors', () => {
     for (const world of worlds) {
       for (const l of world.landmarks) {
         const { origin, width, depth } = l.footprint;
-        const { above, below } = dataCardAnchors(l);
+        const { above, below } = dataCardAnchors(world, l);
         for (const a of [above, below]) {
           expect(a.x, `${world.seed} ${l.id}`).toBe(origin.x + width / 2);
           expect(a.z, `${world.seed} ${l.id}`).toBe(origin.z + depth / 2);
         }
-        const top = Math.max(...corners(l).map(height));
-        const bottom = Math.min(...corners(l).map(height));
+        const top = Math.max(...corners(world, l).map(height));
+        const bottom = Math.min(...corners(world, l).map(height));
         expect(height(above), `${world.seed} ${l.id} above`).toBeGreaterThan(top);
         expect(height(above), `${world.seed} ${l.id} above`).toBeLessThan(top + 1);
         expect(height(below), `${world.seed} ${l.id} below`).toBeLessThan(bottom);
@@ -179,7 +179,7 @@ describe('placeDataCard', () => {
   const card = { width: 180, height: 64 };
   const world = worlds[0]!;
   const station = world.landmarks.find((l) => l.id === 'station')!;
-  const anchors = dataCardAnchors(station);
+  const anchors = dataCardAnchors(world, station);
   const focus = landmarkFocus(world, 'station');
   const halfHeight = world.views.overview.radius;
 

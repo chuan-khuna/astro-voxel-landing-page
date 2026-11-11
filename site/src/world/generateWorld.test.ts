@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, HOUSE_CELLS, LANDMARK_HEIGHT, MAX_BUOYS, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -432,6 +432,42 @@ describe('generateWorld', { timeout: 20_000 }, () => {
       expect(mailbox.footprint.cells, seed).toEqual([{ x: origin.x + 3, z: origin.z + 3 }]);
       expect(mailbox.y, seed).toBe(house.y);
       expect(mailbox.isle, seed).toBe(house.isle);
+    }
+  });
+
+  it('picks each Landmark\'s Variant from its Biome\'s set, and every Variant occurs across sampled Seeds', () => {
+    const seen = new Set<string>();
+    for (const seed of sampledSeeds) {
+      const world = worldFor(seed);
+      for (const l of world.landmarks) {
+        const count = LANDMARK_VARIANTS[world.biome.id][l.id];
+        expect(Number.isInteger(l.variant), `${seed} ${l.id}`).toBe(true);
+        expect(l.variant, `${seed} ${l.id}`).toBeGreaterThanOrEqual(1);
+        expect(l.variant, `${seed} ${l.id}`).toBeLessThanOrEqual(count);
+        seen.add(`${world.biome.id}/${l.id}/${l.variant}`);
+      }
+    }
+    for (const biome of BIOME_IDS) {
+      for (const id of PLACED) {
+        const count = LANDMARK_VARIANTS[biome][id as keyof (typeof LANDMARK_VARIANTS)[typeof biome]];
+        for (let v = 1; v <= count; v++) expect(seen.has(`${biome}/${id}/${v}`), `${biome}/${id}/${v}`).toBe(true);
+      }
+    }
+  });
+
+  it('gives 2–3 Variants to the House, Station, Mailbox and Dock in every Biome', () => {
+    for (const biome of BIOME_IDS) {
+      for (const id of ['house', 'station', 'mailbox', 'dock'] as const) {
+        expect(LANDMARK_VARIANTS[biome][id], `${biome} ${id}`).toBeGreaterThanOrEqual(2);
+        expect(LANDMARK_VARIANTS[biome][id], `${biome} ${id}`).toBeLessThanOrEqual(3);
+      }
+    }
+  });
+
+  it('keeps a Seed\'s Variants whatever the content counts, so a new Project never rebuilds the House', () => {
+    for (const seed of sampledSeeds) {
+      const variants = (w: World) => Object.fromEntries(w.landmarks.map((l) => [l.id, l.variant]));
+      expect(variants(generateWorld(seed, { projects: 24, clients: 12, partners: 6 })), seed).toEqual(variants(worldFor(seed)));
     }
   });
 

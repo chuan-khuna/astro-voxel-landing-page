@@ -15,6 +15,7 @@ export type RoleColour = { biome: BiomeColourRole; dl?: number } | { fixed: Fixe
 export const STRUCTURE_ROLES = {
   // Ground and floors.
   plinth: { fixed: 'plinth' },
+  concrete: { fixed: 'concrete' },
   floor: { fixed: 'floorWood' },
   rug: { fixed: 'rug' },
   post: { fixed: 'trunk' },
@@ -52,6 +53,13 @@ export const STRUCTURE_ROLES = {
   /** The Biome's accent: a trim, a shutter or an ember that changes with the Biome. */
   accent: { biome: 'accent' },
   metal: { fixed: 'metal' },
+  metalDark: { fixed: 'metalDark' },
+  /** A mailbox's red flag. */
+  flag: { fixed: 'flagRed' },
+  /** Pale cloth and rope: sails, awnings, a coil of rope. */
+  canvas: { fixed: 'sail' },
+  /** A lamp's glass. */
+  lamp: { fixed: 'lamp' },
   // Plants.
   foliage: { biome: 'foliage' },
   foliageLight: { biome: 'foliage', dl: 0.05 },

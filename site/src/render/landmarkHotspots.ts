@@ -99,7 +99,7 @@ export function createLandmarkHotspots(
         // a tree's link covers just its tree.
         const cell = landmark.footprint.origin;
         const origin = new THREE.Vector3(cell.x, landmark.y, cell.z);
-        const { min, max } = tree ? treeExtent(landmark, tree) : landmarkExtent(landmark);
+        const { min, max } = tree ? treeExtent(landmark, tree) : landmarkExtent(world, landmark);
         placed.push({
           link,
           box: new THREE.Box3(

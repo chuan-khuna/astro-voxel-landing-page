@@ -1,23 +1,22 @@
 /**
- * Code-built Landmark models in ¼-unit voxels, one per placed Landmark. The
- * Station's and the Mailbox's are real models (tickets 09 and 12); the
- * Garden's and the Dock's are simple placeholders. Each moves to an ASCII
- * structure at ⅛ unit (`structureModels.ts`) in a later polish ticket. The
- * House already has: its structure is drawn by `structureModels.ts` and
- * `house.ts`, and only its room (`houseModel.ts`) is drawn here.
+ * The ¼-unit parts of the Landmarks, drawn into the detail grid: the
+ * Garden (a placeholder until polish ticket 05), the Dock's plank deck and
+ * jetty on posts (ground detail, ADR 0006), and the House's room
+ * (`houseModel.ts`) until the House Interior (polish ticket 04). Everything
+ * else a Landmark shows is its Variant's ⅛-unit structure
+ * (`structureModels.ts`): the House, the Station, the Mailbox and the
+ * things on the Dock's deck.
  *
- * Each model fills its Landmark's footprint, but for the House's, whose
- * plot holds the House structure, its front yard and the Mailbox. It is drawn into the detail
- * grid with its origin at the min corner of the footprint's origin cell, on
- * top of the ground: local x runs 0 to `4 × width`, local z 0 to `4 × depth`,
- * and local y = 0 is the first voxel above the ground.
+ * A model is drawn with its origin at the min corner of the footprint's
+ * origin cell, on top of the ground: local x runs 0 to `4 × width`, local z
+ * 0 to `4 × depth`, and local y = 0 is the first voxel above the ground.
  */
-import { HOUSE_CELLS, type Cell, type PlacedLandmark, type PlacedLandmarkId } from '@/world';
+import { HOUSE_CELLS, type Cell, type PlacedLandmark, type PlacedLandmarkId, type World } from '@/world';
 import type { VoxelGrid } from './mesher';
 import type { WorldColours } from './worldVoxels';
-import { GROUND_DETAIL } from './voxelTiers';
+import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 import { drawHouseRoom, type HouseDraw } from './houseModel';
-import { HOUSE_HEIGHT } from './structureModels';
+import { drawStructure, landmarkPlacement, landmarkStructure } from './structureModels';
 
 interface Origin {
   x: number;
@@ -47,40 +46,8 @@ type Model = (draw: Draw, colours: WorldColours, shape: Shape) => void;
 const TREE_HEIGHT = 8;
 
 const MODELS: Record<PlacedLandmarkId, Model> = {
-  /**
-   * The data station (2×2, so 8×8 here): a concrete pad; a metal control hut
-   * with a blue door and windows on the faces the camera sees, a flat roof
-   * and a dish on it; a lattice mast at the back topped by an accent light;
-   * and, in the front yard, two server cabinets with status lights and a
-   * data tank. Taller parts stand at the back (low x and z) so they never
-   * hide the hut's door.
-   */
-  station: ({ box, set }, { fixed, biome }, { w, d }) => {
-    box(0, 0, 0, w, 1, d, fixed('concrete'));
-    // The hut, its roof overhanging on the back and the sides.
-    box(1, 1, 1, 6, 6, 5, fixed('metal'));
-    box(0, 6, 0, 7, 7, 6, fixed('metalDark'));
-    box(2, 1, 4, 4, 5, 5, fixed('blueDoor'));
-    box(4, 3, 4, 5, 5, 5, fixed('glass'));
-    box(5, 3, 2, 6, 5, 4, fixed('glass'));
-    // A dish on the roof, its feed in the middle.
-    box(4, 7, 3, 5, 8, 4, fixed('metal'));
-    box(3, 8, 2, 6, 9, 5, fixed('whitewash'));
-    box(4, 9, 3, 5, 10, 4, fixed('metalDark'));
-    // The mast: a thin post through the roof's back corner, a crossbar and the accent light.
-    box(1, 7, 1, 2, 16, 2, fixed('metal'));
-    box(0, 12, 1, 3, 13, 2, fixed('metalDark'));
-    box(1, 12, 0, 2, 13, 3, fixed('metalDark'));
-    box(1, 16, 1, 2, 17, 2, biome('accent'));
-    // Server cabinets in the front yard, each with a status light.
-    for (const x of [1, 4]) {
-      box(x, 1, 6, x + 2, 4, 7, fixed('metalDark'));
-      set(x, 3, 6, biome('accent'));
-    }
-    // A data tank in the front corner.
-    box(w - 2, 1, d - 3, w, 4, d - 1, fixed('whitewash'));
-    box(w - 2, 4, d - 3, w, 5, d - 1, fixed('metal'));
-  },
+  /** The Station is a structure (`structureModels.ts`): nothing at ¼ unit. */
+  station: () => {},
   /** The House's room (`houseModel.ts`); the House round it is a structure (`structureModels.ts`). */
   house: (draw, colours) => {
     drawHouseRoom(draw, colours);
@@ -116,26 +83,8 @@ const MODELS: Record<PlacedLandmarkId, Model> = {
       }
     }
   },
-  /**
-   * The Mailbox (1×1, so 4×4 here; 8 tall): a flagstone pad; a wooden post;
-   * a blue box on it, long front to back, with a darker lid and a darker door
-   * on its front (+z), and a letter poking out above the door; a red flag
-   * raised on its +x side, the side the camera sees, up to the model's top;
-   * and a flower at the pad's front corner.
-   */
-  mailbox: ({ box, set }, { fixed, biome }) => {
-    box(0, 0, 0, 4, 1, 4, fixed('concrete'));
-    box(1, 1, 1, 3, 4, 3, fixed('trunk'));
-    box(1, 4, 0, 3, 6, 3, fixed('blueTrim'));
-    box(1, 6, 0, 3, 7, 3, fixed('blueDoor'));
-    box(1, 4, 3, 3, 6, 4, fixed('blueDoor'));
-    set(1, 6, 3, fixed('sail'));
-    // The flag: an arm up the box's side, its red pennant at the top.
-    box(3, 4, 1, 4, 7, 2, fixed('metalDark'));
-    box(3, 7, 1, 4, 8, 3, fixed('flagRed'));
-    set(0, 1, 3, fixed('bougainvillea'));
-    set(3, 1, 3, biome('foliage', -0.04));
-  },
+  /** The Mailbox is a structure (`structureModels.ts`), in the House's yard: nothing at ¼ unit. */
+  mailbox: () => {},
 };
 
 function shapeOf(landmark: PlacedLandmark): Shape {
@@ -169,8 +118,8 @@ export function buildLandmark(landmark: PlacedLandmark, grid: VoxelGrid, colours
 
 /**
  * The box a Landmark covers, in world units relative to its model's origin
- * (the min corner of its footprint, on the ground): everything the model
- * draws, and at least the whole footprint and jetty; for the House, the
+ * (the min corner of its footprint, on the ground): everything its ¼-unit
+ * model and its Variant's structure draw (the House with its lid on), and at least the whole footprint and jetty; for the House, the
  * House itself (its 3×3 and its roof), not its yard, where the Mailbox
  * stands. Used to size the Landmark's hotspot over the canvas (so it covers
  * the whole footprint), the Guide's spot beside it and its Data Card.
@@ -180,39 +129,42 @@ export interface ModelExtent {
   max: { x: number; y: number; z: number };
 }
 
-export function landmarkExtent(landmark: PlacedLandmark): ModelExtent {
+export function landmarkExtent(world: Pick<World, 'biome' | 'landmarks'>, landmark: PlacedLandmark): ModelExtent {
   const min = { x: Infinity, y: Infinity, z: Infinity };
   const max = { x: -Infinity, y: -Infinity, z: -Infinity };
-  const cover = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) => {
-    min.x = Math.min(min.x, x0, x1);
-    min.y = Math.min(min.y, y0, y1);
-    min.z = Math.min(min.z, z0, z1);
-    max.x = Math.max(max.x, x0, x1);
-    max.y = Math.max(max.y, y0, y1);
-    max.z = Math.max(max.z, z0, z1);
+  /** Cover a box given in voxels of `per` to a unit, from the model's origin. */
+  const cover = (per: number, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) => {
+    min.x = Math.min(min.x, x0 / per, x1 / per);
+    min.y = Math.min(min.y, y0 / per, y1 / per);
+    min.z = Math.min(min.z, z0 / per, z1 / per);
+    max.x = Math.max(max.x, x0 / per, x1 / per);
+    max.y = Math.max(max.y, y0 / per, y1 / per);
+    max.z = Math.max(max.z, z0 / per, z1 / per);
   };
   const draw: Draw = {
-    box: (x0, y0, z0, x1, y1, z1) => cover(x0, y0, z0, x1, y1, z1),
-    set: (x, y, z) => cover(x, y, z, x + 1, y + 1, z + 1),
+    box: (x0, y0, z0, x1, y1, z1) => cover(GROUND_DETAIL, x0, y0, z0, x1, y1, z1),
+    set: (x, y, z) => cover(GROUND_DETAIL, x, y, z, x + 1, y + 1, z + 1),
   };
   const shape = shapeOf(landmark);
   // The ground the Landmark stands on: its footprint (the House's own 3×3), plus the jetty's deck.
   const houseSide = landmark.id === 'house' ? HOUSE_CELLS * GROUND_DETAIL : null;
-  cover(0, 0, 0, houseSide ?? shape.w, 0, houseSide ?? shape.d);
-  for (const c of shape.jetty) cover(c.x, -1, c.z, c.x + GROUND_DETAIL, 0, c.z + GROUND_DETAIL);
+  cover(GROUND_DETAIL, 0, 0, 0, houseSide ?? shape.w, 0, houseSide ?? shape.d);
+  for (const c of shape.jetty) cover(GROUND_DETAIL, c.x, -1, c.z, c.x + GROUND_DETAIL, 0, c.z + GROUND_DETAIL);
   // Models only pick colours through `biome` and `fixed`; any id will do here.
   const anyColour = () => 0;
   const colours = { biome: anyColour, fixed: anyColour } as Omit<WorldColours, 'table'> as WorldColours;
   MODELS[landmark.id](draw, colours, shape);
-  // The House's structure, up to its roof (the tallest Variant's), is part of what a visitor clicks.
-  if (houseSide !== null) cover(0, 0, 0, houseSide, HOUSE_HEIGHT * GROUND_DETAIL, houseSide);
+  // The Landmark's Variant (the whole House, its lid on), at ⅛ unit.
+  if (landmark.id !== 'garden') {
+    const { origin } = landmark.footprint;
+    const at = { x: origin.x * STRUCTURE, y: landmark.y * STRUCTURE, z: origin.z * STRUCTURE };
+    drawStructure(landmarkStructure(world, landmark), landmarkPlacement(world, landmark), colours, (x, y, z) =>
+      cover(STRUCTURE, x - at.x, y - at.y, z - at.z, x - at.x + 1, y - at.y + 1, z - at.z + 1),
+    );
+  }
   // Posts reaching down to the sea floor are not part of what a visitor clicks.
-  min.y = Math.max(min.y, -1);
-  const unit = (v: number) => v / GROUND_DETAIL;
-  return {
-    min: { x: unit(min.x), y: unit(min.y), z: unit(min.z) },
-    max: { x: unit(max.x), y: unit(max.y), z: unit(max.z) },
-  };
+  min.y = Math.max(min.y, -1 / GROUND_DETAIL);
+  return { min, max };
 }
 
 /**

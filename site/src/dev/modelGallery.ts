@@ -17,7 +17,7 @@ import { LOOK, oklchToLinear } from '@/render/palette';
 import { structureInstances, type InstancePlacement } from '@/render/structureMeshes';
 import { voxelMaterial } from '@/render/voxelMaterial';
 import { worldColours } from '@/render/worldVoxels';
-import { STRUCTURE } from '@/render/voxelTiers';
+import { GROUND_DETAIL, STRUCTURE } from '@/render/voxelTiers';
 import type { Oklch } from '@/world';
 
 /** Cells between neighbouring models' centres. */
@@ -157,6 +157,19 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
     const mesh = new THREE.Mesh(geometry, groundMaterial);
     mesh.receiveShadow = true;
     ground.add(mesh);
+    // The Dock's things stand on its ¼-unit plank deck (their anchor is below their first layer), as in the World.
+    if (s.kind === 'dock') {
+      const deck = new THREE.BoxGeometry(s.footprint.width, 1 / GROUND_DETAIL, s.footprint.depth);
+      const [pr, pg, pb] = colours.table.colours[colours.fixed('plank')]!;
+      const plank = new Float32Array(deck.attributes.position!.count * 3);
+      for (let i = 0; i < plank.length; i += 3) plank.set([pr, pg, pb], i);
+      deck.setAttribute('color', new THREE.BufferAttribute(plank, 3));
+      deck.translate(at.x, at.y + 1 / GROUND_DETAIL / 2, at.z);
+      const deckMesh = new THREE.Mesh(deck, groundMaterial);
+      deckMesh.receiveShadow = true;
+      deckMesh.castShadow = true;
+      ground.add(deckMesh);
+    }
   };
 
   /** The kind on show, and whether the grid was laid out for a tall screen. */

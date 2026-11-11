@@ -166,7 +166,7 @@ export interface PlacedLandmark {
   footprint: Footprint;
   /** Ground height under the whole footprint, in voxels. */
   y: number;
-  /** Which model variant to draw. Every Landmark has only variant 0 for now. */
+  /** Its Landmark Variant: 1 to its count in the Biome's style (`LANDMARK_VARIANTS`), picked by the Seed. */
   variant: number;
   /**
    * The House only (null otherwise): the way its door faces, south (+z) or

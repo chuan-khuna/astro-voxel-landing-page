@@ -73,7 +73,7 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `bridges` | Straight bridges over the sea: `from` and `to` Isle ids, the sea `cells` spanned (in order from `from`), and the deck height `y`, which equals the land height at both ends. |
 | `paths` | Walkable paths between Landmarks. For now one: Dock to House, as 4-connected cells over land and bridges. |
 | `stairs` | One per single-step height change along a path: the lower `cell`, its height `y`, and the `facing` the stairs climb towards. |
-| `landmarks` | The five placed Landmarks: id, Isle, `footprint` (`origin` cell, `width` along x, `depth` along z, and every `cells` entry it covers), ground height `y` (the whole footprint is at this height), `variant` (always 0 for now), `door` (House only, else null: `south` or `east`, the way its door faces; see "House plot"), `trees` (Garden only: one cell per tree, in Project order) and `jetty` (Dock only: its sea cells, from the shore outwards). |
+| `landmarks` | The five placed Landmarks: id, Isle, `footprint` (`origin` cell, `width` along x, `depth` along z, and every `cells` entry it covers), ground height `y` (the whole footprint is at this height), `variant` (its Landmark Variant, 1 to `LANDMARK_VARIANTS[biome][id]`; see "Landmark Variants"), `door` (House only, else null: `south` or `east`, the way its door faces; see "House plot"), `trees` (Garden only: one cell per tree, in Project order) and `jetty` (Dock only: its sea cells, from the shore outwards). |
 | `boats` | One per Client, up to 12 (`MAX_BOATS`), in Client order: the berth `cell` (a sea cell beside the jetty or off its tip; it may lie past the grid's edge, in the open sea) and the `facing` its bow points, out to sea along the jetty. |
 | `ships` | One per Partner, in Partner order: `cells`, a closed loop of sea cells (each an 8-neighbour of the one before, the last of the first) sailed in order, and `phase` (0–1), how far round it the ship starts. Cells may lie past the grid's edge. |
 | `buoys` | Up to 4 (`MAX_BUOYS`) sea cells, each with a buoy (its lamp glows at Night; see `rendering-and-shading.md`). Inside the grid, clear of the ships, boats, jetty and bridges. |
@@ -303,11 +303,33 @@ most 0.10 (lower where a swatch read too loud). `biomes.ts` names the source
 swatch next to each colour. The House, brand and UI colours do not come from
 the Biome.
 
+## Landmark Variants
+
+Each placed Landmark carries a `variant`: which of its Biome's Variants it
+shows (polish ticket 03). `LANDMARK_VARIANTS` (`landmarks.ts`) says how
+many each Landmark has per Biome: the House 3, the Station 2, the Mailbox 3,
+the Dock 2 and the Garden 1 (until polish ticket 05). The renderer draws
+the structure file of that kind, Biome and number
+(`voxel-structures.md`, "The Landmark Variants"); a data test holds the
+files to the table.
+
+`pickVariants` draws them after the layout, from a sequence of the Seed's
+own (`<seed>/variants`), one number per Landmark in `PLACED_LANDMARK_IDS`
+order. So the same Seed always gives the same Variants, whatever the
+content counts or how many retries the layout took, and the pick never
+moves the layout (every Seed kept its polish 02 layout). The generator's
+height rule (`LANDMARK_HEIGHT`) holds for every Variant, so the pick needs
+no new placement check.
+
+Tests (`generateWorld.test.ts`): over 200 sampled Seeds each Landmark's
+Variant is a whole number from 1 to its Biome's count, and every Variant of
+every Biome occurs; the House, Station, Mailbox and Dock have 2–3 each; and
+the same 200 Seeds keep their Variants with the largest content counts.
+
 ## Not yet built
 
-Later tickets: decoration, Data Card anchors, Landmark variants beyond 0
-(the House's Variant per Biome and its room are drawn by the renderer; see
-`rendering-and-shading.md`, "The House and its room"), and boat and ship kinds (ASCII structures, ADR
+Later tickets: decoration, Data Card anchors, the Garden's Variants (polish
+ticket 05), and boat and ship kinds (ASCII structures, ADR
 0004). The site passes the sizes of the `projects`, `clients` and
 `partners` collections; it pairs tree `k` with the `k`-th Project by id
 (`site/src/lib/gardenTrees.ts`; see `site-project.md`); the generator never

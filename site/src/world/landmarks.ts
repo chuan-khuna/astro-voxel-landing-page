@@ -1,6 +1,6 @@
 import type { Rng } from './prng';
 import { surfaceOf } from './terrain';
-import type { Boat, Bridge, Cell, Facing, Footprint, Isle, PlacedLandmark, PlacedLandmarkId, Terrain } from './types';
+import type { BiomeId, Boat, Bridge, Cell, Facing, Footprint, Isle, PlacedLandmark, PlacedLandmarkId, Terrain } from './types';
 
 /** Most trees the Garden shows; Projects beyond the cap stay on their pages only. */
 export const MAX_TREES = 24;
@@ -26,6 +26,18 @@ export const LANDMARK_HEIGHT: Record<PlacedLandmarkId, number> = {
   garden: 3.5,
   dock: 1,
   mailbox: 2,
+};
+/**
+ * How many Variants each Landmark has in each Biome's style: the structure
+ * files `structures/<landmark>/<biome>-<n>.structure`, numbered from 1 (a
+ * data test holds the files to this table). The Garden has one until its
+ * plants are drawn (polish ticket 05).
+ */
+export const LANDMARK_VARIANTS: Record<BiomeId, Record<PlacedLandmarkId, number>> = {
+  tropical: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
+  northern: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
+  autumn: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
+  volcanic: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
 };
 /** Ground points checked for occlusion per cell edge: a ¼-cell grid. */
 const SAMPLES_PER_CELL = 4;
@@ -244,7 +256,7 @@ export function placeLandmarks(
       isle: owner.id,
       footprint: candidate.footprint,
       y: candidate.y,
-      variant: 0,
+      variant: 1,
       door: null,
       trees,
       jetty: candidate.jetty,
@@ -373,7 +385,7 @@ export function placeLandmarks(
     isle: home.id,
     footprint: rectangle(houseYard(placedHouse).mailbox, 1, 1),
     y: house.y,
-    variant: 0,
+    variant: 1,
     door: null,
     trees: [],
     jetty: [],

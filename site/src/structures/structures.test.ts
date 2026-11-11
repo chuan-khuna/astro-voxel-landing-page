@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BIOME_IDS } from '@/world';
+import { BIOME_IDS, LANDMARK_HEIGHT, LANDMARK_VARIANTS } from '@/world';
 import { HOUSE_INTERIOR } from '@/render/houseModel';
 import { GROUND_DETAIL, STRUCTURE } from '@/render/voxelTiers';
 import { STRUCTURES, STRUCTURE_FILES, variantsOf } from './index';
@@ -40,6 +40,69 @@ describe('structure files', () => {
       const reached = new Set<string>();
       for (const v of structureVoxels(s)) reached.add(`${Math.floor(v.x / STRUCTURE)},${Math.floor(v.z / STRUCTURE)}`);
       for (let z = 0; z < s.footprint.depth; z++) for (let x = 0; x < s.footprint.width; x++) expect(reached.has(`${x},${z}`), `${s.name} ${x},${z}`).toBe(true);
+    }
+  });
+});
+
+describe('the Landmark Variants', () => {
+  const KINDS = ['house', 'station', 'mailbox', 'dock'] as const;
+  /** How far a structure reaches above the ground, in ⅛ voxels (its anchor may sit below its first layer). */
+  const above = (s: Structure) => s.size.y - s.anchor.y;
+
+  it('gives each Landmark in every Biome as many Variants as the generator picks from, numbered from 1', () => {
+    for (const biome of BIOME_IDS) {
+      for (const kind of KINDS) {
+        const variants = variantsOf(kind, biome);
+        expect(variants.map((v) => v.variant), `${kind} ${biome}`).toEqual(Array.from({ length: LANDMARK_VARIANTS[biome][kind] }, (_, i) => i + 1));
+        for (const v of variants) expect(v.name, `${kind} ${biome}`).toContain(`${biome}-${v.variant}`);
+      }
+    }
+  });
+
+  it('never stands taller than the generator keeps clear for its Landmark (`LANDMARK_HEIGHT`)', () => {
+    for (const kind of KINDS) for (const s of STRUCTURES.filter((s) => s.kind === kind)) expect(above(s) / STRUCTURE, s.name).toBeLessThanOrEqual(LANDMARK_HEIGHT[kind]);
+  });
+
+  it('makes the Station 2×2 and 5–6 units tall, its door 4×10 on +z', () => {
+    for (const s of STRUCTURES.filter((s) => s.kind === 'station')) {
+      expect(s.footprint, s.name).toEqual({ width: 2, depth: 2 });
+      expect(s.size.y, s.name).toBeGreaterThanOrEqual(40);
+      expect(s.size.y, s.name).toBeLessThanOrEqual(48);
+      expect(s.door, s.name).toBe('+z');
+      expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
+      // The door: 4 wide and 10 tall, each voxel the frontmost of its column on that row. The autumn door is
+      // the Biome's green accent, which also lights the cabinets in the yard (x 12 and up), so only the
+      // Station's own front (x below 12) counts.
+      const STATION_FRONT = 12;
+      const door = [...structureVoxels(s)].filter((v) => v.role === 'door' || v.role === 'doorWood' || (v.role === 'accent' && v.y >= 1 && v.y <= 10 && v.x < STATION_FRONT));
+      const front = door.filter((v) => voxelAt(s, v.x, v.y, v.z + 1) === null);
+      expect(new Set(front.map((v) => v.x)).size, s.name).toBe(4);
+      expect(new Set(front.map((v) => v.y)).size, s.name).toBe(10);
+    }
+  });
+
+  it('makes the Mailbox small: about 4×6 and 1–1.25 units tall in the House\'s yard, its front on +z', () => {
+    for (const s of STRUCTURES.filter((s) => s.kind === 'mailbox')) {
+      expect(s.footprint, s.name).toEqual({ width: 1, depth: 1 });
+      expect(s.size.y, s.name).toBeGreaterThanOrEqual(8);
+      expect(s.size.y, s.name).toBeLessThanOrEqual(10);
+      expect(s.door, s.name).toBe('+z');
+      // The box (everything above the post) is at most 6 voxels across either way.
+      const box = [...structureVoxels(s)].filter((v) => v.y >= 5);
+      for (const axis of ['x', 'z'] as const) {
+        const span = Math.max(...box.map((v) => v[axis])) - Math.min(...box.map((v) => v[axis])) + 1;
+        expect(span, `${s.name} ${axis}`).toBeLessThanOrEqual(6);
+      }
+    }
+  });
+
+  it('stands the Dock\'s things on its ¼-unit deck: 2×1, the anchor two voxels below the first layer, at most 1 unit above the ground', () => {
+    const deck = STRUCTURE / GROUND_DETAIL;
+    for (const s of STRUCTURES.filter((s) => s.kind === 'dock')) {
+      expect(s.footprint, s.name).toEqual({ width: 2, depth: 1 });
+      expect(s.anchor, s.name).toEqual({ x: 0, y: -deck, z: 0 });
+      expect(s.door, s.name).toBeNull();
+      expect(above(s), s.name).toBeLessThanOrEqual(STRUCTURE);
     }
   });
 });

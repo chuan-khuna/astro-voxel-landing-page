@@ -4,7 +4,7 @@
  */
 import { screenOffsetOf, type CameraState } from './cameraMath';
 import type { LandmarkFocus } from './landmarkFocus';
-import type { PlacedLandmark } from '../world';
+import type { PlacedLandmark, World } from '@/world';
 import { landmarkExtent } from './landmarkModels';
 
 /** A card shows from this fraction of its Landmark's close-up zoom inwards. */
@@ -139,9 +139,9 @@ export interface DataCardAnchors {
  * isometric screen a point's height goes with `2y − x − z`, which is how the
  * heights are found from the model's box (`landmarkExtent`).
  */
-export function dataCardAnchors(landmark: PlacedLandmark): DataCardAnchors {
+export function dataCardAnchors(world: Pick<World, 'biome' | 'landmarks'>, landmark: PlacedLandmark): DataCardAnchors {
   const { origin, width, depth } = landmark.footprint;
-  const { min, max } = landmarkExtent(landmark);
+  const { min, max } = landmarkExtent(world, landmark);
   const cx = origin.x + width / 2;
   const cz = origin.z + depth / 2;
   // The box's highest corner on screen is its top back one; its lowest, the bottom front one.

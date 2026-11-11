@@ -12,7 +12,7 @@ const screen = (p: Vec3) => ({ x: (p.x - p.z) / Math.SQRT2, y: (2 * p.y - p.x - 
 /** A placed Landmark's box on screen. */
 const landmarkBox = (world: World, id: (typeof PLACED_LANDMARK_IDS)[number]) => {
   const landmark = world.landmarks.find((l) => l.id === id)!;
-  const { min, max } = landmarkExtent(landmark);
+  const { min, max } = landmarkExtent(world, landmark);
   const { origin } = landmark.footprint;
   const xs: number[] = [];
   const ys: number[] = [];

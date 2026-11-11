@@ -18,10 +18,10 @@ const voxelsOf = (landmark: PlacedLandmark, world = worlds[0]!) => {
 };
 
 describe('Landmark models', () => {
-  it('fill their footprint: the model reaches every footprint cell, and the jetty', () => {
+  it('draw only the Garden, the Dock\'s deck and jetty, and the House\'s room at ¼ unit: the rest are structures', () => {
     for (const world of worlds) {
-      // The House's plot holds its structure, its yard and the Mailbox (`structureModels.test.ts`).
-      for (const l of world.landmarks.filter((l) => l.id !== 'house')) {
+      for (const l of world.landmarks.filter((l) => l.id === 'station' || l.id === 'mailbox')) expect(voxelsOf(l, world), `${world.seed} ${l.id}`).toHaveLength(0);
+      for (const l of world.landmarks.filter((l) => l.id === 'garden' || l.id === 'dock')) {
         const voxels = voxelsOf(l, world);
         const reached = new Set(voxels.map((v) => `${Math.floor(v.x / GROUND_DETAIL)},${Math.floor(v.z / GROUND_DETAIL)}`));
         for (const c of [...l.footprint.cells, ...l.jetty]) expect(reached.has(`${c.x},${c.z}`), `${world.seed} ${l.id} ${c.x},${c.z}`).toBe(true);
@@ -61,7 +61,7 @@ describe('landmarkExtent', () => {
   it('covers the whole footprint (and the jetty) on the ground, and the model\'s height', () => {
     for (const world of worlds) {
       for (const l of world.landmarks.filter((l) => l.id !== 'house')) {
-        const { min, max } = landmarkExtent(l);
+        const { min, max } = landmarkExtent(world, l);
         const { origin } = l.footprint;
         for (const c of [...l.footprint.cells, ...l.jetty]) {
           expect(c.x - origin.x, `${world.seed} ${l.id}`).toBeGreaterThanOrEqual(min.x);
@@ -72,7 +72,7 @@ describe('landmarkExtent', () => {
         expect(max.y, `${world.seed} ${l.id}`).toBeGreaterThan(0);
       }
       // The House's box is the House: its 3×3, not its yard, up to its roof (3.5–4 units).
-      const house = landmarkExtent(world.landmarks.find((l) => l.id === 'house')!);
+      const house = landmarkExtent(world, world.landmarks.find((l) => l.id === 'house')!);
       expect(house.min, world.seed).toEqual({ x: 0, y: 0, z: 0 });
       expect([house.max.x, house.max.z], world.seed).toEqual([3, 3]);
       expect(house.max.y, world.seed).toBeGreaterThanOrEqual(3.5);
@@ -83,37 +83,31 @@ describe('landmarkExtent', () => {
   it('never stands taller than the generator keeps clear for it (`LANDMARK_HEIGHT`)', () => {
     // Placement keeps every Landmark in view past the others' models at these heights.
     for (const world of worlds) {
-      for (const l of world.landmarks) expect(landmarkExtent(l).max.y, `${world.seed} ${l.id}`).toBeLessThanOrEqual(LANDMARK_HEIGHT[l.id]);
+      for (const l of world.landmarks) expect(landmarkExtent(world, l).max.y, `${world.seed} ${l.id}`).toBeLessThanOrEqual(LANDMARK_HEIGHT[l.id]);
     }
   });
 
-  it('measures the box the Station draws, in world units', () => {
-    const station = worlds[0]!.landmarks.find((l) => l.id === 'station')!;
-    // A 2×2 pad, and the mast's light at the top, 17 quarter voxels up.
-    expect(landmarkExtent(station)).toEqual({ min: { x: 0, y: 0, z: 0 }, max: { x: 2, y: 4.25, z: 2 } });
-  });
-});
-
-describe('the Mailbox', () => {
-  it('measures one cell across and 2 units tall: a box on a post, its flag raised above it', () => {
+  it('measures the Station\'s Variant: its 2×2, 5–6 units tall', () => {
     for (const world of worlds) {
-      const mailbox = world.landmarks.find((l) => l.id === 'mailbox')!;
-      expect(landmarkExtent(mailbox), world.seed).toEqual({ min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 2, z: 1 } });
+      const { min, max } = landmarkExtent(world, world.landmarks.find((l) => l.id === 'station')!);
+      expect(min, world.seed).toEqual({ x: 0, y: 0, z: 0 });
+      expect([max.x, max.z], world.seed).toEqual([2, 2]);
+      expect(max.y, world.seed).toBeGreaterThanOrEqual(5);
+      expect(max.y, world.seed).toBeLessThanOrEqual(6);
     }
   });
 
-  it('raises a red flag on the side the camera sees (+x), up to its top', () => {
-    const world = worlds[0]!;
-    const mailbox = world.landmarks.find((l) => l.id === 'mailbox')!;
-    const grid = new VoxelGrid(1 / GROUND_DETAIL);
-    const colours = worldColours(world);
-    buildLandmark(mailbox, grid, colours);
-    const red = colours.fixed('flagRed');
-    const flag = [...grid.voxels()].filter((v) => v.colour === red);
-    expect(flag.length).toBeGreaterThan(0);
-    const { x, y } = { x: mailbox.footprint.origin.x * GROUND_DETAIL, y: mailbox.y * GROUND_DETAIL };
-    for (const v of flag) expect(v.x - x).toBe(GROUND_DETAIL - 1);
-    expect(Math.max(...flag.map((v) => v.y - y))).toBe(2 * GROUND_DETAIL - 1);
+  it('measures the Mailbox in its cell, 1–1.25 units tall, and the Dock\'s things at most 1 unit over its deck', () => {
+    for (const world of worlds) {
+      const mailbox = landmarkExtent(world, world.landmarks.find((l) => l.id === 'mailbox')!);
+      expect(mailbox.min, world.seed).toEqual({ x: 0, y: 0, z: 0 });
+      expect([mailbox.max.x, mailbox.max.z], world.seed).toEqual([1, 1]);
+      expect(mailbox.max.y, world.seed).toBeGreaterThanOrEqual(1);
+      expect(mailbox.max.y, world.seed).toBeLessThanOrEqual(1.25);
+      const dock = landmarkExtent(world, world.landmarks.find((l) => l.id === 'dock')!);
+      expect(dock.max.y, world.seed).toBeGreaterThan(0.25);
+      expect(dock.max.y, world.seed).toBeLessThanOrEqual(1);
+    }
   });
 });
 

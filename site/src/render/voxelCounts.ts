@@ -22,10 +22,11 @@ export const VOXEL_KINDS = ['terrain', 'landmarks', 'trees', 'houseRoom', 'boats
 export type VoxelKind = (typeof VOXEL_KINDS)[number];
 
 /**
- * - `terrain`: 1-unit voxels; the House's structure is ⅛-unit voxels; every
- *   other kind is ¼-unit voxels.
- * - `landmarks`: the Landmark models, the House's structure (base and lid)
- *   included, less the Garden's trees and the House's room.
+ * - `terrain`: 1-unit voxels; the Landmarks' structures are ⅛-unit voxels;
+ *   every other kind is ¼-unit voxels.
+ * - `landmarks`: the Landmark models and their Variants' structures (the
+ *   House's base and lid, the Station, the Mailbox, the Dock's things), less
+ *   the Garden's trees and the House's room.
  * - `trees`: the Garden's trees, one per Project.
  * - `houseRoom`: the House's room (`houseModel.ts`), the developer's
  *   moving head and hands included.

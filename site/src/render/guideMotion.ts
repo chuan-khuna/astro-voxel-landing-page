@@ -44,7 +44,7 @@ const toScreen = (x: number, y: number, z: number) => ({ x: (x - z) / Math.SQRT2
 function screenBox(world: World, id: PlacedLandmarkId): ScreenBox {
   const landmark = world.landmarks.find((l) => l.id === id);
   if (!landmark) throw new Error(`World ${world.seed} has no ${id}`);
-  const { min, max } = landmarkExtent(landmark);
+  const { min, max } = landmarkExtent(world, landmark);
   const { origin } = landmark.footprint;
   const box = { left: Infinity, right: -Infinity, bottom: Infinity, top: -Infinity };
   for (let i = 0; i < 8; i++) {

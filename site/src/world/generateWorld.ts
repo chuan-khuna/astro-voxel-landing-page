@@ -2,13 +2,14 @@ import { BIOMES, BIOME_RELIEF } from './biomes';
 import { buildBridges } from './bridges';
 import { findPath, stairsAlong } from './paths';
 import { createRng } from './prng';
-import { houseYard, placeLandmarks } from './landmarks';
+import { LANDMARK_VARIANTS, houseYard, placeLandmarks } from './landmarks';
 import { sailingRoutes } from './ships';
 import { placeBuoys } from './buoys';
 import { buildStrata, buildTerrain } from './terrain';
 import { site } from '@/data/site';
 import {
   BIOME_IDS,
+  PLACED_LANDMARK_IDS,
   type BiomeId,
   type Boat,
   type Bridge,
@@ -58,7 +59,8 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
     const { boats, terrain } = placement;
     const found = dockToHouse(terrain, bridges, placement.landmarks);
     if (!found) continue;
-    const { route, landmarks } = found;
+    const landmarks = pickVariants(seed, biome.id, found.landmarks);
+    const { route } = found;
     const ships = sailingRoutes(terrain, isles, bridges, [...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)], counts.partners);
     return {
       seed,
@@ -110,6 +112,18 @@ function dockToHouse(
     if (route) return { route, landmarks: landmarks.map((l) => (l === house ? { ...l, door } : l)) };
   }
   return null;
+}
+
+/**
+ * Each Landmark's Variant, from 1 to its count in the Biome's style
+ * (`LANDMARK_VARIANTS`). Drawn from a sequence of the Seed's own, never the
+ * layout's: the same Seed always gives the same Variants, whatever the
+ * content counts or retries, and adding Variants never moves the layout.
+ */
+function pickVariants(seed: string, biome: BiomeId, landmarks: PlacedLandmark[]): PlacedLandmark[] {
+  const rng = createRng(`${seed}/variants`);
+  const picks = new Map(PLACED_LANDMARK_IDS.map((id) => [id, 1 + Math.floor(rng() * LANDMARK_VARIANTS[biome][id])]));
+  return landmarks.map((l) => ({ ...l, variant: picks.get(l.id)! }));
 }
 
 /** The default Seed gets the brand Biome; any other Seed picks one from its own hash. */

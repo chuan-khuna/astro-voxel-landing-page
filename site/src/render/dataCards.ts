@@ -10,7 +10,7 @@ import * as THREE from 'three/webgpu';
 import type { CameraState } from './cameraMath';
 import { dataCardAnchors, nearestDataCard, placeDataCard, type DataCardAnchors } from './dataCardMath';
 import { landmarkFocus, type LandmarkFocus } from './landmarkFocus';
-import type { PlacedLandmarkId, World } from '../world';
+import type { PlacedLandmarkId, World } from '@/world';
 
 export interface DataCards {
   /** A new World: new Landmark positions. */
@@ -43,7 +43,7 @@ export function createDataCards(frame: HTMLElement, cards: HTMLElement[]): DataC
         card.hidden = !landmark;
         card.removeAttribute('data-near');
         if (!landmark) continue;
-        placed.push({ id: landmark.id, card, anchors: dataCardAnchors(landmark), focus: landmarkFocus(world, landmark.id) });
+        placed.push({ id: landmark.id, card, anchors: dataCardAnchors(world, landmark), focus: landmarkFocus(world, landmark.id) });
       }
     },
     place(camera, state, centre) {

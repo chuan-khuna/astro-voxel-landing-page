@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { generateWorld, houseYard, type World } from '@/world';
 import { structureVoxels } from '@/structures/parse';
-import { housePlacement, houseStructure, houseWindowFaces, turned } from './structureModels';
-import { worldToVoxels } from './worldVoxels';
-import { STRUCTURE } from './voxelTiers';
+import { drawStructure, housePlacement, houseStructure, houseWindowFaces, landmarkPlacement, landmarkStructure, turned } from './structureModels';
+import { worldColours, worldToVoxels } from './worldVoxels';
+import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 
 const counts = { projects: 6, clients: 3, partners: 2 };
 const worlds = Array.from({ length: 40 }, (_, i) => generateWorld(`house-${i}`, counts));
@@ -24,15 +24,15 @@ describe('the House in the World', () => {
       const house = houseOf(world);
       const base = [...structureVoxels(houseStructure(world))].filter((v) => v.part === 'base');
       expect(structure.size).toBe(1 / STRUCTURE);
-      expect(structure.count, world.seed).toBe(base.length);
+      // The House's 3×3 holds its base and nothing else (the Mailbox stands in the yard).
       const { origin } = houseYard(house).house;
-      for (const v of structure.voxels()) {
-        expect(Math.floor(v.x / STRUCTURE) - origin.x, world.seed).toBeGreaterThanOrEqual(0);
-        expect(Math.floor(v.x / STRUCTURE) - origin.x, world.seed).toBeLessThan(3);
-        expect(Math.floor(v.z / STRUCTURE) - origin.z, world.seed).toBeGreaterThanOrEqual(0);
-        expect(Math.floor(v.z / STRUCTURE) - origin.z, world.seed).toBeLessThan(3);
-        expect(v.y, world.seed).toBeGreaterThanOrEqual(house.y * STRUCTURE);
-      }
+      const inHouse = [...structure.voxels()].filter((v) => {
+        const dx = Math.floor(v.x / STRUCTURE) - origin.x;
+        const dz = Math.floor(v.z / STRUCTURE) - origin.z;
+        return dx >= 0 && dx < 3 && dz >= 0 && dz < 3;
+      });
+      expect(inHouse.length, world.seed).toBe(base.length);
+      for (const v of inHouse) expect(v.y, world.seed).toBeGreaterThanOrEqual(house.y * STRUCTURE);
     }
   });
 
@@ -68,6 +68,67 @@ describe('the House in the World', () => {
         const front = f.facing === '+x' ? `${f.x + 1},${f.y},${f.z}` : `${f.x},${f.y},${f.z + 1}`;
         expect(filled.has(front), `${world.seed} ${front}`).toBe(false);
       }
+    }
+  });
+});
+
+describe('the Landmark Variants in the World', () => {
+  const placed = (world: World) => world.landmarks.filter((l) => l.id !== 'garden');
+
+  it('draws each Landmark\'s own Variant, from the World\'s Biome', () => {
+    const seen = new Set<string>();
+    for (const world of worlds) {
+      for (const l of placed(world)) {
+        const s = landmarkStructure(world, l);
+        expect([s.kind, s.biome, s.variant], `${world.seed} ${l.id}`).toEqual([l.id, world.biome.id, l.variant]);
+        seen.add(`${l.id}/${l.variant}`);
+      }
+    }
+    // Across the sampled Worlds, more than one Variant of each shows.
+    for (const id of ['house', 'station', 'mailbox', 'dock']) expect([...seen].filter((k) => k.startsWith(`${id}/`)).length, id).toBeGreaterThan(1);
+  });
+
+  it('meshes every Landmark\'s structure in the World\'s ⅛-unit grid, filling its footprint on its ground (the House\'s lid apart)', () => {
+    for (const world of worlds.slice(0, 12)) {
+      const { structure } = worldToVoxels(world);
+      const cells = new Map<string, number>();
+      for (const v of structure.voxels()) {
+        const key = `${Math.floor(v.x / STRUCTURE)},${Math.floor(v.z / STRUCTURE)}`;
+        cells.set(key, Math.min(cells.get(key) ?? Infinity, v.y));
+      }
+      for (const l of placed(world)) {
+        const ground = l.id === 'house' ? houseYard(l).house : l.footprint;
+        for (let z = 0; z < ground.depth; z++) {
+          for (let x = 0; x < ground.width; x++) {
+            const key = `${ground.origin.x + x},${ground.origin.z + z}`;
+            expect(cells.has(key), `${world.seed} ${l.id} ${key}`).toBe(true);
+            expect(cells.get(key), `${world.seed} ${l.id} ${key}`).toBeGreaterThanOrEqual(l.y * STRUCTURE);
+          }
+        }
+      }
+      // Nothing outside the footprints.
+      const inside = new Set(placed(world).flatMap((l) => l.footprint.cells.map((c) => `${c.x},${c.z}`)));
+      for (const key of cells.keys()) expect(inside.has(key), `${world.seed} ${key}`).toBe(true);
+    }
+  });
+
+  it('turns the Mailbox\'s front the way the House\'s door faces, and lays the Dock along its footprint', () => {
+    for (const world of worlds) {
+      const house = houseOf(world);
+      const mailbox = world.landmarks.find((l) => l.id === 'mailbox')!;
+      const dock = world.landmarks.find((l) => l.id === 'dock')!;
+      expect(landmarkPlacement(world, mailbox).facing, world.seed).toBe(house.door);
+      expect(landmarkPlacement(world, dock).facing, world.seed).toBe(dock.footprint.width === 2 ? 'south' : 'east');
+    }
+  });
+
+  it('stands the Dock\'s things on top of its ¼-unit deck', () => {
+    for (const world of worlds) {
+      const dock = world.landmarks.find((l) => l.id === 'dock')!;
+      const s = landmarkStructure(world, dock);
+      let lowest = Infinity;
+      drawStructure(s, landmarkPlacement(world, dock), worldColours(world), (_x, y) => (lowest = Math.min(lowest, y)));
+      expect(lowest, world.seed).toBe(dock.y * STRUCTURE + STRUCTURE / GROUND_DETAIL);
     }
   });
 });

@@ -118,8 +118,8 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 | Tree or flower | 1×1 | 8×8 |
 
 **Landmark Variants**
-- Each Landmark (House, Station, Mailbox, Dock) and each Service structure has one style per Biome and 2–3 Variants per style, about 8–12 per Landmark.
-- The Seed picks a Variant per Landmark, so the same Seed gives the same Variants.
+- Each Landmark (House, Station, Mailbox, Dock) and each Service structure has one style per Biome and 2–3 Variants per style, about 8–12 per Landmark. Built in ticket 03: the House 3, the Station 2, the Mailbox 3 and the Dock 2 per Biome (`LANDMARK_VARIANTS`).
+- The Seed picks a Variant per Landmark, so the same Seed gives the same Variants. The pick uses a sequence of its own, so it never moves the layout, and content counts never change it.
 - A Variant fills its Landmark's footprint (ticket 18 of the base feature).
 - Doors face the path where there is one.
 
