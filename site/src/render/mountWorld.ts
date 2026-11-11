@@ -5,18 +5,22 @@
  * - `WebGPURenderer` with the automatic WebGL 2 fallback.
  * - One directional light (the sun) whose shadow map renders only when the
  *   World changes, plus a hemisphere sky light.
- * - Frames render only on request (mount, resize, a new World); nothing renders while idle.
+ * - Frames render only on request (mount, resize, a new World, a camera move);
+ *   nothing renders while idle. Each frame bumps `canvas.dataset.frames` and
+ *   writes `canvas.dataset.camera` (target x, z and zoom), for checks.
+ * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
+ *   Landmark hotspots (`landmarkHotspots.ts`) follow the camera.
  * - `show(world)` swaps in another World (a new Seed) and disposes the old one.
  * - DPR is capped at 1.5 on touch devices and 2 elsewhere.
  */
 import * as THREE from 'three/webgpu';
 import type { World } from '../world';
 import { FIXED_COLOURS, LOOK, oklchToLinear, type FixedColour } from './palette';
+import { createCameraRig, type CameraRig } from './cameraRig';
+import { createLandmarkHotspots } from './landmarkHotspots';
 import { buildWorldObjects, type WorldObjects } from './worldMeshes';
 import type { MeshedWorld } from './worldVoxels';
 
-/** Direction from the target to the camera: true isometric (azimuth 45°, elevation ≈35.26°). */
-const ISO_DIRECTION = new THREE.Vector3(1, 1, 1).normalize();
 const SHADOW_MAP_SIZE = 2048;
 
 const fixedColour = (name: FixedColour) => {
@@ -37,10 +41,27 @@ export interface WorldView {
    * Pass `meshed` when the World was meshed in the Web Worker.
    */
   show(world: World, meshed?: MeshedWorld): void;
+  /** The camera rig: its state, and cuts to other states. */
+  readonly camera: CameraRig;
   dispose(): void;
 }
 
-export async function mountWorld(canvas: HTMLCanvasElement, world: World, meshed?: MeshedWorld): Promise<WorldView> {
+export interface WorldFrame {
+  /** The element round the canvas that takes pan and zoom input and holds the hotspots. */
+  frame: HTMLElement;
+  /** Hotspot links over the canvas, each with `data-hotspot="<placed landmark id>"`. */
+  hotspots: HTMLElement[];
+}
+
+/** Closest zoom: about this many world units from the centre to the edge of the frame. */
+const CLOSEST_HALF_HEIGHT = 3;
+
+export async function mountWorld(
+  canvas: HTMLCanvasElement,
+  world: World,
+  meshed?: MeshedWorld,
+  ui: WorldFrame = { frame: canvas.parentElement ?? canvas, hotspots: [] },
+): Promise<WorldView> {
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: true });
   renderer.setPixelRatio(pixelRatio());
   renderer.toneMapping = THREE.NeutralToneMapping;
@@ -60,15 +81,32 @@ export async function mountWorld(canvas: HTMLCanvasElement, world: World, meshed
   /** Overview radius of the World on show; the camera frames it. */
   let radius = 1;
 
+  /**
+   * `render()` starts three's internal animation loop, which then ticks
+   * `requestAnimationFrame` forever (it only advances node time; nothing here
+   * animates by node time). Stop it after each frame so an idle World
+   * schedules no frames at all; the next `render()` starts it again.
+   * `_animation` is internal, so this is guarded.
+   */
+  const idleRenderer = () => (renderer as unknown as { _animation?: { stop?: () => void } })._animation?.stop?.();
+
   // Render on demand: a request schedules at most one frame.
   let frame = 0;
+  let frames = 0;
   const requestRender = () => {
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
+      hotspots.place(camera);
       renderer.render(scene, camera);
+      idleRenderer();
+      canvas.dataset.frames = String(++frames);
+      const { target, zoom } = rig.state;
+      canvas.dataset.camera = `${target.x.toFixed(2)} ${target.z.toFixed(2)} ${zoom.toFixed(3)}`;
     });
   };
+  const rig = createCameraRig({ element: ui.frame, camera, onChange: requestRender });
+  const hotspots = createLandmarkHotspots(ui.frame, ui.hotspots, (target) => rig.jumpTo({ target, zoom: rig.state.zoom }));
 
   const frameCamera = () => {
     const w = canvas.clientWidth;
@@ -108,12 +146,23 @@ export async function mountWorld(canvas: HTMLCanvasElement, world: World, meshed
     const centre = new THREE.Vector3(width / 2, 0, depth / 2);
     placeSun(sun, centre, Math.hypot(width, depth) / 2 + 2);
 
+    // Pan bounds are the union of the Isles' footprints; zoom runs from the Overview in to a close-up.
     const { target } = next.views.overview;
     radius = next.views.overview.radius;
-    const lookAt = new THREE.Vector3(target.x, target.y, target.z);
-    camera.position.copy(lookAt).addScaledVector(ISO_DIRECTION, radius * 4);
-    camera.lookAt(lookAt);
     frameCamera();
+    hotspots.setWorld(next);
+    rig.reset(
+      {
+        minX: Math.min(...next.isles.map((i) => i.bounds.minX)),
+        maxX: Math.max(...next.isles.map((i) => i.bounds.maxX)) + 1,
+        minZ: Math.min(...next.isles.map((i) => i.bounds.minZ)),
+        maxZ: Math.max(...next.isles.map((i) => i.bounds.maxZ)) + 1,
+        minZoom: 1,
+        maxZoom: Math.max(2, radius / CLOSEST_HALF_HEIGHT),
+      },
+      { target: { x: target.x, z: target.z }, zoom: 1 },
+      radius * 4,
+    );
 
     canvas.dataset.seed = next.seed;
     canvas.dataset.triangles = String(objects.triangles);
@@ -128,8 +177,11 @@ export async function mountWorld(canvas: HTMLCanvasElement, world: World, meshed
 
   return {
     show,
+    camera: rig,
     dispose: () => {
       cancelAnimationFrame(frame);
+      rig.dispose();
+      hotspots.dispose();
       observer.disconnect();
       objects?.dispose();
       renderer.dispose();

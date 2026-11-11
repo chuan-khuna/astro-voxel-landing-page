@@ -2,6 +2,6 @@
 
 One bullet per document in `docs/documents/`: `- Title — one-line summary`.
 
-- [Site project](site-project.md) — the Astro site in `site/`: stack, commands, file layout, home page, Seed in the URL and the dice button.
+- [Site project](site-project.md) — the Astro site in `site/`: stack, commands, file layout, home page, exploring the World, Seed in the URL and the dice button.
 - [World generator](world-generator.md) — `generateWorld(seed, contentCounts)`: interface, World data shape, terrain, Isles, bridges, paths, Biomes, retry and tests.
-- [Rendering and shading](rendering-and-shading.md) — World to pixels: voxel grids, the mesher (culling, AO, greedy merge, chunks), the soft-voxel TSL material, sea, the World Web Worker and cache, scene runtime (swapping Worlds) and the triangle budget.
+- [Rendering and shading](rendering-and-shading.md) — World to pixels: voxel grids, the mesher (culling, AO, greedy merge, chunks), the soft-voxel TSL material, sea, the World Web Worker and cache, scene runtime (swapping Worlds, render on demand), camera pan and zoom with bounds, Landmark hotspots and the triangle budget.

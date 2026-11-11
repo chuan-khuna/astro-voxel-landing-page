@@ -39,11 +39,11 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/content.config.ts` | Content collections. Only `pages` for now (MDX): `title` and an optional `landmark` id. |
 | `src/content/pages/home.mdx` | The home hook copy. |
 | `src/world/` | The World generator. See `world-generator.md`. |
-| `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`). See `rendering-and-shading.md`. |
+| `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`), camera rig (pan and zoom) and Landmark hotspots. See `rendering-and-shading.md`. |
 | `src/lib/seedUrl.ts` | The Seed in the URL: `seedFromUrl`, `rollSeed` (numeric) and `withSeed` (keep the Seed on a route link). Tested in `seedUrl.test.ts`. |
 | `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order. Its links carry `data-seed-link`, so they keep a rolled Seed. |
 | `src/layouts/Base.astro` | The HTML shell: title and description from site data. |
-| `src/pages/index.astro` | The home page. |
+| `src/pages/index.astro` | The home page: hero, World frame with Landmark hotspots, dice button, Landmark menu, hook. |
 
 Company identity, the default Seed and the Landmark list live only in
 `src/data/site.ts`. Landmark ids are typed against the generator's id lists.
@@ -53,6 +53,25 @@ Company identity, the default Seed and the Landmark list live only in
 The home page shows the company name and tagline, the World canvas, the
 dice button with the current Seed, the Landmark menu and the home hook.
 The counts are all 0 until the Project, Client and Partner collections exist.
+
+### Exploring the World
+
+- The canvas sits in `#world-frame` (`.world`), which takes the input:
+  drag to pan, wheel or trackpad pinch to zoom toward the cursor; on touch,
+  one finger pans and two fingers pinch-zoom. Pan stops at the World's
+  bounds and zoom runs from the Overview in to a close-up. The frame has
+  `touch-action: none`, so gestures on the World never scroll or zoom the
+  page (the page still scrolls from outside the World), and the wheel over
+  the World zooms instead of scrolling.
+- The page renders one hotspot link per placed Landmark inside the frame
+  (`a.hotspot[data-hotspot]`, with `data-seed-link`), hidden until the World
+  is shown. The World keeps each over its Landmark's model. Hover or keyboard
+  focus shows an outline and the Landmark's label; they come first in the
+  Tab order, before the dice button and the Landmark menu. A drag that starts
+  on a hotspot pans and does not follow the link.
+- The page passes the frame and hotspots to `mountWorld(canvas, world,
+  meshed, { frame, hotspots })`. See "Camera and interaction" in
+  `rendering-and-shading.md`.
 
 ### Seed in the URL
 
@@ -81,8 +100,9 @@ routes arrive in ticket 07.
 
 ## Rendering
 
-`mountWorld(canvas, world, meshed?)` renders the World as soft voxels and
-returns a view whose `show` swaps in another World: a mesher with
-culling, baked AO and greedy merging, a TSL material for seams, bevel and
-colour jitter, a static sun shadow map, and frames only on demand. See
+`mountWorld(canvas, world, meshed?, ui?)` renders the World as soft voxels
+and returns a view whose `show` swaps in another World and whose `camera`
+is the pan-and-zoom rig: a mesher with culling, baked AO and greedy
+merging, a TSL material for seams, bevel and colour jitter, a static sun
+shadow map, and frames only on demand (only while the camera moves). See
 `rendering-and-shading.md`.

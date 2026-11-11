@@ -9,7 +9,7 @@
  */
 import type { PlacedLandmark, PlacedLandmarkId } from '../world';
 import type { VoxelGrid } from './mesher';
-import type { WorldColours } from './worldVoxels';
+import { DETAIL, type WorldColours } from './worldVoxels';
 
 interface Origin {
   x: number;
@@ -79,4 +79,40 @@ export function buildLandmark(landmark: PlacedLandmark, grid: VoxelGrid, colours
     set: (x, y, z, colour) => grid.set(origin.x + x, origin.y + y, origin.z + z, colour),
   };
   MODELS[landmark.id](draw, colours, landmark.variant);
+}
+
+/**
+ * The box a Landmark's model fills, in world units relative to the model's
+ * origin (the min corner of the Landmark's cell, on the ground). Measured
+ * from what the model draws, so models of any footprint or height are
+ * covered. Used to size the Landmark's hotspot over the canvas.
+ */
+export interface ModelExtent {
+  min: { x: number; y: number; z: number };
+  max: { x: number; y: number; z: number };
+}
+
+export function landmarkExtent(id: PlacedLandmarkId, variant = 0): ModelExtent {
+  const min = { x: Infinity, y: Infinity, z: Infinity };
+  const max = { x: -Infinity, y: -Infinity, z: -Infinity };
+  const cover = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) => {
+    min.x = Math.min(min.x, x0, x1);
+    min.y = Math.min(min.y, y0, y1);
+    min.z = Math.min(min.z, z0, z1);
+    max.x = Math.max(max.x, x0, x1);
+    max.y = Math.max(max.y, y0, y1);
+    max.z = Math.max(max.z, z0, z1);
+  };
+  const draw: Draw = {
+    box: (x0, y0, z0, x1, y1, z1) => cover(x0, y0, z0, x1, y1, z1),
+    set: (x, y, z) => cover(x, y, z, x + 1, y + 1, z + 1),
+  };
+  // Models only pick colours through `biome` and `fixed`; any id will do here.
+  const anyColour = () => 0;
+  MODELS[id](draw, { biome: anyColour, fixed: anyColour } as Omit<WorldColours, 'table'> as WorldColours, variant);
+  const unit = (v: number) => v / DETAIL;
+  return {
+    min: { x: unit(min.x), y: unit(min.y), z: unit(min.z) },
+    max: { x: unit(max.x), y: unit(max.y), z: unit(max.z) },
+  };
 }
