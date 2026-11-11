@@ -36,6 +36,12 @@ Whenever you set up a Node project or add a package manager config, set a minimu
   min-release-age=7
   ```
 
+## Code conventions
+
+### Imports
+
+In `site/`, import from another folder through the `@/` alias, which points at `site/src/` (e.g. `import { generateWorld } from '@/world'`), not a relative path climbing out of the current folder (`../../world`). A `./` import of a file in the same folder is fine. The alias is set in `site/tsconfig.json` (`paths`) and `site/vitest.config.ts` (`resolve.alias`); keep the two in step. Convert existing `../` imports when you touch a file; don't do sweeping import-only rewrites.
+
 ## Project docs
 
 ### Documents
