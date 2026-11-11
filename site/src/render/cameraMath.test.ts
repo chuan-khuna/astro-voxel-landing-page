@@ -93,6 +93,15 @@ describe('stateShowing', () => {
     expect(seen.y).toBeCloseTo(at.y, 6);
   });
 
+  it('brings a Landmark at the edge of the World to the free part above a bottom sheet', () => {
+    // The visitor looks 4 frame units above the centre: the bounds hold the ground seen there.
+    const at = { x: 0, y: 4 };
+    const state = stateShowing({ x: 40, y: 0, z: 30 }, 2, at, { ...limits, at });
+    const seen = pointOnScreen(state, 40, 0, 30);
+    expect(seen.x).toBeCloseTo(at.x, 6);
+    expect(seen.y).toBeCloseTo(at.y, 6);
+  });
+
   it('stays inside the limits', () => {
     const state = stateShowing({ x: 100, y: 0, z: -50 }, 50, { x: 0, y: 0 }, limits);
     expect(state).toEqual(clampState(state, limits));

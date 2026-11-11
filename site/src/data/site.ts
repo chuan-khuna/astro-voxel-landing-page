@@ -61,7 +61,17 @@ export const site = {
   brand: {
     /** Brand colour, OKLCH. Fixed; never changes with the Biome. */
     colour: 'oklch(0.55 0.09 235)',
-    font: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+    /**
+     * Font stacks: the pixel-style Jersey faces (self-hosted from Fontsource,
+     * loaded in `Base.astro`, `font-display: swap`), then system fallbacks.
+     * Jersey has one weight (400), so nothing is set bold.
+     */
+    fonts: {
+      /** Body text: Jersey 20, drawn on a 20px grid. */
+      body: '"Jersey 20", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+      /** Headings (h1–h3), card titles and the company name: Jersey 15. */
+      heading: '"Jersey 15", "Jersey 20", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+    },
   },
   seo: {
     title: 'Lanternfish Data: data and AI engineering',

@@ -1,8 +1,12 @@
 ---
 /**
- * Every page of the site: the World with its hotspots, Data Cards and dice
- * button, the Landmark menu, and (on a section page) the section's panel
- * over the World.
+ * Every page of the site: the World full screen, with its hotspots and Data
+ * Cards, and the UI floating over it as cards: the company name (top left),
+ * the Landmark menu (top right), the dice and Seed (bottom left), and the
+ * section's panel or the Overview's intro. The full-screen layout is on only
+ * while `<html data-world="live">` (set in `Base.astro` when the browser
+ * can draw the World; dropped if it fails to mount); without it the page is
+ * a normal page that scrolls.
  *
  * The World's frame and its controls carry `transition:persist`, so the
  * client router moves the same canvas, renderer, meshes and camera into each
@@ -11,6 +15,7 @@
  */
 import Base from './Base.astro';
 import LandmarkMenu from '../components/LandmarkMenu.astro';
+import Logo from '../components/Logo.astro';
 import { getCollection } from 'astro:content';
 import { site, landmarksInStoryOrder, type DataCardMetric } from '../data/site';
 import { MAX_TREES, PLACED_LANDMARK_IDS } from '../world';
@@ -41,23 +46,42 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
 ---
 
 <Base title={title} description={description}>
-  <header class="hero">
-    {
-      hasPanel ? (
-        <p class="company">
-          <a href="/" data-seed-link>
-            {site.company.name}
+  <!--
+    The HUD: every UI element floats over the full-screen World as a card.
+    Top: the company name (left) and the Landmark menu (right); then the
+    section panel or the Overview's intro, and the dice with the Seed. The
+    World itself is fixed behind it all. Without the full-screen layout (no
+    JS, no WebGPU or WebGL) the same HTML is a normal page that scrolls.
+  -->
+  <div class="hud">
+    <header class="hud-bar" data-covers-world>
+      {
+        hasPanel ? (
+          <a class="brand" href="/" data-seed-link>
+            <Logo />
+            <span class="brand-name">{site.company.name}</span>
           </a>
-        </p>
-      ) : (
-        <h1 class="company">{site.company.name}</h1>
-      )
-    }
-    <p class="tagline">{site.company.tagline}</p>
-  </header>
+        ) : (
+          <h1 class="brand">
+            <Logo />
+            <span class="brand-name">{site.company.name}</span>
+          </h1>
+        )
+      }
+      <LandmarkMenu />
+    </header>
 
-  <main>
-    <div class="stage">
+    <main class="hud-main">
+      {
+        hasPanel ? (
+          <slot name="panel" />
+        ) : (
+          <section class="intro" data-covers-world aria-label="Introduction">
+            <p class="tagline">{site.company.tagline}</p>
+            <slot />
+          </section>
+        )
+      }
       <div class="world" id="world-frame" transition:persist="world">
         <canvas
           id="world-canvas"
@@ -96,30 +120,28 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
           ))
         }
       </div>
-      <slot name="panel" />
-    </div>
-    <div class="world-controls" transition:persist="world-controls">
-      <button type="button" class="dice" id="roll-seed">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
-          <rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2"></rect>
-          <circle cx="8" cy="8" r="1.6" fill="currentColor"></circle>
-          <circle cx="16" cy="8" r="1.6" fill="currentColor"></circle>
-          <circle cx="12" cy="12" r="1.6" fill="currentColor"></circle>
-          <circle cx="8" cy="16" r="1.6" fill="currentColor"></circle>
-          <circle cx="16" cy="16" r="1.6" fill="currentColor"></circle>
-        </svg>
-        Roll a new World
-      </button>
-      <p class="world-status" id="world-status" aria-live="polite"></p>
-    </div>
-    <LandmarkMenu />
-    <slot />
-  </main>
+      <div class="world-controls" data-covers-world transition:persist="world-controls">
+        <button type="button" class="dice" id="roll-seed">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+            <rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <circle cx="8" cy="8" r="1.6" fill="currentColor"></circle>
+            <circle cx="16" cy="8" r="1.6" fill="currentColor"></circle>
+            <circle cx="12" cy="12" r="1.6" fill="currentColor"></circle>
+            <circle cx="8" cy="16" r="1.6" fill="currentColor"></circle>
+            <circle cx="16" cy="16" r="1.6" fill="currentColor"></circle>
+          </svg>
+          Roll a new World
+        </button>
+        <p class="world-status" id="world-status" aria-live="polite"></p>
+      </div>
+    </main>
+  </div>
 </Base>
 
 <script>
   import { navigate } from 'astro:transitions/client';
   import { mountWorld, type ScreenOffset, type WorldView } from '../render/mountWorld';
+  import { freeCentre as freeCentreOf } from '../render/freeArea';
   import { createWorldSource } from '../render/worldSource';
   import type { CameraState } from '../render/cameraMath';
   import { rollSeed, seedFromUrl, withSeed, SEED_PARAM } from '../lib/seedUrl';
@@ -134,7 +156,8 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
   const frame = document.querySelector<HTMLElement>('#world-frame');
   const dice = document.querySelector<HTMLButtonElement>('#roll-seed');
   const status = document.querySelector<HTMLElement>('#world-status');
-  if (canvas && frame) {
+  // No GPU (see `Base.astro`): no World to mount; the page stays the normal page that scrolls.
+  if (canvas && frame && document.documentElement.dataset.world) {
     const hotspots = [...frame.querySelectorAll<HTMLElement>('[data-hotspot]')];
     const cards = [...frame.querySelectorAll<HTMLElement>('[data-card]')];
     const defaultSeed = canvas.dataset.defaultSeed ?? '';
@@ -143,6 +166,8 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     /** The scene, mounted once with the first World; later Worlds are swapped in. */
     let mounting: Promise<WorldView> | null = null;
+    /** Whether the scene has mounted (so the full-screen layout is earned). */
+    let mounted = false;
     /** Only the latest request may show its World; older ones are dropped. */
     let latest = 0;
     /** The Seed of the World on show (or loading), as asked for in the URL. */
@@ -176,34 +201,35 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     };
 
     /**
-     * Where a Landmark should sit on the frame so the open panel does not
-     * cover it: the middle of the part of the frame the panel leaves free.
+     * Where a Landmark should sit on the full-screen World so the floating
+     * cards do not cover it: the middle of the part they leave free (beside
+     * a side panel, above a bottom sheet, below the top bar).
      */
     const freeCentre = (): ScreenOffset => {
-      const panel = document.querySelector<HTMLElement>('[data-panel]');
-      if (!panel) return { x: 0, y: 0 };
-      const f = frame.getBoundingClientRect();
-      const p = panel.getBoundingClientRect();
-      // Side panel: it covers the frame's right-hand side.
-      if (p.left > f.left + f.width / 3 && p.left < f.right) return { x: (p.left - f.left) / 2 - f.width / 2, y: 0 };
-      // Bottom sheet: it covers the frame's lower part.
-      if (p.top > f.top && p.top < f.bottom) return { x: 0, y: (p.top - f.top) / 2 - f.height / 2 };
-      return { x: 0, y: 0 };
+      const covers = [...document.querySelectorAll<HTMLElement>('[data-covers-world]')];
+      return freeCentreOf(
+        frame.getBoundingClientRect(),
+        covers.map((cover) => cover.getBoundingClientRect()),
+      );
     };
 
-    /** Move the camera for the route now showing: to its Landmark, or back to where the World was left. */
-    const followRoute = (view: WorldView, ms: number) => {
+    /**
+     * Move the camera for the route now showing: to its Landmark, or back to
+     * where the World was left. `fresh`: a new World is in, so frame it.
+     */
+    const followRoute = (view: WorldView, ms: number, fresh = false) => {
       const id = routeLandmark();
-      // The Data Card shown is the one nearest where the visitor looks: beside the panel, if any.
-      view.setViewCentre(freeCentre());
+      const at = freeCentre();
+      // Where the visitor looks: the Data Card shown is the one nearest it, and the pan bounds hold it.
+      view.setViewCentre(at);
       if (id === 'overview') {
         // A section opened directly has no earlier view of the World: go to the Overview.
         if (worldState) void view.camera.flyTo(worldState, ms);
-        else if (shownLandmark !== 'overview') void view.focus('overview', { ms });
+        else if (fresh || shownLandmark !== 'overview') void view.focus('overview', { at, ms });
         worldState = null;
       } else {
         if (shownLandmark === 'overview') worldState = view.camera.state;
-        void view.focus(id, { at: freeCentre(), ms });
+        void view.focus(id, { at, ms });
       }
       shownLandmark = id;
     };
@@ -219,6 +245,7 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
         if (!mounting) {
           mounting = mountWorld(canvas, world, meshed, { frame, hotspots, cards });
           view = await mounting;
+          mounted = true;
         } else {
           view = await mounting;
           if (request !== latest) return;
@@ -227,13 +254,15 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
         // A new World starts at its Overview: cut to the open section's Landmark, if any.
         worldState = null;
         shownLandmark = 'overview';
-        followRoute(view, 0);
+        followRoute(view, 0, true);
         canvas.dataset.generateMs = ms.toFixed(1);
         linkSeed = world.seed;
         keepSeedOnLinks();
         if (status) status.textContent = `Seed ${world.seed}`;
       } catch (error: unknown) {
         console.error('World render failed', error);
+        // No World to show: fall back to the normal page that scrolls.
+        if (!mounted) delete document.documentElement.dataset.world;
       } finally {
         if (request === latest) frame.removeAttribute('aria-busy');
       }
@@ -257,46 +286,189 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
       void navigate(url.href);
     });
 
-    // Escape closes an open section, like its close button.
+    // Escape closes an open section, like its close button; an open menu popover takes it first.
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (document.querySelector(':popover-open')) return;
       document.querySelector<HTMLAnchorElement>('[data-panel-close]')?.click();
     });
 
+    // The router swaps the <html> attributes: keep the full-screen layout on.
+    document.addEventListener('astro:before-swap', (event) => {
+      const { world } = document.documentElement.dataset;
+      if (world) event.newDocument.documentElement.dataset.world = world;
+    });
     document.addEventListener('astro:after-swap', () => void onRoute());
+    // A resize can move the cards (a side panel becomes a bottom sheet): re-aim the Data Card.
+    window.addEventListener('resize', () => {
+      if (mounted) void mounting?.then((view) => view.setViewCentre(freeCentre()));
+    });
     markCurrentTree();
     void showSeed(currentSeed());
   }
 </script>
 
 <style>
-  .hero,
-  main {
+  /*
+   * Without the full-screen layout (no JS, no WebGPU or WebGL): a normal
+   * page that scrolls, the cards stacked in a column. The World and its
+   * controls need JS and a GPU, so they are hidden.
+   */
+  .hud {
     max-width: 64rem;
     margin: 0 auto;
-    padding: 0 1rem;
+    padding: var(--gutter);
   }
-  .company {
-    margin: 1.5rem 0 0.25rem;
-    font-size: 2rem;
-    font-weight: 700;
-    line-height: 1.2;
+  .hud-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    justify-content: space-between;
+    gap: 0.5rem var(--gutter);
   }
-  .company a {
-    color: inherit;
+  .hud-main {
+    display: grid;
+    gap: var(--gutter);
+    margin-top: var(--gutter);
+  }
+  .world,
+  .world-controls {
+    display: none;
+  }
+
+  /* The floating card look shared by the company name, the intro and the controls. */
+  .brand,
+  .intro,
+  .world-controls {
+    border-radius: var(--card-radius);
+    background: var(--card);
+    box-shadow: var(--card-shadow);
+    color: var(--ink);
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.35rem 0.75rem 0.35rem 0.5rem;
+    font: 1.875rem / 1.1 var(--font-heading);
     text-decoration: none;
   }
+  a.brand:hover .brand-name,
+  a.brand:focus-visible .brand-name {
+    color: var(--brand-ink);
+  }
+  a.brand:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+  .intro {
+    box-sizing: border-box;
+    max-width: 26rem;
+    padding: 0.9rem 1.1rem 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
   .tagline {
-    margin: 0 0 1rem;
+    margin: 0 0 0.6rem;
+    color: var(--brand-ink);
+    font: 1.875rem / 1.05 var(--font-heading);
   }
-  .stage {
-    position: relative;
-    margin-bottom: 0.75rem;
+  .intro :global(p:last-child) {
+    margin-bottom: 0;
   }
-  .world {
-    position: relative;
-    aspect-ratio: 16 / 10;
-    border-radius: 6px;
+  .world-controls {
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0.9rem 0.4rem 0.4rem;
+  }
+  .dice {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.75rem 0.4rem;
+    border: 0;
+    border-radius: 4px;
+    background: var(--brand-ink);
+    color: var(--on-brand);
+    cursor: pointer;
+  }
+  .dice:hover {
+    background: color-mix(in oklab, var(--brand-ink) 80%, black);
+  }
+  .dice:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+  .world-status {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * The full-screen World: the canvas fills the viewport, edge to edge, and
+   * the page does not scroll. The HUD lies over it, letting the pointer
+   * through everywhere but its cards.
+   */
+  :global(:root[data-world]),
+  :global(:root[data-world] body) {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  :global(:root[data-world]) .hud {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gutter);
+    max-width: none;
+    height: 100dvh;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  :global(:root[data-world]) .hud-bar {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+  /* :global(*): the menu and the panel are other components, outside this scope. */
+  :global(:root[data-world]) .hud-bar > :global(*),
+  :global(:root[data-world]) .hud-main > :global(*) {
+    pointer-events: auto;
+  }
+  :global(:root[data-world]) .hud-main {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    /* Desktop: intro (or nothing) at the left, a panel at the right, the controls at the bottom left. */
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  :global(:root[data-world]) .intro {
+    grid-area: 1 / 1;
+    align-self: start;
+    justify-self: start;
+    max-height: 100%;
+  }
+  :global(:root[data-world]) .hud-main > :global([data-panel]) {
+    grid-area: 1 / 2 / -1 / 3;
+    align-self: start;
+    justify-self: end;
+    max-height: 100%;
+  }
+  :global(:root[data-world]) .world-controls {
+    display: flex;
+    grid-area: 2 / 1;
+    align-self: end;
+    justify-self: start;
+  }
+  :global(:root[data-world]) .world {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    display: block;
+    height: 100dvh;
     /* clip, not hidden: a focused hotspot must not scroll the frame. */
     overflow: clip;
     /* The World takes every touch gesture: one finger pans, two pinch. */
@@ -306,32 +478,29 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     cursor: grab;
     background: var(--surface);
   }
-  .world-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-  }
-  .dice {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.75rem;
-    border: 0;
-    border-radius: 4px;
-    background: var(--brand);
-    color: var(--on-brand);
-    font: inherit;
-    cursor: pointer;
-  }
-  .dice:focus-visible {
-    outline: 2px solid var(--ink);
-    outline-offset: 2px;
-  }
-  .world-status {
-    margin: 0;
-    font-variant-numeric: tabular-nums;
+  /* Phones: the panel (or intro) is a bottom sheet, the controls just above it. */
+  @media (max-width: 47.99rem) {
+    .brand,
+    .tagline {
+      font-size: 1.40625rem;
+    }
+    :global(:root[data-world]) .hud-main {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto auto;
+    }
+    :global(:root[data-world]) .world-controls {
+      grid-area: 2 / 1;
+    }
+    :global(:root[data-world]) .intro,
+    :global(:root[data-world]) .hud-main > :global([data-panel]) {
+      grid-area: 3 / 1;
+      justify-self: stretch;
+      max-width: none;
+      max-height: 55dvh;
+    }
+    :global(:root[data-world]) .intro {
+      max-height: 40dvh;
+    }
   }
   .world[data-dragging] {
     cursor: grabbing;
@@ -372,13 +541,13 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     opacity: 1;
   }
   .data-card-value {
-    color: var(--brand);
-    font-size: 1.15rem;
-    font-weight: 700;
+    color: var(--brand-ink);
+    font-family: var(--font-heading);
+    font-size: 1.40625rem;
     font-variant-numeric: tabular-nums;
   }
   .data-card-label {
-    font-size: 0.8rem;
+    font-size: 1rem;
   }
   @media (max-width: 47.99rem) {
     .data-card {
@@ -386,10 +555,10 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
       padding: 0.25rem 0.45rem 0.3rem;
     }
     .data-card-value {
-      font-size: 0.95rem;
+      font-size: 1.171875rem;
     }
     .data-card-label {
-      font-size: 0.7rem;
+      font-size: 0.9375rem;
     }
   }
   .hotspot {
@@ -412,9 +581,9 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     translate: -50% 0;
     padding: 0.15rem 0.5rem;
     border-radius: 4px;
-    background: var(--brand);
+    background: var(--brand-ink);
     color: var(--on-brand);
-    font-size: 0.85rem;
+    font-size: 1rem;
     white-space: nowrap;
     opacity: 0;
     pointer-events: none;

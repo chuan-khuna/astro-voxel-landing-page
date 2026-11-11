@@ -11,8 +11,9 @@
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
  *   Landmark hotspots (`landmarkHotspots.ts`) and Data Cards (`dataCards.ts`)
  *   follow the camera.
- * - `setViewCentre(at)` says where the visitor looks (beside a panel), for
- *   choosing the Data Card.
+ * - `setViewCentre(at)` says where the visitor looks (the middle of the part
+ *   the floating cards leave free), for choosing the Data Card; the pan
+ *   bounds hold the ground seen there (`CameraLimits.at`).
  * - `focus(landmark)` flies (or cuts) the camera to a Landmark
  *   (`landmarkFocus.ts`), optionally off centre to leave room for a panel.
  * - `show(world)` swaps in another World (a new Seed) and disposes the old one.
@@ -28,6 +29,9 @@ import { landmarkFocus } from './landmarkFocus';
 import { stateShowing, type CameraState } from './cameraMath';
 import { buildWorldObjects, type WorldObjects } from './worldMeshes';
 import type { MeshedWorld } from './worldVoxels';
+import type { ScreenOffset } from './freeArea';
+
+export type { ScreenOffset };
 
 const SHADOW_MAP_SIZE = 2048;
 
@@ -68,11 +72,6 @@ export interface WorldView {
   dispose(): void;
 }
 
-/** CSS px from the centre of the World's frame, x right and y down. */
-export interface ScreenOffset {
-  x: number;
-  y: number;
-}
 
 export interface WorldFrame {
   /** The element round the canvas that takes pan and zoom input and holds the hotspots. */
@@ -157,6 +156,16 @@ export async function mountWorld(
     camera.updateProjectionMatrix();
   };
 
+  /** CSS px from the frame's centre (y down) to frame units (world units at zoom 1, y up). */
+  function toFrameUnits(at: ScreenOffset) {
+    const k = (camera.top - camera.bottom) / Math.max(1, ui.frame.clientHeight);
+    return { x: at.x * k, y: -at.y * k };
+  }
+  /** The pan bounds hold the ground where the visitor looks, not the frame's centre. Again after any re-framing. */
+  function lookAtViewCentre() {
+    rig.lookAt(toFrameUnits(viewCentre));
+  }
+
   const resize = () => {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
@@ -164,6 +173,7 @@ export async function mountWorld(
     renderer.setPixelRatio(pixelRatio());
     renderer.setSize(w, h, false);
     frameCamera();
+    lookAtViewCentre();
     requestRender();
   };
 
@@ -187,6 +197,7 @@ export async function mountWorld(
     const { target } = next.views.overview;
     radius = next.views.overview.radius;
     frameCamera();
+    lookAtViewCentre();
     hotspots.setWorld(next);
     cards.setWorld(next);
     rig.reset(
@@ -213,11 +224,10 @@ export async function mountWorld(
   resize();
   canvas.dataset.backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl2';
 
+
   const focusState = (id: LandmarkId, at: ScreenOffset = { x: 0, y: 0 }) => {
     const { point, zoom } = landmarkFocus(current, id);
-    // CSS px to frame units (world units at zoom 1), y up.
-    const k = (camera.top - camera.bottom) / Math.max(1, ui.frame.clientHeight);
-    return stateShowing(point, zoom, { x: at.x * k, y: -at.y * k }, rig.limits);
+    return stateShowing(point, zoom, toFrameUnits(at), rig.limits);
   };
 
   return {
@@ -227,6 +237,7 @@ export async function mountWorld(
     focus: (id, { at, ms }) => rig.flyTo(focusState(id, at), ms),
     setViewCentre: (at) => {
       viewCentre = at;
+      lookAtViewCentre();
       requestRender();
     },
     dispose: () => {

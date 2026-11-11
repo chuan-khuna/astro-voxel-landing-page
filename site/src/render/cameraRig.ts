@@ -27,6 +27,12 @@ export interface CameraRig {
   reset(limits: CameraLimits, state: CameraState, distance: number): void;
   /** The limits the state is clamped to (the World's bounds and zoom range). */
   readonly limits: CameraLimits;
+  /**
+   * Where the visitor looks (`CameraLimits.at`, frame units from the centre,
+   * y up): from now on the bounds hold the ground seen there. Kept across
+   * `reset`. Does not move the camera.
+   */
+  lookAt(at: { x: number; y: number }): void;
   /** Cut to a state, clamped to the limits. Stops a flight. */
   jumpTo(state: CameraState): void;
   /** Fly to a state over `ms` milliseconds (a cut when `ms` is 0). Resolves when it lands or is stopped. */
@@ -213,9 +219,12 @@ export function createCameraRig({ element, camera, onChange }: Options): CameraR
     get limits() {
       return limits;
     },
+    lookAt(at) {
+      limits = { ...limits, at };
+    },
     reset(nextLimits, nextState, nextDistance) {
       stopFlight();
-      limits = nextLimits;
+      limits = { at: limits.at, ...nextLimits };
       distance = nextDistance;
       apply(nextState);
     },

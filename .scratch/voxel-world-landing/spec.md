@@ -266,8 +266,21 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - They are real text, and their metrics come from site data.
 - **Done (ticket 09).** Metrics are `site.dataCards` in `site/src/data/site.ts`, keyed to a placed Landmark id. Each card keeps its CSS size on screen (crisp text at any zoom); only its tilt (upright, text along the World's −z axis) and position follow the camera. One card shows at a time: the Landmark the camera is near (zoom above the Overview and at least 0.7 × the Landmark's close-up, Landmark within the middle of the frame round where the visitor looks, beside a panel if one is open). It stands over its Landmark, or hangs under it when the top of the frame would cut it off. The `services` collection (`title`, `summary`, `icon` from `pipeline`/`model`/`chart`/`platform`, `order`) is listed on `/services`; the Station has its real voxel model.
 
+**Layout: a full-screen World with floating UI** (like haru-ni.net; added on 2026-11-11, ticket 19)
+- **The World fills the viewport**, edge to edge (`100dvh`), with no frame or border. The page does not scroll while the World is shown.
+- **Every UI element floats over the World as a card**: rounded (about 6px), near-opaque paper, a soft shadow. Only the cards take the pointer; the World can be dragged anywhere else.
+  - Top left: the logo mark and company name.
+  - Top right: the Landmark menu as a rounded bar, the current section marked (`aria-current`). On narrow screens it collapses into a menu button that opens it as a popover.
+  - Bottom left: the dice button and the current Seed.
+  - Section panels: on desktop a card at the right, below the menu, as tall as its content and no taller than the screen; on phones a bottom sheet, with the dice row above it. Long content scrolls inside the card.
+  - The Overview's intro (tagline and home hook) is the same kind of card: at the left on desktop, a bottom sheet on phones.
+- **Camera framing.** The camera puts each focused Landmark in the middle of the part of the screen the cards leave free, and the pan bounds apply there, so a Landmark at the edge of the World still clears a panel or sheet.
+- **Without JS, or without WebGPU/WebGL,** the page is a normal readable HTML page that scrolls (the same cards in a column; the World and dice hidden), never a viewport-locked empty screen.
+- **Fonts.** Jersey 20 for body text and Jersey 15 for headings (h1–h3, card titles, the company name), self-hosted from Fontsource with `font-display: swap` and a system fallback stack. The stacks live in the site data module. Body text is 20px (Jersey 20's pixel grid) and never below 16px; headings use multiples of 15px. All text meets WCAG AA.
+- **Done (ticket 19).** The layout switch is `<html data-world="live">`, set before first paint when the browser has WebGPU or WebGL 2 and dropped if the World fails to mount. The free part is `freeCentre` in `site/src/render/freeArea.ts`; the pan bounds hold the ground at `CameraLimits.at`. Brand-coloured text uses `--brand-ink` (the brand colour darkened) for AA.
+
 **Overlay UI**
-- **Section pages** open as a side panel on desktop and a bottom sheet on mobile.
+- **Section pages** open as a floating card on desktop and a bottom sheet on mobile (see Layout above).
 - **Landmark menu.** An HTML Landmark menu is always present and keyboard-reachable.
 - **Controls**
   - dice button: roll a new Seed
@@ -309,7 +322,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - The company is fictional.
 - Content: about 6 Projects, 4 Services, 4 Team Members, 5 Clients and 3 fictional Partners, plus Data Card metrics and contact details.
 - No real brands or logos are used.
-- The implementer picks the fictional company name, UI font and brand colour and puts them in the site data module; the user may change them later.
+- The implementer picks the fictional company name and brand colour and puts them in the site data module; the user may change them later. The fonts are the user's choice (Jersey 20 and Jersey 15, see Layout).
 - The Guide's voice is talkative with dry humour.
 
 ## Testing Decisions

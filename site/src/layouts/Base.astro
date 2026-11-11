@@ -1,5 +1,7 @@
 ---
 import { ClientRouter } from 'astro:transitions';
+import '@fontsource/jersey-20';
+import '@fontsource/jersey-15';
 import { site } from '../data/site';
 
 interface Props {
@@ -7,6 +9,7 @@ interface Props {
   description?: string;
 }
 const { title = site.seo.title, description = site.seo.description } = Astro.props;
+const { colour, fonts } = site.brand;
 ---
 
 <!doctype html>
@@ -18,10 +21,28 @@ const { title = site.seo.title, description = site.seo.description } = Astro.pro
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="icon" href="data:," />
+    <!--
+      The full-screen World layout is only for a browser that can draw the
+      World: with JS and WebGPU or WebGL 2. Set before first paint, so the
+      page does not jump; the World's script keeps it across routes and drops
+      it if the World fails to mount. Without it the page is a normal page
+      that scrolls.
+    -->
+    <script is:inline>
+      (() => {
+        let live = 'gpu' in navigator;
+        if (!live) {
+          const gl = document.createElement('canvas').getContext('webgl2');
+          live = !!gl;
+          gl?.getExtension('WEBGL_lose_context')?.loseContext();
+        }
+        if (live) document.documentElement.dataset.world = 'live';
+      })();
+    </script>
     <!-- The client router keeps the World canvas (transition:persist) across routes. -->
     <ClientRouter />
   </head>
-  <body style={`--brand: ${site.brand.colour}; --font: ${site.brand.font};`}>
+  <body style={`--brand: ${colour}; --font-body: ${fonts.body}; --font-heading: ${fonts.heading};`}>
     <slot />
   </body>
 </html>
@@ -32,11 +53,40 @@ const { title = site.seo.title, description = site.seo.description } = Astro.pro
     --paper: oklch(0.97 0.01 230);
     --surface: oklch(0.92 0.015 230);
     --on-brand: oklch(0.98 0.005 230);
+    /* Floating cards over the World. */
+    --card: color-mix(in oklab, var(--paper) 95%, transparent);
+    --card-radius: 6px;
+    --card-shadow: 0 6px 24px oklch(0.2 0.02 250 / 0.2);
+    /* Space between the cards and the edge of the screen. */
+    --gutter: 1rem;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--ink) 35%, transparent) transparent;
   }
   body {
+    /* The brand colour (set on <body>) darkened for text and for backgrounds under text: WCAG AA on the cards. */
+    --brand-ink: color-mix(in oklab, var(--brand) 80%, black);
     margin: 0;
-    font-family: var(--font);
+    /* Jersey 20 is drawn on a 20px grid: 20px keeps its pixels whole. */
+    font: 1.25rem / 1.3 var(--font-body);
+    /* Jersey has one weight: never fake a bold or an italic. */
+    font-synthesis: none;
     color: var(--ink);
     background: var(--paper);
+  }
+  h1,
+  h2,
+  h3,
+  dt {
+    font-family: var(--font-heading);
+    font-weight: 400;
+    line-height: 1.1;
+  }
+  button {
+    font: inherit;
+  }
+  @media (max-width: 47.99rem) {
+    :root {
+      --gutter: 0.5rem;
+    }
   }
 </style>

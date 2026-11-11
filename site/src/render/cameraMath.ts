@@ -18,7 +18,10 @@ export interface CameraState {
   zoom: number;
 }
 
-/** Where the target may go (the World's bounds) and how far the camera may zoom. */
+/**
+ * Where the ground the visitor looks at may go (the World's bounds) and how
+ * far the camera may zoom.
+ */
 export interface CameraLimits {
   minX: number;
   maxX: number;
@@ -26,6 +29,13 @@ export interface CameraLimits {
   maxZ: number;
   minZoom: number;
   maxZoom: number;
+  /**
+   * Where the visitor looks, in frame units from the screen centre (y up):
+   * the middle of the part the floating cards leave free. The bounds hold
+   * the ground seen there, so a Landmark at the edge of the World can still
+   * be brought beside a panel or above a bottom sheet. Default: the centre.
+   */
+  at?: { x: number; y: number };
 }
 
 /**
@@ -43,11 +53,18 @@ export function screenToGround(dx: number, dy: number): GroundPoint {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** Keep the target inside the World's bounds and the zoom inside its limits. */
+/** Keep the ground seen at `limits.at` inside the World's bounds and the zoom inside its limits. */
 export function clampState(state: CameraState, limits: CameraLimits): CameraState {
+  const zoom = clamp(state.zoom, limits.minZoom, limits.maxZoom);
+  const at = limits.at ?? { x: 0, y: 0 };
+  const toLook = screenToGround(at.x / zoom, at.y / zoom);
+  const look = { x: state.target.x + toLook.x, z: state.target.z + toLook.z };
   return {
-    target: { x: clamp(state.target.x, limits.minX, limits.maxX), z: clamp(state.target.z, limits.minZ, limits.maxZ) },
-    zoom: clamp(state.zoom, limits.minZoom, limits.maxZoom),
+    target: {
+      x: clamp(look.x, limits.minX, limits.maxX) - toLook.x,
+      z: clamp(look.z, limits.minZ, limits.maxZ) - toLook.z,
+    },
+    zoom,
   };
 }
 

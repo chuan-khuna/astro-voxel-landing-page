@@ -158,8 +158,9 @@ along x) on sea cells within 2 cells of land. Both are opaque
 `{ frame, hotspots, cards? }`: the element round the canvas that takes pan and zoom
 input, the Landmark hotspot links inside it, and the Data Cards (default: the canvas's
 parent, no hotspots, no cards). `setViewCentre(at)` says where the visitor
-looks (CSS px from the frame's centre: the middle of the part a section
-panel leaves free), which picks the Data Card shown. `camera` is the camera rig (below); `focus` flies the
+looks (CSS px from the frame's centre: the middle of the part the floating
+cards leave free, from `freeCentre`), which picks the Data Card shown and
+is where the pan bounds apply (`CameraLimits.at`, below). `camera` is the camera rig (below); `focus` flies the
 camera to a Landmark (see "Landmark focus and flights").
 
 - **Renderer:** `WebGPURenderer` (`three/webgpu`), falling back to WebGL 2 by
@@ -208,7 +209,8 @@ on the isometric axis above the target.
   (−1, 0, −1)·√(3/2)); `panBy` moves the target so the ground under the
   pointer follows a drag; `zoomAt` changes the zoom and keeps the ground
   point under the cursor or pinch centre in place; `clampState` keeps the
-  target inside the bounds and the zoom inside its limits. Screen offsets
+  ground seen at `limits.at` (where the visitor looks; default the screen
+  centre) inside the bounds and the zoom inside its limits. Screen offsets
   are in frame units: world units at zoom 1, from the screen centre, y up.
 - **`cameraRig.ts`**: `createCameraRig({ element, camera, onChange })` owns
   the state and listens on the frame element (so a drag that starts on a
@@ -227,10 +229,14 @@ on the isometric axis above the target.
     `data-dragging` while dragging (grab and grabbing cursors).
   - `reset(limits, state, distance)` sets new bounds and cuts; `jumpTo(state)`
     cuts to a clamped state; `flyTo(state, ms)` flies there (below);
-    `limits` are the current bounds and zoom range.
+    `limits` are the current bounds and zoom range; `lookAt(at)` sets
+    `limits.at` (kept across `reset`) without moving the camera.
 - **Limits:** pan bounds are the union of the Isles' footprints (the same
-  box the Overview is fitted to), so the view centre is always over the
-  World's land box. Zoom runs from 1 (the Overview, the farthest out) to
+  box the Overview is fitted to), so where the visitor looks is always over
+  the World's land box. That is the free part's middle, not the screen's
+  centre: with a bottom sheet open on a phone, a Landmark at the World's
+  edge can still be brought into the free part above it. `mountWorld`
+  keeps `limits.at` in step with `setViewCentre`, resizes and new Worlds. Zoom runs from 1 (the Overview, the farthest out) to
   `max(2, radius / 3)`, about 3 world units from the centre to the frame
   edge.
 - **Landmark hotspots** (`landmarkHotspots.ts`): every page renders one
@@ -276,9 +282,9 @@ camera):
   and the Landmark is seen within 0.6 of the frame's half width and height
   of `centre`. Of the near Landmarks, the one seen closest to `centre` shows;
   at most one card shows, so neighbours' cards never pile up. `centre` is
-  the view centre the page sets: beside a side panel the Landmark sits in
-  the middle of the free part, and that is what counts, not the frame's
-  centre. The shown card gets `data-near` (opacity 1); the others fade out
+  the view centre the page sets: the Landmark sits in the middle of the
+  part the floating cards leave free, and that is what counts, not the
+  frame's centre. The shown card gets `data-near` (opacity 1); the others fade out
   where they were. Cards are hidden until a World is shown and reset on a
   new World.
 - **The tilt: `dataCardTransform(viewProjection, frame, anchor, card, pin)`.**
@@ -322,8 +328,10 @@ camera):
   by the offset. Tested against a real three.js camera.
 - **`view.focus(id, { at, ms })`** combines the two: `at` is where on the
   frame (CSS px from its centre) the Landmark should land. The page passes
-  the middle of the part of the frame the section panel leaves free, so the
-  Landmark is never under the panel.
+  `freeCentre(frame, covers)` (`freeArea.ts`, tested in
+  `freeArea.test.ts`): the middle of the part the floating cards (top bar,
+  panel or bottom sheet, intro, dice row) leave free, so the Landmark is
+  never under a card. See "Full-screen layout" in `site-project.md`.
 - **Flights:** `rig.flyTo(state, ms)` tweens with `flightState(from, to, t)`:
   cubic ease in and out, the target in a straight line and the zoom on a
   log scale (zooming in and out feel equally fast); one `jumpTo` per
