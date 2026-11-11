@@ -220,6 +220,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - Biomes come from the referenced Lospec palettes (late night bath, Cryptic Ocean, Punolite Plus Remake, Aquaverse), with chroma clamped to ≤ 0.10 and L and h kept.
 - Brand and UI colours and the House colours are fixed and independent of the Biome.
 - Day and Night are a separate theme dimension. They drive lighting and emissive accents, never the layout.
+- **Done (ticket 13).** One set of OKLCH tokens, `THEME_TOKENS` in `site/src/data/theme.ts`, drives the CSS custom properties (inlined in `<head>` by `themeCss()`) and the three.js World (sky, sun or moon, hemisphere light, water shade, glow). A toggle at the top right, before the Landmark menu, cycles Auto, Day and Night (one icon button: monitor, sun, moon); Auto follows `prefers-color-scheme` live, Day and Night are kept in `localStorage`, and an inline `<head>` script sets `<html data-theme>` before first paint, so there is no flash. At Night the House's windows glow (`HOUSE_WINDOWS`), the buoys' lamps glow and the water darkens. The buoys (up to 4, sea marks nearest the Dock) are part of the World data (`world.buoys`), placed from the layout alone, so both themes show the same World. Every UI text pair meets WCAG AA in both themes (`theme.test.ts`). The Landmark menu now collapses below 64rem (was 60rem) to make room for the toggle.
 
 **Mesher**
 - The mesher converts the World into chunked buffer geometry:

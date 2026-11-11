@@ -54,6 +54,8 @@ Rolling a new Seed changes the terrain and the colours, but not the character of
 - clouds drift over the sea and their shadows cross the Isles
 - fish swim in the shallows and waves break on the shore
 
+**Night light.** Torches and lanterns in each Biome's style stand round the Landmarks and along the paths. At Night they flicker and throw warm block light on the voxels round them, and every light source glows softly.
+
 None of it can be clicked, none of it hides a Landmark for long, and all of it stands still under reduced motion (ADR 0005).
 
 ## User Stories
@@ -79,6 +81,7 @@ None of it can be clicked, none of it hides a Landmark for long, and all of it s
 19. As a visitor, I want moving things never to block a click or hide a Landmark, so that finding sections stays easy.
 20. As a visitor who prefers reduced motion, I want all Ambient Life to stand still, so that the World does not move without me.
 21. As a visitor on a slow device, I want the motion to scale itself down, so that panning and camera flights stay smooth.
+22. As a visitor at Night, I want torches that flicker and light up the ground round them, so that I can find the Landmarks by their light.
 
 ## Implementation Decisions
 
@@ -204,6 +207,14 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 - *Sea.* Shore foam (⅛-unit) runs in towards the coast, breaks along the edge and draws back. It is computed in the shader from the same distance-from-coast data as the water colour. Schools of 3–5 fish swim in the shallows, seen through the translucent water. Now and then one leaps and splashes. At Night the foam dims, and a faint bioluminescent glow shows where waves break.
 - *Land animals.* `generateWorld` gives each land animal a rest point and a short route from the Seed. Routes never cross a footprint, a bridge or the Garden, and never stand between the camera and a Landmark, using the Decoration occlusion check. At runtime an animal walks its route, then rests, grazes or turns its head. Each Isle has at most 2–3 animals.
 - *Birds* circle above the Isles, higher than every Landmark, and never fly through the camera's view of a Landmark.
+
+**Night light (ticket 16)**
+- A Light Source is a ⅛-unit structure with a `flame` or `glow` role and a declared light: colour (a theme token per Biome), reach of about 3–5 cells and strength.
+- Each Biome has its own torch style with 2 Variants. `generateWorld` places one or two at each Landmark and a few along paths and at bridge ends, under the Decoration rules.
+- Block light is baked: a flood fill in the World Web Worker, one level less per cell, stopped by solid voxels, passed to the mesher as a per-vertex attribute. No real-time lights.
+- A `nightStrength` uniform turns it on at Night; switching theme never remeshes.
+- Flames flicker from the shared clock. Emissive parts bloom at the full tier, use a halo sprite at the reduced tier, and keep only block light at the still tier.
+- The House's lit windows and the buoys' lamps also throw block light; fireflies only glow.
 
 ## Testing Decisions
 
