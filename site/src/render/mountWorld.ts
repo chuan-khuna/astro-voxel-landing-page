@@ -221,7 +221,9 @@ export async function mountWorld(
   // Ships sail while the page is visible and the visitor has not asked for reduced motion:
   // then every frame asks for the next. Otherwise they keep still where they are.
   const stillness = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const sailing = () => !!objects && objects.ships.count > 0 && !stillness.matches && document.visibilityState === 'visible';
+  /** Motion is allowed and the page visible: anything that loops may move. */
+  const idling = () => !stillness.matches && document.visibilityState === 'visible';
+  const sailing = () => !!objects && objects.ships.count > 0 && idling();
   /** Seconds sailed so far. */
   let sailed = 0;
   /** The House: open or shut, how far its lid is lifted (0–1), how long a lift takes, and seconds worked inside. */
@@ -231,9 +233,8 @@ export async function mountWorld(
   let worked = 0;
   const lifting = () => opening !== (interior ? 1 : 0);
   // The developer works while the House is open, the page visible and motion allowed.
-  const working = () => interior && opening > 0 && !stillness.matches && document.visibilityState === 'visible';
-  // The Guide assembles and dissolves whenever it does; it bobs and blinks only while motion is allowed and the page visible.
-  const idling = () => !stillness.matches && document.visibilityState === 'visible';
+  const working = () => interior && opening > 0 && idling();
+  // The Guide assembles and dissolves whenever it does; it bobs and blinks only while idling.
   const moving = () => sailing() || lifting() || working() || guide.moving(idling());
   /** The time of the last frame while something moved (0 when nothing did). */
   let lastTick = 0;

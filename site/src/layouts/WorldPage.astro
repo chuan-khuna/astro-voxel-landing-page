@@ -293,8 +293,10 @@ const stillAlt = site.seo.imageAlt;
   const GUIDE_FLIGHT_MS = 750;
   /** On the Tour the camera comes no closer than this times the close-up of the Landmark the Guide floats beside. */
   const TOUR_ZOOM = 1.3;
+  /** What steps through a Tour already begun: next, previous or exit. */
+  type TourStepAction = Exclude<TourAction, 'start'>;
   /** The keys that step through the Tour. */
-  const TOUR_KEYS: Partial<Record<string, Exclude<TourAction, 'start'>>> = { ArrowRight: 'next', ArrowLeft: 'previous', Escape: 'exit' };
+  const TOUR_KEYS: Partial<Record<string, TourStepAction>> = { ArrowRight: 'next', ArrowLeft: 'previous', Escape: 'exit' };
   /** How long the House's lid takes to lift or come down; a cut under reduced motion. */
   const ROOF_MS = 800;
 
@@ -328,9 +330,9 @@ const stillAlt = site.seo.imageAlt;
     const counts = JSON.parse(canvas.dataset.counts ?? '{}') as ContentCounts;
     const source = createWorldSource();
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    /** The scene, mounted once with the first World; later Worlds are swapped in. */
+    /** The World view, mounted once with the first World; later Worlds are swapped in. */
     let mounting: Promise<WorldView> | null = null;
-    /** Whether the scene has mounted (so the full-screen layout is earned). */
+    /** Whether the World has mounted (so the full-screen layout is earned). */
     let mounted = false;
     /** Only the latest request may show its World; older ones are dropped. */
     let latest = 0;
@@ -340,7 +342,7 @@ const stillAlt = site.seo.imageAlt;
     let shownLandmark: LandmarkId = 'overview';
     /** Where the camera was on the World before a section opened; closing returns there. */
     let worldState: CameraState | null = null;
-    /** The World's Seed as generated (an over-long Seed falls back to the default). */
+    /** The Seed asked for, then the World's Seed as generated (an over-long Seed falls back to the default). */
     let linkSeed = defaultSeed;
     /** Render stats: only in dev or with `?stats`, decided once per visit (links keep `?stats`). */
     const stats = statsAvailable(import.meta.env.DEV, new URL(location.href));
@@ -352,6 +354,9 @@ const stillAlt = site.seo.imageAlt;
     const currentSeed = () => seedFromUrl(new URL(location.href)) ?? defaultSeed;
     const routeLandmark = () => landmarkForPath(location.pathname) ?? 'overview';
     const flightMs = () => (reducedMotion.matches ? 0 : FLIGHT_MS);
+    /** The lid's lift and the Guide's flight alongside a camera move of `ms`: cuts when the move is one. */
+    const roofMs = (ms: number) => (ms > 0 ? ROOF_MS : 0);
+    const guideFlightMs = (ms: number) => (ms > 0 ? GUIDE_FLIGHT_MS : 0);
     /** The cards floating over the World: the Guide's bubble keeps clear of them. */
     const covers = () => [...document.querySelectorAll<HTMLElement>('[data-covers-world]')].map((c) => c.getBoundingClientRect());
     /** The Landmarks' hotspots on screen (not the trees within the Garden's): the Guide's bubble keeps off them when it can. */
@@ -430,7 +435,7 @@ const stillAlt = site.seo.imageAlt;
       // Where the visitor looks: the Data Card shown is the one nearest it, and the pan bounds hold it.
       view.setViewCentre(at);
       // About and Team open the House: its lid lifts as the camera dives in; anywhere else it comes down.
-      view.setInterior(interior, ms > 0 ? ROOF_MS : 0);
+      view.setInterior(interior, roofMs(ms));
       if (id === 'overview') {
         // A section opened directly has no earlier view of the World: go to the Overview.
         if (worldState) void view.camera.flyTo(worldState, ms);
@@ -467,9 +472,9 @@ const stillAlt = site.seo.imageAlt;
       const ms = flightMs();
       const at = freeCentre();
       view.setViewCentre(at);
-      view.setInterior(stage.interior, ms > 0 ? ROOF_MS : 0);
+      view.setInterior(stage.interior, roofMs(ms));
       view.guide.hush();
-      const guideThere = view.guide.flyTo(view.guideSpot(stage.guideAt), ms > 0 ? GUIDE_FLIGHT_MS : 0);
+      const guideThere = view.guide.flyTo(view.guideSpot(stage.guideAt), guideFlightMs(ms));
       // No closer than the Guide's Landmark's own close-up, so the Guide beside it stays in view (inside the House, too).
       const shot = view.focusState(stage.focus, at);
       void view.camera.flyTo({ ...shot, zoom: Math.min(shot.zoom, view.focusState(stage.guideAt, at).zoom * TOUR_ZOOM) }, ms);
@@ -509,14 +514,14 @@ const stillAlt = site.seo.imageAlt;
       void mounting?.then((view) => {
         const ms = flightMs();
         view.guide.hush();
-        const home = view.guide.flyTo(view.guideSpot('station'), ms > 0 ? GUIDE_FLIGHT_MS : 0);
+        const home = view.guide.flyTo(view.guideSpot('station'), guideFlightMs(ms));
         if (how === 'navigate') {
           // The route moves the camera; a section opened from the Overview closes back to where the Tour began.
           if (shownLandmark === 'overview') worldState = beforeTour;
           return;
         }
         view.setViewCentre(freeCentre());
-        view.setInterior(routeView(routeLandmark()).interior, ms > 0 ? ROOF_MS : 0);
+        view.setInterior(routeView(routeLandmark()).interior, roofMs(ms));
         if (how === 'explore') return;
         if (beforeTour) void view.camera.flyTo(beforeTour, ms);
         void home.then(() => {
@@ -528,7 +533,7 @@ const stillAlt = site.seo.imageAlt;
     };
 
     /** Next, previous or exit, from the card's buttons or the keyboard. */
-    const stepTour = (action: Exclude<TourAction, 'start'>) => {
+    const stepTour = (action: TourStepAction) => {
       if (!tour) return;
       const after = tourAfter(tour, action, steps.length);
       if (!after) return endTour(action === 'next' ? 'finish' : 'exit');
@@ -540,6 +545,9 @@ const stillAlt = site.seo.imageAlt;
     const showSeed = async (seed: string) => {
       const request = ++latest;
       shownSeed = seed;
+      // Links carry the Seed asked for at once, so they still match the URL if the load fails.
+      linkSeed = seed;
+      keepSeedOnLinks();
       frame.setAttribute('aria-busy', 'true');
       try {
         const { world, meshed, ms, generateMs } = await source.load(seed, counts);
@@ -622,7 +630,7 @@ const stillAlt = site.seo.imageAlt;
       // Opening the step's section ends the Tour; the route takes the camera there.
       if (control.matches('[data-tour-open]')) return endTour('navigate');
       if (control.getAttribute('aria-disabled') === 'true') return;
-      stepTour(control.dataset.tour as Exclude<TourAction, 'start'>);
+      stepTour(control.dataset.tour as TourStepAction);
     });
     // Any navigation (a link, Back or Forward, a new Seed) ends the Tour.
     document.addEventListener('astro:before-preparation', () => endTour('navigate'));
@@ -1087,7 +1095,7 @@ const stillAlt = site.seo.imageAlt;
       font-size: 1.171875rem;
     }
     .data-card-label {
-      font-size: 0.9375rem;
+      font-size: 1rem;
     }
   }
   .hotspot {

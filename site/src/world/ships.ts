@@ -32,7 +32,7 @@ interface Body {
  * One sailing route per Partner. With one Isle, every loop sails round it.
  * With more, loops pass through the strait beside a bridge on both sides,
  * so the ship sails between the two Isles it links (and, since bridges link
- * every Isle, round the whole archipelago). Only bridges of 3+ cells can be
+ * every Isle, round all the Isles). Only bridges of 3+ cells can be
  * sailed beside; with none, the loop goes round all the land. Partner `k`
  * takes bridge `k mod bridges`; Partners beyond the bridges take a wider
  * loop, the other way round, then share loops, spread out round them by
