@@ -1,13 +1,18 @@
 /**
  * World to three.js objects: meshes the World's voxel grids into chunked
- * `BufferGeometry` with the soft-voxel material, plus the sea and the
- * Partners' sailing ships (`ships.ts`) and the House's moving parts (`house.ts`:
- * its lid, the developer and the screen).
+ * `BufferGeometry` with the soft-voxel material, plus the sea, the
+ * Partners' sailing ships (`ships.ts`), the House's moving parts (`house.ts`:
+ * its lid, the developer, the screen and its lights) and the buoys' lamps.
+ * `setTheme` recolours the sea and lights the lamps and the House's windows
+ * at Night; it never moves or adds anything.
  */
 import * as THREE from 'three/webgpu';
 import type { World } from '../world';
 import { triangleCount, type ChunkMesh } from './mesher';
 import { oklchToLinear } from './palette';
+import { seaColour, THEME_TOKENS, type WorldTokens } from '../data/theme';
+import type { Theme } from '../lib/theme';
+import { buoyLamp } from './buoyModel';
 import { voxelMaterial } from './voxelMaterial';
 import { meshWorld, type MeshedWorld } from './worldVoxels';
 import { buildFleet, type Fleet } from './ships';
@@ -25,6 +30,8 @@ export interface WorldObjects {
   ships: Fleet;
   /** The House's lid, developer and screen: `house.setOpening` lifts the lid, `house.work` animates the room. */
   house: HouseParts;
+  /** Recolour the sea and light (or put out) the House's windows and the buoys' lamps. */
+  setTheme: (theme: Theme) => void;
   dispose: () => void;
 }
 
@@ -56,18 +63,27 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
   group.add(ships.group);
   const house = buildHouse(world);
   group.add(house.group);
+  const lamps = buildLamps(world);
+  group.add(lamps.group);
 
   return {
     group,
     triangles: triangleCount(terrain) + triangleCount(detail) + ships.triangles + house.triangles,
     ships,
     house,
+    setTheme: (theme) => {
+      const tokens = THEME_TOKENS[theme].world;
+      sea.setTheme(theme);
+      house.setLights(tokens);
+      lamps.setLights(tokens);
+    },
     dispose: () => {
       ships.dispose();
       house.dispose();
       for (const g of geometries) g.dispose();
       for (const m of materials) m.dispose();
       sea.dispose();
+      lamps.dispose();
     },
   };
 }
@@ -85,12 +101,45 @@ function chunkGeometry(chunk: ChunkMesh): THREE.BufferGeometry {
 const linearColour = (rgb: readonly [number, number, number]) =>
   new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2], THREE.LinearSRGBColorSpace);
 
-/** Deep water as one wide plane, shallow water as one mesh of tiles beside the land. */
-function buildSea(world: World): { group: THREE.Group; dispose: () => void } {
+/** How much bigger than its voxel a buoy's glowing lamp is, in world units each side: it covers the voxel's seams. */
+const LAMP_GROW = 0.01;
+
+/** The buoys' lamps: one glowing box over each lamp voxel (a few at most), shown at Night. */
+function buildLamps(world: World): { group: THREE.Group; setLights: (tokens: WorldTokens) => void; dispose: () => void } {
+  const group = new THREE.Group();
+  group.name = 'buoy-lamps';
+  group.visible = false;
+  const material = new THREE.MeshBasicNodeMaterial();
+  const geometries = world.buoys.map((cell) => {
+    const { min, max } = buoyLamp(cell);
+    const geometry = new THREE.BoxGeometry(
+      max.x - min.x + 2 * LAMP_GROW,
+      max.y - min.y + 2 * LAMP_GROW,
+      max.z - min.z + 2 * LAMP_GROW,
+    );
+    geometry.translate((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2);
+    group.add(new THREE.Mesh(geometry, material));
+    return geometry;
+  });
+  return {
+    group,
+    setLights: ({ lightsOn, buoyLight }) => {
+      material.color.copy(linearColour(oklchToLinear(buoyLight)));
+      group.visible = lightsOn;
+    },
+    dispose: () => {
+      for (const g of geometries) g.dispose();
+      material.dispose();
+    },
+  };
+}
+
+/** Deep water as one wide plane, shallow water as one mesh of tiles beside the land. Darker at Night. */
+function buildSea(world: World): { group: THREE.Group; setTheme: (theme: Theme) => void; dispose: () => void } {
   const { width, depth, isle } = world.terrain;
   const group = new THREE.Group();
   const waterMaterial = (role: 'waterDeep' | 'waterShallow') =>
-    new THREE.MeshStandardNodeMaterial({ color: linearColour(oklchToLinear(world.biome.colours[role])), roughness: 0.35 });
+    new THREE.MeshStandardNodeMaterial({ color: linearColour(oklchToLinear(seaColour(world.biome, role, 'day'))), roughness: 0.35 });
 
   // Far wider than the grid so the sea fills the frame at any aspect ratio.
   const deepGeometry = new THREE.PlaneGeometry(width * 6, depth * 6);
@@ -140,6 +189,10 @@ function buildSea(world: World): { group: THREE.Group; dispose: () => void } {
 
   return {
     group,
+    setTheme: (theme) => {
+      deepMaterial.color.copy(linearColour(oklchToLinear(seaColour(world.biome, 'waterDeep', theme))));
+      shallowMaterial.color.copy(linearColour(oklchToLinear(seaColour(world.biome, 'waterShallow', theme))));
+    },
     dispose: () => {
       deepGeometry.dispose();
       shallowGeometry.dispose();

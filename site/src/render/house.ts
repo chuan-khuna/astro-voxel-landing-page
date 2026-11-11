@@ -4,7 +4,10 @@
  *
  * - the lid (roof, dome and front walls), which `setOpening` lifts off;
  * - the developer's head and hands, which `work(seconds)` animates;
- * - the computer's screen, a glowing plane that scrolls lines of code.
+ * - the computer's screen, a glowing plane that scrolls lines of code;
+ * - the House's lights: a glowing pane over each window (`HOUSE_WINDOWS`),
+ *   on the face the camera sees, shown at Night (`setLights`). The lid's
+ *   panes lift with it.
  *
  * Every voxel mesh uses the soft-voxel material in local space, built at the
  * House's place in the World (whole ¼ voxels), so seams stay on voxel edges
@@ -20,7 +23,8 @@ import { LOOK, oklchToLinear, FIXED_COLOURS } from './palette';
 import { voxelMaterial } from './voxelMaterial';
 import { DETAIL, worldColours } from './worldVoxels';
 import { landmarkOrigin } from './landmarkModels';
-import { DEVELOPER_PARTS, SCREEN, drawDeveloperPart, drawHouseLid, type DeveloperPart, type HouseDraw } from './houseModel';
+import { DEVELOPER_PARTS, HOUSE_WINDOWS, SCREEN, drawDeveloperPart, drawHouseLid, type DeveloperPart, type HouseDraw } from './houseModel';
+import type { WorldTokens } from '../data/theme';
 import { developerPose, roofLift } from './houseMotion';
 
 export interface HouseParts {
@@ -31,6 +35,8 @@ export interface HouseParts {
   setOpening(opening: number): void;
   /** Pose the developer and the screen `seconds` into their work. */
   work(seconds: number): void;
+  /** Light the windows, or not, as the theme says. */
+  setLights(world: WorldTokens): void;
   dispose(): void;
 }
 
@@ -48,7 +54,7 @@ export function buildHouse(world: World): HouseParts {
   const group = new THREE.Group();
   group.name = 'house';
   const house = world.landmarks.find((l) => l.id === 'house');
-  if (!house) return { group, triangles: 0, setOpening: () => {}, work: () => {}, dispose: () => {} };
+  if (!house) return { group, triangles: 0, setOpening: () => {}, work: () => {}, setLights: () => {}, dispose: () => {} };
 
   const origin = landmarkOrigin(house);
   const colours = worldColours(world);
@@ -108,9 +114,38 @@ export function buildHouse(world: World): HouseParts {
   screen.name = 'screen';
   group.add(screen);
 
+  // The lights: one glowing pane a hair in front of each window's lit face.
+  const lightMaterial = new THREE.MeshBasicNodeMaterial();
+  const panes: THREE.Mesh[] = [];
+  for (const { part, box, facing } of HOUSE_WINDOWS) {
+    const alongX = facing === '+x';
+    const geometry = new THREE.PlaneGeometry(
+      (alongX ? box.max.z - box.min.z : box.max.x - box.min.x) * q,
+      (box.max.y - box.min.y) * q,
+    );
+    if (alongX) geometry.rotateY(Math.PI / 2);
+    geometry.translate(
+      (origin.x + (alongX ? box.max.x : (box.min.x + box.max.x) / 2)) * q + (alongX ? 0.003 : 0),
+      (origin.y + (box.min.y + box.max.y) / 2) * q,
+      (origin.z + (alongX ? (box.min.z + box.max.z) / 2 : box.max.z)) * q + (alongX ? 0 : 0.003),
+    );
+    geometries.push(geometry);
+    const pane = new THREE.Mesh(geometry, lightMaterial);
+    pane.name = `house-light-${part}`;
+    pane.visible = false;
+    panes.push(pane);
+    // The lid's panes are its children, so they lift with it.
+    (part === 'lid' ? lid : group).add(pane);
+  }
+
   return {
     group,
     triangles,
+    setLights: ({ lightsOn, windowLight }) => {
+      const [r, g, b] = oklchToLinear(windowLight);
+      lightMaterial.color.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+      for (const pane of panes) pane.visible = lightsOn;
+    },
     setOpening: (opening) => {
       lid.position.y = roofLift(opening);
     },
@@ -123,6 +158,7 @@ export function buildHouse(world: World): HouseParts {
       for (const g of geometries) g.dispose();
       material.dispose();
       screenMaterial.dispose();
+      lightMaterial.dispose();
     },
   };
 }

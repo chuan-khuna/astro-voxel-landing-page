@@ -36,6 +36,7 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | Path | What it holds |
 |---|---|
 | `src/data/site.ts` | The site data module: company identity, brand colour and fonts (`brand.fonts.body` Jersey 20, `brand.fonts.heading` Jersey 15, each with a fallback stack), SEO defaults, default Seed, brand Biome (the Biome the default Seed always gets), the Landmark list (id, route, label, Story Order) and the Data Card metrics (`dataCards`, keyed to a placed Landmark id). `landmarksInStoryOrder` is the sorted list. |
+| `src/data/theme.ts` | The Day and Night theme tokens (`THEME_TOKENS`): one set of OKLCH values for the page (`ui`: ink, paper, surface, brand ink and its hover, text on brand, shadow) and for the World (`world`: sky, sun or moon light, sky and ground light, water darkening, the House's window light and the buoys' lamp light, and `lightsOn`). `themeCss()` writes the `ui` tokens as CSS custom properties; `seaColour` is a Biome's water in a theme; `contrastRatio` is the WCAG ratio. Tested in `theme.test.ts` (every text pair AA in both themes). |
 | `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id and an optional meta `description`) `projects` (MDX, schema `projectSchema`), `services` (MDX, schema `serviceSchema`), `clients` (YAML, schema `clientSchema`), `partners` (YAML, schema `partnerSchema`) and `team` (MDX, schema `teamMemberSchema`). |
 | `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema`, `serviceSchema`, `clientSchema`, `partnerSchema` and `teamMemberSchema` (see "Projects", "Services", "Clients and Partners" and "Team" below). Tested in `contentSchemas.test.ts`. |
 | `src/content/projects/` | One MDX file per Project; the file name is its id and URL slug, the body its case study. Six mock Projects. |
@@ -46,11 +47,13 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/content/pages/` | `home.mdx` (the home hook) and one intro per section, found by its `landmark`: `services.mdx` (station), `about.mdx` (house), `team.mdx` (house-interior), `garden.mdx`, `dock.mdx`, `contact.mdx` (mailbox). |
 | `src/world/` | The World generator. See `world-generator.md`. |
 | `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`), camera rig (pan, zoom and flights), Landmark focus and hotspots. See `rendering-and-shading.md`. |
+| `src/lib/theme.ts` | Which theme shows: `ThemeChoice` (`auto`, `day`, `night`), `parseThemeChoice` (a stored value; Auto for anything else), `resolveTheme(choice, prefersDark)`, `nextThemeChoice` (Auto → Day → Night → Auto) and `themeBootScript`, the inline `<head>` script. Tested in `theme.test.ts` (the boot script runs against a fake page). |
 | `src/lib/seedUrl.ts` | The Seed in the URL: `seedFromUrl`, `rollSeed` (numeric) and `withSeed` (keep the Seed on a route link). Tested in `seedUrl.test.ts`. |
 | `src/lib/gardenTrees.ts` | `treeOrder(projects)`: Projects sorted by id (tree order). `gardenTrees(world, projectIds)`: the World's tree cells, each paired with its Project (tree `k` is the `k`-th Project by id; none beyond the cap). Tested in `gardenTrees.test.ts`. |
 | `src/lib/contactDetails.ts` | `contactDetails(company)`: the Contact panel's details, from `site.company`: email, phone, address, then each social, each with a label, the text shown and a link (none for the address). Tested in `contactDetails.test.ts`. |
 | `src/lib/landmarkRoutes.ts` | `landmarkForPath(pathname)`: the Landmark a route belongs to, from the Landmark list. A trailing slash and `index.html` are ignored, `/garden/<slug>` belongs to the Garden, and any other route gives `null`. `routeView(id)`: what the World shows for it: the Landmark the camera goes to, and whether the House is open (About and Team both open it and go to the House Interior). Tested in `landmarkRoutes.test.ts`. |
-| `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order: a floating rounded bar, collapsing below 60rem into a menu button that opens the list as a popover (the Popover API, so it needs no JS). Its links carry `data-seed-link`, so they keep a rolled Seed; the current section's link has `aria-current="page"`. |
+| `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order: a floating rounded bar, collapsing below 64rem into a menu button that opens the list as a popover (the Popover API, so it needs no JS). Its links carry `data-seed-link`, so they keep a rolled Seed; the current section's link has `aria-current="page"`. |
+| `src/components/ThemeToggle.astro` | The theme toggle: one icon button (a monitor, a sun or a moon, for the choice in force) that cycles Auto, Day and Night, and the script that keeps the choice (see "Day and Night"). |
 | `src/components/Logo.astro` | The logo mark beside the company name: one isometric voxel in three shades of the brand colour. |
 | `src/components/SectionPanel.astro` | A section's panel over the World, as a floating card: heading, close link and the intro copy. |
 | `src/components/ServiceList.astro` | The Station's list of every Service in `order`: icon, title, summary and body. |
@@ -58,8 +61,8 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/components/DockList.astro` | The Dock's two lists: Clients (by id) and Partners (closest tier first), each with its logo or initials. |
 | `src/components/TeamList.astro` | Team's list of every Team Member in `order`: avatar or initials, name, role and bio. |
 | `src/components/ContactList.astro` | Contact's details (`contactDetails`) as a definition list in an `<address>`. |
-| `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), Astro's `<ClientRouter />`, the self-hosted Jersey fonts, the colour, card and font tokens, and the inline script that turns on the full-screen layout (`data-world="live"`). |
-| `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's tree links and the Data Cards, and the HUD floating over it (company name, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice button), and the client script that runs the World across routes. |
+| `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), Astro's `<ClientRouter />`, the self-hosted Jersey fonts, the theme's boot script and colour tokens (`themeBootScript`, `themeCss()`, both inline in `<head>`), the card and font tokens, and the inline script that turns on the full-screen layout (`data-world="live"`). |
+| `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's tree links and the Data Cards, and the HUD floating over it (company name, theme toggle, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice button), and the client script that runs the World across routes. |
 | `src/pages/index.astro` | The home page: the World and the home hook. |
 | `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project, the Dock's every Client and Partner, Team's every Team Member, and Contact the company's contact details; About links on to Team. |
 | `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. |
@@ -124,14 +127,14 @@ radius, the `--card` paper at 95%, a soft shadow), haru-ni style:
 | Where | What |
 |---|---|
 | Top left | The logo mark and company name (the `h1` on the Overview, a link home on a section page). |
-| Top right | The Landmark menu: a rounded bar; below 60rem a menu button that opens it as a popover. The current section is marked (`aria-current`). |
+| Top right | The theme toggle (one icon button), then the Landmark menu: a rounded bar; below 64rem a menu button that opens it as a popover (the bar, the toggle and the name need about 1,018px). The current section is marked (`aria-current`). |
 | Bottom left | The dice button and the current Seed. |
 | Right, below the menu (48rem and wider) | A section's panel: `min(27rem, 42vw)` wide, as tall as its content and no taller than the screen; long content scrolls inside it. |
 | Left, below the name (48rem and wider) | The Overview's intro card: the tagline and the home hook. |
 | Bottom (narrower than 48rem) | The panel or the intro as a bottom sheet (up to 55dvh; the intro 40dvh), with the dice row just above it. |
 
 - **HUD.** `.hud` is a fixed, full-screen column with
-  `pointer-events: none`: `.hud-bar` (name and menu), then `.hud-main`, a
+  `pointer-events: none`: `.hud-bar` (name, and `.hud-tools`: the theme toggle and the menu), then `.hud-main`, a
   grid for the panel or intro and the controls. Only the cards take the
   pointer, so the World can be dragged anywhere else. The World frame is
   fixed behind it all. The DOM order (name, menu, panel or intro, the
@@ -162,11 +165,50 @@ radius, the `--card` paper at 95%, a soft shadow), haru-ni style:
   one weight, so `font-synthesis: none` and nothing is set bold. The font
   stacks live in site data and reach CSS as `--font-body` and
   `--font-heading`.
-- **Contrast (WCAG AA).** `--brand-ink` (the brand colour mixed 80% with
-  black, set on `body` where `--brand` is) is used for brand-coloured text
-  and for backgrounds under light text: links, the tagline, Data Card
-  figures, the dice, hovered menu links and hotspot labels. It is at least
-  6.2:1 on the cards; body text (`--ink`) is about 12:1.
+- **Contrast (WCAG AA).** `--brand-ink` (a theme token: the brand colour
+  darkened by Day, lightened by Night) is used for brand-coloured text and
+  for backgrounds under `--on-brand` text: links, the tagline, Data Card
+  figures, the dice, hovered menu links and hotspot labels. Every text pair
+  meets AA in both themes (`theme.test.ts`); see "Day and Night".
+
+### Day and Night
+
+The page and the World follow the visitor's light or dark preference, and
+the theme toggle overrides it.
+
+- **Tokens.** One set of OKLCH tokens, `THEME_TOKENS` in
+  `src/data/theme.ts`, drives both the CSS and the three.js World.
+  `Base.astro` inlines `themeCss()`: the Day tokens on `:root`, the Night
+  tokens on `:root[data-theme="night"]` and, before any script (or without
+  JS), on `:root:not([data-theme])` when the system prefers dark. Each sets
+  `color-scheme` too. The cards, panels, menu, toggle, Data Cards and
+  hotspot labels use only these variables (`--ink`, `--paper`,
+  `--surface`, `--brand-ink`, `--brand-ink-hover`, `--on-brand`,
+  `--shadow`); the brand colour itself (`--brand`, site data) is the same
+  in both themes.
+- **Contrast.** By Day: body text 13.4:1 on the cards, brand ink 7.0:1, text
+  on the brand ink 7.2:1 (10.6:1 hovered). By Night: body text 13.1:1, brand
+  ink 8.4:1, text on the brand ink 9.4:1 (11.8:1 hovered). `theme.test.ts` checks every pair at 4.5:1 or more.
+- **The toggle** (`ThemeToggle.astro`), at the top right before the menu:
+  one icon button that cycles Auto (a monitor), Day (a sun) and Night (a
+  moon); its `aria-label` and tooltip name the choice in force and the
+  next (`Theme: Auto (follows your system). Switch to Day`). Day and Night
+  are kept in `localStorage` (`theme`); Auto clears it. Storage is
+  wrapped in try/catch, so a blocked store keeps the choice for the visit.
+  The toggle needs JS, so it is hidden without it.
+- **No flash.** `themeBootScript`, inline in `<head>`, sets
+  `<html data-theme>` (`day` or `night`) and `data-theme-choice` before
+  first paint, from the stored choice and `prefers-color-scheme`. The
+  toggle's script carries both across route swaps (`astro:before-swap`),
+  re-labels the new page's toggle (`astro:after-swap`), and in Auto follows
+  a change of the system preference live.
+- **The World** follows `data-theme`: the page script watches it and calls
+  `view.setTheme`, and the first mount takes the theme in force. At Night
+  the sky darkens, the sun becomes a dim cool moon from the same direction,
+  the water darkens, the House's windows light up and the buoys' lamps
+  glow (see `rendering-and-shading.md`, "Day and Night"). Only colours,
+  light and glow change: never the layout, the camera, the hotspots or the
+  Data Cards.
 
 ### Routes over the World (ADR 0003)
 
@@ -364,7 +406,8 @@ fade under reduced motion), and are smaller on screens under 48rem.
 
 `mountWorld(canvas, world, meshed?, ui?)` renders the World as soft voxels
 and returns a view whose `show` swaps in another World, whose `camera` is
-the pan, zoom and flight rig, and whose `focus` flies to a Landmark. It
+the pan, zoom and flight rig, whose `focus` flies to a Landmark, and whose
+`setTheme` shows it by Day or by Night. It
 has a mesher with culling, baked AO and greedy merging, a TSL material for
 seams, bevel and colour jitter, a static sun shadow map, and frames only on
 demand: while the camera moves, while the Partners' ships sail and while

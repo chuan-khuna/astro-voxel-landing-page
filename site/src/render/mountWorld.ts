@@ -22,11 +22,18 @@
  * - `setInterior(open, ms)` opens the House (its lid lifts, the developer's
  *   link appears) or shuts it.
  * - `show(world)` swaps in another World (a new Seed) and disposes the old one.
+ * - `setTheme(theme)` switches Day and Night (`data/theme.ts`): the sky,
+ *   the lights' colours and strengths, the water's colour, and at Night the
+ *   House's windows and the buoys' lamps glow. Nothing moves, so the shadow
+ *   map is kept; one frame is rendered.
  * - DPR is capped at 1.5 on touch devices and 2 elsewhere.
  */
 import * as THREE from 'three/webgpu';
 import type { LandmarkId, World } from '../world';
-import { FIXED_COLOURS, LOOK, oklchToLinear, type FixedColour } from './palette';
+import { LOOK, oklchToLinear } from './palette';
+import { THEME_TOKENS } from '../data/theme';
+import type { Theme } from '../lib/theme';
+import type { Oklch } from '../world';
 import { createCameraRig, type CameraRig } from './cameraRig';
 import { createLandmarkHotspots } from './landmarkHotspots';
 import { createDataCards } from './dataCards';
@@ -41,9 +48,9 @@ export type { ScreenOffset };
 
 const SHADOW_MAP_SIZE = 2048;
 
-const fixedColour = (name: FixedColour) => {
-  const [r, g, b] = oklchToLinear(FIXED_COLOURS[name]);
-  return new THREE.Color().setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+const setColour = (target: THREE.Color, colour: Oklch) => {
+  const [r, g, b] = oklchToLinear(colour);
+  target.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
 };
 
 /** Device-pixel-ratio cap: 1.5 on phones and tablets (coarse pointer), 2 on desktop. */
@@ -80,6 +87,8 @@ export interface WorldView {
    * shows) or shut it (the lid comes down). 0 cuts. Kept across `show`.
    */
   setInterior(open: boolean, ms: number): void;
+  /** Show the World by Day or by Night. Kept across `show`. */
+  setTheme(theme: Theme): void;
   dispose(): void;
 }
 
@@ -91,6 +100,8 @@ export interface WorldFrame {
   hotspots: HTMLElement[];
   /** Data Cards over the canvas, each with `data-card="<placed landmark id>"`. */
   cards?: HTMLElement[];
+  /** Day or Night from the first frame (default Day). */
+  theme?: Theme;
 }
 
 /** Closest zoom: about this many world units from the centre to the edge of the frame. */
@@ -111,11 +122,25 @@ export async function mountWorld(
   await renderer.init();
 
   const scene = new THREE.Scene();
-  scene.background = fixedColour('sky');
-
-  scene.add(new THREE.HemisphereLight(fixedColour('skyLight'), fixedColour('groundLight'), LOOK.skyIntensity));
-  const sun = new THREE.DirectionalLight(fixedColour('sunLight'), LOOK.sunIntensity);
-  scene.add(sun, sun.target);
+  const sky = new THREE.Color();
+  scene.background = sky;
+  const hemisphere = new THREE.HemisphereLight();
+  // The sun by Day, the moon by Night: always from the same direction, so shadows stay put.
+  const sun = new THREE.DirectionalLight();
+  scene.add(hemisphere, sun, sun.target);
+  let theme: Theme = ui.theme ?? 'day';
+  /** Colour the sky and the lights for the theme; the World's own parts follow in `objects.setTheme`. */
+  const lightFor = (next: Theme) => {
+    const tokens = THEME_TOKENS[next].world;
+    setColour(sky, tokens.sky);
+    setColour(hemisphere.color, tokens.skyLight);
+    setColour(hemisphere.groundColor, tokens.groundLight);
+    hemisphere.intensity = tokens.skyIntensity;
+    setColour(sun.color, tokens.sunLight);
+    sun.intensity = tokens.sunIntensity;
+    canvas.dataset.theme = next;
+  };
+  lightFor(theme);
 
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
   /** Overview radius of the World on show; the camera frames it. */
@@ -237,6 +262,7 @@ export async function mountWorld(
       objects.dispose();
     }
     objects = buildWorldObjects(next, nextMeshed);
+    objects.setTheme(theme);
     objects.house.setOpening(opening);
     objects.house.work(worked);
     scene.add(objects.group);
@@ -293,6 +319,13 @@ export async function mountWorld(
       openingMs = ms;
       hotspots.setInterior(open);
       if (!lifting()) canvas.dataset.interior = open ? 'open' : 'shut';
+      requestRender();
+    },
+    setTheme: (next) => {
+      if (next === theme) return;
+      theme = next;
+      lightFor(theme);
+      objects?.setTheme(theme);
       requestRender();
     },
     setViewCentre: (at) => {

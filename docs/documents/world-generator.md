@@ -41,6 +41,7 @@ imports, so the generator stays pure.
 | `generateWorld.ts` | The public function: Seed fallback, Biome choice, the retry loop, the Dock-to-House route, derived views. |
 | `landmarks.ts` | Landmark footprints: placement, levelling, the occlusion check, the Garden's tree layout and the Dock's berths (the moored boats). |
 | `ships.ts` | The Partners' sailing routes: loops through open sea. |
+| `buoys.ts` | The buoys: sea marks just off the Isles, nearest the Dock first. |
 | `terrain.ts` | Isle layout, noise heights, surface kinds, cliff strata. |
 | `noise.ts` | Seeded 2D simplex noise and FBM. |
 | `bridges.ts` | Bridges between Isles. |
@@ -75,6 +76,7 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `landmarks` | The five placed Landmarks: id, Isle, `footprint` (`origin` cell, `width` along x, `depth` along z, and every `cells` entry it covers), ground height `y` (the whole footprint is at this height), `variant` (always 0 for now), `trees` (Garden only: one cell per tree, in Project order) and `jetty` (Dock only: its sea cells, from the shore outwards). |
 | `boats` | One per Client, up to 12 (`MAX_BOATS`), in Client order: the berth `cell` (a sea cell beside the jetty or off its tip; it may lie past the grid's edge, in the open sea) and the `facing` its bow points, out to sea along the jetty. |
 | `ships` | One per Partner, in Partner order: `cells`, a closed loop of sea cells (each an 8-neighbour of the one before, the last of the first) sailed in order, and `phase` (0–1), how far round it the ship starts. Cells may lie past the grid's edge. |
+| `buoys` | Up to 4 (`MAX_BUOYS`) sea cells, each with a buoy (its lamp glows at Night; see `rendering-and-shading.md`). Inside the grid, clear of the ships, boats, jetty and bridges. |
 | `views` | The two derived Landmarks, as camera views (`target`, `radius`): `overview` and `house-interior`. |
 
 ### Placed vs derived Landmarks
@@ -220,6 +222,19 @@ a chart that runs 6 cells past the grid's edge. A loop sails round a
   then the all-land body, then a ring just inside the chart's edge, which is
   always open. In 2,000 sampled Seeds the ring is never needed.
 
+### Buoys
+
+`buoys.ts` sets out up to 4 buoys after the ships, from the layout alone
+(no randomness, so the theme or anything else never moves them). A
+candidate is a sea cell inside the grid, 1–4 cells (Chebyshev) off the
+land, at least 2 cells from every cell a ship sails through (as ships keep
+from the boats) and from the jetty, the boats and the bridges, with its
+lamp (1 unit up, mid-cell) in plain view of the isometric camera (the same
+ray march as for footprints, with bridge decks and the jetty). The
+candidates nearest the jetty's tip are taken first (ties north to south,
+then west to east), each at least 4 cells from the ones already taken, so
+the buoys lead the way to the Dock. Every one of 200 sampled Worlds gets 4.
+
 ### Retry
 
 If a rule fails (two Isles touch, an Isle is under 30 cells, an Isle cannot
@@ -295,7 +310,10 @@ Seeds, never snapshots:
   the jetty and boats; every loop encloses all the land (so with one Isle it
   sails round it); over 85% of Worlds with a bridge of 5+ cells sail
   through a strait between two Isles; ships sharing a loop start at
-  different phases.
+  different phases;
+- buoys: at most 4, at sea inside the grid, 1–4 cells off the land, at
+  least 2 cells from ship cells, the jetty, boats and bridges, 4 apart, the
+  lamp in plain view (the ray march); over 90% of Worlds get two or more.
 
 ```sh
 cd site && bun run test

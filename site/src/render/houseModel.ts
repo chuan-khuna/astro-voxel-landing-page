@@ -67,6 +67,40 @@ const WALL_LO = inner.x - 1;
 const WALL_HI = outer.x;
 const ROOF_Y = outer.y;
 
+/**
+ * The House's windows: a pane of glass one ¼ voxel thick in a wall, each
+ * in the lid (the front walls, seen from outside) or the base (the back
+ * walls, seen from inside with the lid off). Each is lit at Night on the
+ * face the camera sees (`facing`: +x or +z), so the House's lights show
+ * from outside when it is shut and inside when it is open.
+ */
+export interface HouseWindow {
+  part: 'lid' | 'base';
+  box: VoxelBox;
+  facing: '+x' | '+z';
+}
+
+const pane = (
+  part: HouseWindow['part'],
+  facing: HouseWindow['facing'],
+  [x0, y0, z0, x1, y1, z1]: [number, number, number, number, number, number],
+): HouseWindow => ({ part, facing, box: { min: { x: x0, y: y0, z: z0 }, max: { x: x1, y: y1, z: z1 } } });
+
+export const HOUSE_WINDOWS: readonly HouseWindow[] = [
+  // One in each back wall, seen from inside.
+  pane('base', '+x', [WALL_LO, 5, 6, WALL_LO + 1, 7, 8]),
+  pane('base', '+z', [6, 5, WALL_LO, 8, 7, WALL_LO + 1]),
+  // Two in the front wall facing +x, one in the wall facing +z (beside the door).
+  pane('lid', '+x', [WALL_HI, 5, 2, WALL_HI + 1, 7, 4]),
+  pane('lid', '+x', [WALL_HI, 5, d - 4, WALL_HI + 1, 7, d - 2]),
+  pane('lid', '+z', [2, 5, WALL_HI, 4, 7, WALL_HI + 1]),
+];
+
+/** Draw one part's windows in glass. */
+function drawWindows(part: HouseWindow['part'], box: HouseDraw['box'], glass: number): void {
+  for (const { box: b } of HOUSE_WINDOWS.filter((w) => w.part === part)) box(b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z, glass);
+}
+
 /** Plinth, floor (with a rug under the chair) and the two back walls (low x, low z). */
 export function drawHouseBase({ box, set }: HouseDraw, { fixed }: HouseColours): void {
   box(0, 0, 0, w, 1, d, fixed('plinth'));
@@ -75,9 +109,7 @@ export function drawHouseBase({ box, set }: HouseDraw, { fixed }: HouseColours):
   // The back walls, corner to corner; the two outer corners belong to the lid.
   box(WALL_LO, 1, WALL_LO, WALL_LO + 1, ROOF_Y, WALL_HI, fixed('whitewash'));
   box(WALL_LO + 1, 1, WALL_LO, WALL_HI, ROOF_Y, WALL_LO + 1, fixed('whitewash'));
-  // A window in each back wall, seen from inside.
-  box(WALL_LO, 5, 6, WALL_LO + 1, 7, 8, fixed('glass'));
-  box(6, 5, WALL_LO, 8, 7, WALL_LO + 1, fixed('glass'));
+  drawWindows('base', box, fixed('glass'));
   set(WALL_LO, 7, 8, fixed('bougainvillea'));
 }
 
@@ -88,8 +120,7 @@ export function drawHouseLid({ box, set }: HouseDraw, { fixed }: HouseColours): 
   box(0, ROOF_Y, 0, w, ROOF_Y + 1, d, fixed('roofWhite'));
   const mid = Math.floor(w / 2);
   box(mid - 1, 1, WALL_HI, mid + 1, 6, WALL_HI + 1, fixed('blueDoor'));
-  for (const z of [2, d - 4]) box(WALL_HI, 5, z, WALL_HI + 1, 7, z + 2, fixed('glass'));
-  box(2, 5, WALL_HI, 4, 7, WALL_HI + 1, fixed('glass'));
+  drawWindows('lid', box, fixed('glass'));
   box(mid - 2, ROOF_Y + 1, Math.floor(d / 2) - 2, mid + 2, ROOF_Y + 3, Math.floor(d / 2) + 2, fixed('blueTrim'));
   box(mid - 1, ROOF_Y + 3, Math.floor(d / 2) - 1, mid + 1, ROOF_Y + 4, Math.floor(d / 2) + 1, fixed('blueTrim'));
   // Bougainvillea climbing the front corner.

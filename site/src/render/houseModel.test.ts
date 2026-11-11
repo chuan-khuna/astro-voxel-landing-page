@@ -4,6 +4,7 @@ import {
   DEVELOPER_PARTS,
   HOUSE_INTERIOR,
   HOUSE_SIZE,
+  HOUSE_WINDOWS,
   SCREEN,
   developerExtent,
   drawDeveloperPart,
@@ -104,6 +105,53 @@ describe('the room', () => {
     for (const axis of ['x', 'y', 'z'] as const) {
       expect(a[axis]).toBeGreaterThanOrEqual(min[axis]);
       expect(b[axis]).toBeLessThanOrEqual(max[axis]);
+    }
+  });
+});
+
+describe('the House’s windows', () => {
+  const glassOnly = { fixed: (name: string) => (name === 'glass' ? 1 : 0), biome: () => 0 };
+  /** Every voxel a part draws in glass. */
+  const glassOf = (paint: (draw: HouseDraw) => void) => {
+    const grid = new VoxelGrid(1);
+    paint({
+      box: (x0, y0, z0, x1, y1, z1, colour) => grid.box(x0, y0, z0, x1, y1, z1, colour),
+      set: (x, y, z, colour) => grid.set(x, y, z, colour),
+    });
+    return new Set([...grid.voxels()].filter((v) => v.colour === 1).map(key));
+  };
+  const glass = {
+    lid: glassOf((draw) => drawHouseLid(draw, glassOnly)),
+    base: glassOf((draw) => drawHouseBase(draw, glassOnly)),
+  };
+  const solid = new Set([...base, ...lid, ...room, ...developer].map(key));
+
+  it('lists every pane of glass in the lid and the base, one window each', () => {
+    for (const part of ['lid', 'base'] as const) {
+      const listed = HOUSE_WINDOWS.filter((w) => w.part === part).flatMap(({ box }) => {
+        const cells: string[] = [];
+        for (let x = box.min.x; x < box.max.x; x++)
+          for (let y = box.min.y; y < box.max.y; y++) for (let z = box.min.z; z < box.max.z; z++) cells.push(key({ x, y, z }));
+        return cells;
+      });
+      expect(new Set(listed), part).toEqual(glass[part]);
+    }
+  });
+
+  it('lights each window on the face the camera sees (+x or +z), with nothing in front of it', () => {
+    for (const { box, facing } of HOUSE_WINDOWS) {
+      expect(['+x', '+z']).toContain(facing);
+      const axis = facing === '+x' ? 'x' : 'z';
+      // One ¼ voxel thick through the wall, so the face is its max side.
+      expect(box.max[axis] - box.min[axis]).toBe(1);
+      for (let x = box.min.x; x < box.max.x; x++) {
+        for (let y = box.min.y; y < box.max.y; y++) {
+          for (let z = box.min.z; z < box.max.z; z++) {
+            const front = { x: axis === 'x' ? x + 1 : x, y, z: axis === 'z' ? z + 1 : z };
+            expect(solid.has(key(front)), key(front)).toBe(false);
+          }
+        }
+      }
     }
   });
 });

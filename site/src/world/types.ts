@@ -218,5 +218,7 @@ export interface World {
   boats: Boat[];
   /** One sailing ship per Partner, in Partner order. */
   ships: ShipRoute[];
+  /** Buoys: sea cells, each with a buoy whose lamp glows at Night. Clear of the ships, boats, jetty and bridges. */
+  buoys: Cell[];
   views: Record<ViewLandmarkId, View>;
 }

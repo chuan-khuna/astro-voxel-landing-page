@@ -79,7 +79,7 @@ const current = landmarkForPath(Astro.url.pathname);
   }
 
   /* Wide screens: the list is the bar itself, always shown (not a popover). */
-  @media (min-width: 60rem) {
+  @media (min-width: 64rem) {
     ol[popover] {
       position: static;
       inset: auto;
@@ -94,7 +94,7 @@ const current = landmarkForPath(Astro.url.pathname);
   }
 
   /* Narrow screens: a menu button; the list opens below it as a popover. */
-  @media (max-width: 59.99rem) {
+  @media (max-width: 63.99rem) {
     .menu-button {
       display: inline-flex;
     }

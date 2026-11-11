@@ -16,6 +16,7 @@
 import Base from './Base.astro';
 import LandmarkMenu from '../components/LandmarkMenu.astro';
 import Logo from '../components/Logo.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
 import { getCollection } from 'astro:content';
 import { site, landmarksInStoryOrder, type DataCardMetric } from '../data/site';
 import { MAX_TREES, PLACED_LANDMARK_IDS } from '../world';
@@ -74,7 +75,10 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
           </h1>
         )
       }
-      <LandmarkMenu />
+      <div class="hud-tools">
+        <ThemeToggle />
+        <LandmarkMenu />
+      </div>
     </header>
 
     <main class="hud-main">
@@ -165,6 +169,7 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
   import { rollSeed, seedFromUrl, withSeed, SEED_PARAM } from '../lib/seedUrl';
   import { landmarkForPath, routeView } from '../lib/landmarkRoutes';
   import type { ContentCounts, LandmarkId } from '../world';
+  import type { Theme } from '../lib/theme';
 
   /** How long a camera flight to a Landmark takes; a cut under reduced motion. */
   const FLIGHT_MS = 900;
@@ -199,6 +204,7 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     /** The World's Seed as generated (an over-long Seed falls back to the default). */
     let linkSeed = defaultSeed;
 
+    const currentTheme = (): Theme => (document.documentElement.dataset.theme === 'night' ? 'night' : 'day');
     const currentSeed = () => seedFromUrl(new URL(location.href)) ?? defaultSeed;
     const routeLandmark = () => landmarkForPath(location.pathname) ?? 'overview';
     const flightMs = () => (reducedMotion.matches ? 0 : FLIGHT_MS);
@@ -269,9 +275,11 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
         if (request !== latest) return;
         let view: WorldView;
         if (!mounting) {
-          mounting = mountWorld(canvas, world, meshed, { frame, hotspots, cards });
+          mounting = mountWorld(canvas, world, meshed, { frame, hotspots, cards, theme: currentTheme() });
           view = await mounting;
           mounted = true;
+          // The theme may have changed while the World mounted.
+          view.setTheme(currentTheme());
         } else {
           view = await mounting;
           if (request !== latest) return;
@@ -329,6 +337,10 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     window.addEventListener('resize', () => {
       if (mounted) void mounting?.then((view) => view.setViewCentre(freeCentre()));
     });
+    // Day and Night: the World follows <html data-theme> (set by the theme toggle and the system preference).
+    new MutationObserver(() => {
+      if (mounted) void mounting?.then((view) => view.setTheme(currentTheme()));
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     markCurrentLink();
     void showSeed(currentSeed());
   }
@@ -351,6 +363,11 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     align-items: start;
     justify-content: space-between;
     gap: 0.5rem var(--gutter);
+  }
+  .hud-tools {
+    display: flex;
+    align-items: start;
+    gap: 0.5rem;
   }
   .hud-main {
     display: grid;
@@ -420,7 +437,7 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     cursor: pointer;
   }
   .dice:hover {
-    background: color-mix(in oklab, var(--brand-ink) 80%, black);
+    background: var(--brand-ink-hover);
   }
   .dice:focus-visible {
     outline: 2px solid var(--ink);
@@ -556,7 +573,7 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     border-left: 3px solid var(--brand);
     border-radius: 4px;
     background: color-mix(in oklab, var(--paper) 92%, transparent);
-    box-shadow: 0 4px 14px oklch(0.2 0.02 250 / 0.16);
+    box-shadow: 0 4px 14px var(--shadow);
     color: var(--ink);
     line-height: 1.2;
     transform-origin: 0 0;

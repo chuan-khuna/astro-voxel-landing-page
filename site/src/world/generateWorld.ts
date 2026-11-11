@@ -4,6 +4,7 @@ import { findPath, stairsAlong } from './paths';
 import { createRng } from './prng';
 import { placeLandmarks } from './landmarks';
 import { sailingRoutes } from './ships';
+import { placeBuoys } from './buoys';
 import { buildStrata, buildTerrain } from './terrain';
 import { site } from '../data/site';
 import {
@@ -57,6 +58,7 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
     const { landmarks, boats, terrain } = placement;
     const route = dockToHouse(terrain, bridges, landmarks);
     if (!route) continue;
+    const ships = sailingRoutes(terrain, isles, bridges, [...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)], counts.partners);
     return {
       seed,
       attempts: attempt + 1,
@@ -69,7 +71,8 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
       stairs: stairsAlong(terrain, bridges, route),
       landmarks,
       boats,
-      ships: sailingRoutes(terrain, isles, bridges, [...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)], counts.partners),
+      ships,
+      buoys: placeBuoys(terrain, bridges, landmarks.find((l) => l.id === 'dock'), boats.map((b) => b.cell), ships),
       views: deriveViews(isles, landmarks, boats),
     };
   }

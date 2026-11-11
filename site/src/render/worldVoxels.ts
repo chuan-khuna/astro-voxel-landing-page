@@ -6,13 +6,14 @@
  *   stratum's colour, so cliffs show layered bands.
  * - `detail`: ¼-unit voxels for everything built on the terrain: bridge
  *   decks, stairs, the Landmark models (each filling its footprint) and the
- *   Clients' moored boats.
+ *   Clients' moored boats and the buoys.
  *
  * Both grids index one shared colour list.
  */
 import type { BiomeColourRole, Oklch, World } from '../world';
 import { buildLandmark } from './landmarkModels';
 import { drawBoat } from './vesselModels';
+import { drawBuoy } from './buoyModel';
 import { meshVoxels, VoxelGrid, type ChunkMesh } from './mesher';
 import { FIXED_COLOURS, LOOK, oklchToLinear, shiftLightness, type FixedColour, type Rgb } from './palette';
 
@@ -121,6 +122,7 @@ export function worldToVoxels(world: World): WorldVoxels {
   addStairs(world, detail, colours);
   for (const landmark of world.landmarks) buildLandmark(landmark, detail, colours);
   for (const boat of world.boats) drawBoat(boat, detail, colours);
+  for (const buoy of world.buoys) drawBuoy(buoy, detail, colours);
 
   return { terrain, detail, colours: colours.table.colours, terrainSolid };
 }

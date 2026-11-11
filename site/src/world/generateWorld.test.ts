@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '../data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, MAX_BUOYS, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -657,5 +657,37 @@ describe('generateWorld', () => {
         expect(Math.abs(cell.z + 0.5 - target.z), seed).toBeLessThanOrEqual(radius);
       }
     }
+  });
+
+  it('sets buoys out at sea near the Isles, clear of ships, boats, the jetty and bridges, apart and in plain view', () => {
+    const chebyshev = (a: { x: number; z: number }, b: { x: number; z: number }) =>
+      Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+    let withBuoys = 0;
+    for (const seed of sampledSeeds) {
+      const world = worldFor(seed);
+      const { width, depth, isle } = world.terrain;
+      expect(world.buoys.length, seed).toBeLessThanOrEqual(MAX_BUOYS);
+      if (world.buoys.length >= 2) withBuoys++;
+      const land: Array<{ x: number; z: number }> = [];
+      isle.forEach((owner, i) => owner !== -1 && land.push({ x: i % width, z: Math.floor(i / width) }));
+      const dock = world.landmarks.find((l) => l.id === 'dock')!;
+      const shipCells = world.ships.flatMap((s) => s.cells);
+      const keepClear = [...dock.jetty, ...world.boats.map((b) => b.cell), ...world.bridges.flatMap((b) => b.cells)];
+      world.buoys.forEach((buoy, n) => {
+        const at = `${seed} buoy ${key(buoy)}`;
+        expect(buoy.x >= 0 && buoy.z >= 0 && buoy.x < width && buoy.z < depth, at).toBe(true);
+        expect(isSeaAt(world, buoy.x, buoy.z), at).toBe(true);
+        const shore = Math.min(...land.map((c) => chebyshev(c, buoy)));
+        expect(shore, at).toBeGreaterThanOrEqual(1);
+        expect(shore, at).toBeLessThanOrEqual(4);
+        for (const c of shipCells) expect(chebyshev(c, buoy), at).toBeGreaterThanOrEqual(2);
+        for (const c of keepClear) expect(chebyshev(c, buoy), at).toBeGreaterThanOrEqual(2);
+        for (const other of world.buoys.slice(n + 1)) expect(chebyshev(other, buoy), at).toBeGreaterThanOrEqual(4);
+        // Its lamp, a unit above the sea floor in the middle of the cell, is never hidden.
+        expect(hiddenFromCamera(world, buoy.x + 0.5, 1, buoy.z + 0.5), at).toBe(false);
+      });
+    }
+    // Nearly every World has buoys to light at Night.
+    expect(withBuoys, 'Worlds with two or more buoys').toBeGreaterThan(sampledSeeds.length * 0.9);
   });
 });

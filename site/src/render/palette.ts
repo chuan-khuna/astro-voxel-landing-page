@@ -41,7 +41,8 @@ const oklch = (l: number, c: number, h: number): Oklch => ({ l, c, h });
 
 /**
  * Fixed colours, independent of the Biome. The House colours are the ones
- * approved in ticket 01. Every chroma is at most 0.10.
+ * approved in ticket 01. Every chroma is at most 0.10. The sky and the
+ * lights follow the theme: they are in `data/theme.ts`.
  */
 export const FIXED_COLOURS = {
   // House (approved in ticket 01).
@@ -74,11 +75,8 @@ export const FIXED_COLOURS = {
   hullRed: oklch(0.52, 0.09, 30),
   hullNavy: oklch(0.4, 0.06, 255),
   sail: oklch(0.94, 0.018, 85),
-  // Sky and light (approved in ticket 01).
-  sky: oklch(0.93, 0.02, 230),
-  sunLight: oklch(0.98, 0.025, 85),
-  skyLight: oklch(0.93, 0.03, 235),
-  groundLight: oklch(0.78, 0.04, 80),
+  // Buoys: a lamp on top, unlit by Day (it glows at Night; see `data/theme.ts`).
+  lamp: oklch(0.86, 0.04, 85),
 } as const satisfies Record<string, Oklch>;
 
 export type FixedColour = keyof typeof FIXED_COLOURS;

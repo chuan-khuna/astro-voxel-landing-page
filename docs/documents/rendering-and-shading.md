@@ -6,20 +6,22 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 
 - Code: `site/src/render/`
 - Decision: `docs/adr/0002-webgpu-renderer-with-tsl.md`
+- Theme tokens: `site/src/data/theme.ts` (see "Day and Night")
 - Tests: `site/src/render/mesher.test.ts`, `cameraMath.test.ts`,
-  `landmarkModels.test.ts`, `houseModel.test.ts`, `houseMotion.test.ts` and
-  `dataCardMath.test.ts` (a few behavioural checks; the World generator
+  `landmarkModels.test.ts`, `houseModel.test.ts`, `houseMotion.test.ts`,
+  `buoyModel.test.ts` and `dataCardMath.test.ts` (a few behavioural checks; the World generator
   stays the main test seam)
 
 ## Code layout
 
 | File | What it does | three.js? |
 |---|---|---|
-| `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, its room and developer, placeholder parts, boat and ship hulls and sail, sky, lights) as OKLCH, `oklchToLinear`. | no |
+| `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, its room and developer, placeholder parts, boat and ship hulls and sail, the buoys' lamp) as OKLCH, `oklchToLinear`. The sky and lights are theme tokens (`data/theme.ts`). | no |
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid and the ¼-unit detail grid with a shared colour list. `meshWorld(world)`: both grids meshed. | no |
 | `landmarkModels.ts` | The ¼-unit Landmark models (the Station's and the House's are real models; the rest are placeholders), each filling its footprint, and `landmarkExtent(landmark)`: the box a Landmark covers, measured from what its model draws and never smaller than its footprint. | no |
-| `houseModel.ts` | The House in parts: `drawHouseBase` (stays), `drawHouseLid` (lifts), `drawHouseRoom` (desk, computer, chair, plant, the developer's seated body) in `HOUSE_INTERIOR`, the developer's moving parts (`DEVELOPER_PARTS`, `drawDeveloperPart`), the `SCREEN` rectangle and `developerExtent` (the developer's box, for their link). | no |
+| `buoyModel.ts` | `drawBuoy(cell, grid, colours)`: a buoy in the detail grid; `buoyLamp(cell)`: its lamp's box, which glows at Night. | no |
+| `houseModel.ts` | The House in parts: `drawHouseBase` (stays), `drawHouseLid` (lifts), `drawHouseRoom` (desk, computer, chair, plant, the developer's seated body) in `HOUSE_INTERIOR`, the developer's moving parts (`DEVELOPER_PARTS`, `drawDeveloperPart`), the `SCREEN` rectangle, the windows (`HOUSE_WINDOWS`) and `developerExtent` (the developer's box, for their link). | no |
 | `houseMotion.ts` | `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame) and `developerPose(seconds)` (typing and reading). | no |
 | `vesselModels.ts` | `drawBoat(boat, grid, colours)`: a Client's boat in its berth, drawn into the detail grid; `shipVoxels(colours)`: the Partner ship's own small grid, centred on `SHIP_ORIGIN`, bow towards +x. | no |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
@@ -29,10 +31,10 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
 | `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?)`: the TSL node material, in world space or (for ships) the mesh's own space. | yes |
-| `house.ts` | `buildHouse(world)`: the lid and the developer's head and hands as meshes, and the screen's code shader; `setOpening` lifts the lid, `work(seconds)` animates the room. | yes |
+| `house.ts` | `buildHouse(world)`: the lid and the developer's head and hands as meshes, and the screen's code shader; the windows' lights; `setOpening` lifts the lid, `work(seconds)` animates the room, `setLights` lights the windows. | yes |
 | `ships.ts` | `buildFleet(world)`: one mesh per Partner ship, sharing one geometry, and `sail(seconds)` to move them along their loops. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, the ships and the House's moving parts, as a `THREE.Group`. | yes |
-| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, opening the House, swapping Worlds. | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `setTheme` recolours the sea and lights the lamps and windows. | yes |
+| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, opening the House, Day and Night, swapping Worlds. | yes |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it. | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
 | `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, the Garden's tree links over their trees and, while the House is open, the developer's link over the developer. | yes |
@@ -50,11 +52,12 @@ spans world `[x·size, (x+1)·size)`):
 | Grid | Voxel size | Contents |
 |---|---|---|
 | terrain | 1 unit | Every land column from y = 0 to its height. The top voxel takes the surface colour (sand, grass, peak) or the path colour; buried voxels take their stratum's colour. |
-| detail | ¼ unit (`DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Landmark models, each filling its footprint (the House's base and room, not its lid), and the Clients' moored boats. |
+| detail | ¼ unit (`DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Landmark models, each filling its footprint (the House's base and room, not its lid), the Clients' moored boats and the buoys. |
 
 Colours: each grid voxel holds a colour id into one shared list
-(`ColourTable`). Biome colours come from `world.biome`; the House, sky and
-light colours are fixed (`FIXED_COLOURS`) and never change with the Biome.
+(`ColourTable`). Biome colours come from `world.biome`; the House and other
+fixed colours (`FIXED_COLOURS`) never change with the Biome. The sky, the
+lights and the water's shade follow the theme instead (see "Day and Night").
 Every chroma is at most 0.10.
 
 ### Landmark models
@@ -179,6 +182,19 @@ follow its Client's id, never the Seed.
   least twice a boat's length, wider and more than twice its height,
   centred on its origin.
 
+## Buoys
+
+`buoyModel.ts` draws each of the World's buoys (`world.buoys`, placed by
+the generator; see `world-generator.md`) into the detail grid, in the
+middle of its cell: a 2×2 float, red (`flagRed`) under a white band, then
+a dark post and a lamp (`lamp`) on top, a unit tall from the sea floor, so
+it floats at the waterline like the boats. About 40 triangles each. At
+Night `worldMeshes.ts` shows a glowing box over each lamp (`buoyLamp`, a
+hair bigger than the voxel so it covers the seams), in the `buoyLight`
+token. `buoyModel.test.ts` checks each buoy stays in its cell from the sea
+floor up, a unit tall, with one lamp voxel on top that `buoyLamp` covers
+exactly.
+
 ## The House and its room
 
 The House (ticket 11) is a code-built model in three parts, so its roof can
@@ -197,7 +213,11 @@ The base and lid never share a voxel and leave the interior space empty; the
 lid covers every interior column from above; with the lid off the base has
 no wall on the front sides, so the camera sees in; the room and developer
 fit the interior space; the screen sits on the computer's face with nothing
-in front of it. `houseModel.test.ts` checks all of these. House Variants and
+in front of it. Every pane of glass is listed in `HOUSE_WINDOWS` (part,
+box, and the face the camera sees, `+x` or `+z`): two in the lid's `+x`
+wall and one in its `+z` wall, seen from outside, and one in each of the
+base's back walls, seen from inside when the lid is off; nothing stands in
+front of a lit face. `houseModel.test.ts` checks all of these. House Variants and
 one room per Biome (the polish feature, ADR 0004) keep the same split and
 interior space.
 
@@ -211,6 +231,11 @@ interior space.
   one of three muted colours (teal, pink, white), with gaps between words
   and the odd blank line. A `uniform` time scrolls it up 2.5 lines a
   second.
+- **Lights.** A `MeshBasicNodeMaterial` pane a hair in front of each
+  window's lit face, in the `windowLight` token, shown only at Night
+  (`setLights`). The lid's panes are children of the lid, so they lift
+  with it: from outside the shut House shows lit windows, and inside the
+  open House the back windows glow.
 - **Lifting** (`houseMotion.ts`). The House's opening runs from 0 (shut)
   to 1 (open); `openingStep` moves it toward open or shut at a rate that
   takes the given time end to end (a cut at 0). `roofLift(opening)` lifts
@@ -231,7 +256,7 @@ interior space.
 
 A wide deep-water plane at y = 0.15, plus shallow-water quads (runs merged
 along x) on sea cells within 2 cells of land. Both are opaque
-`MeshStandardNodeMaterial`s in the Biome's water colours and receive shadows.
+`MeshStandardNodeMaterial`s in the Biome's water colours and receive shadows. At Night both darken (`seaColour`: the `waterShift` token, −0.12 OKLCH lightness).
 
 ## World Web Worker and cache
 
@@ -252,10 +277,10 @@ along x) on sea cells within 2 cells of land. Both are opaque
 ## Scene runtime
 
 `mountWorld(canvas, world, meshed?, ui?)` returns a `WorldView`
-`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), setViewCentre(at), setInterior(open, ms), dispose() }`. `ui` is
-`{ frame, hotspots, cards? }`: the element round the canvas that takes pan and zoom
-input, the Landmark hotspot links inside it, and the Data Cards (default: the canvas's
-parent, no hotspots, no cards). `setViewCentre(at)` says where the visitor
+`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), setViewCentre(at), setInterior(open, ms), setTheme(theme), dispose() }`. `ui` is
+`{ frame, hotspots, cards?, theme? }`: the element round the canvas that takes pan and zoom
+input, the Landmark hotspot links inside it, the Data Cards and the theme of the first frame (default: the canvas's
+parent, no hotspots, no cards, Day). `setViewCentre(at)` says where the visitor
 looks (CSS px from the frame's centre: the middle of the part the floating
 cards leave free, from `freeCentre`), which picks the Data Card shown and
 is where the pan bounds apply (`CameraLimits.at`, below). `setInterior(open, ms)`
@@ -273,7 +298,8 @@ camera to a Landmark (see "Landmark focus and flights").
   camera rig moves and zooms it from there. It never rotates.
 - **Lights:** a hemisphere sky light and one directional sun at the approved
   azimuth and elevation. Its shadow camera covers the whole World
-  (2048² map).
+  (2048² map). Their colours and strengths, and the sky, are theme tokens
+  (see "Day and Night").
 - **Static shadow map:** `shadow.autoUpdate = false`; `needsUpdate = true` is
   set once each time a World is shown, so the shadow map renders on that
   World's first frame only.
@@ -310,6 +336,31 @@ camera to a Landmark (see "Landmark focus and flights").
   `data-interior` (`open`, `shut` or `moving`: the House's lid) and
   `data-camera` (target x, target z, zoom) for checks in a browser. The page
   adds `data-generate-ms`.
+
+## Day and Night
+
+The theme (`site-project.md`, "Day and Night") reaches the World through
+`view.setTheme(theme)`, and the first mount takes the theme in force
+(`ui.theme`). Everything comes from the `world` tokens of
+`THEME_TOKENS` (`site/src/data/theme.ts`), the same set that drives the
+page's CSS:
+
+| Token | Day | Night |
+|---|---|---|
+| `sky` (background) | the approved pale blue | a deep blue (L 0.27) |
+| `sunLight`, `sunIntensity` | the approved warm sun, 2.4 | a cool moon, 1.2, from the same direction |
+| `skyLight`, `groundLight`, `skyIntensity` | the approved hemisphere, 1.1 | a dim blue hemisphere, 0.95 |
+| `waterShift` | 0 | −0.12 lightness on both water colours |
+| `lightsOn` | off | the House's windows (`windowLight`, a warm white) and the buoys' lamps (`buoyLight`, a warm amber) glow |
+
+`setTheme` recolours the sky, the lights and the two sea materials, shows
+or hides the window panes and lamp boxes, sets `canvas.dataset.theme` and
+renders one frame. A new World (`show`) takes the theme in force. Nothing
+moves, nothing is added to or removed from the voxel meshes, the sun keeps
+its direction (so the static shadow map is kept), and the camera, hotspots
+and Data Cards are untouched: the layout is the same in both themes. The
+glow is unlit colour (`MeshBasicNodeMaterial`), not real lights, so it
+adds no shader variants and no per-frame cost.
 
 ## Camera and interaction
 
@@ -482,10 +533,11 @@ ones. Boats (ticket 10) add about 53 triangles each, so 12 boats about 640
 ship adds 206, outside the voxel chunks (`data-triangles` counts them).
 The House's room (ticket 11) adds about 320 to the detail mesh, and its
 lid (250) and the developer (48) are meshes of their own (counted in
-`data-triangles`). Real tree models and decoration (later tickets) will
+`data-triangles`). The 4 buoys (ticket 13) add about 160 to the detail
+mesh; the Night glow (5 window panes, 4 lamp boxes) adds about 60 more. Real tree models and decoration (later tickets) will
 add most of the remaining triangles.
 
 ## Not yet built
 
-Day/Night lighting, animation of water and trees, boat and ship kinds, the reduced-decoration tier,
+Animation of water and trees, boat and ship kinds, the reduced-decoration tier,
 real models for the Garden and Dock, House Variants and one room per Biome, and the Guide's dissolve and re-form on a new Seed.
