@@ -1,7 +1,7 @@
 /**
  * Landmark hotspots: real links laid over the canvas, one per placed
  * Landmark, sized to the screen rectangle of the Landmark's model (its
- * measured extent, whatever its footprint). They give each Landmark a hover
+ * measured extent, which covers its whole footprint). They give each Landmark a hover
  * affordance, a pointer cursor and keyboard focus without any GPU picking;
  * the links themselves are rendered by the page.
  *
@@ -62,9 +62,10 @@ export function createLandmarkHotspots(
           link.hidden = true;
           continue;
         }
-        // The model's own extent, so any footprint (one cell or several) is covered.
-        const origin = new THREE.Vector3(landmark.cell.x, landmark.y, landmark.cell.z);
-        const { min, max } = landmarkExtent(landmark.id, landmark.variant);
+        // The model's own extent, which always covers the whole footprint (and the Dock's jetty).
+        const cell = landmark.footprint.origin;
+        const origin = new THREE.Vector3(cell.x, landmark.y, cell.z);
+        const { min, max } = landmarkExtent(landmark);
         placed.push({
           link,
           box: new THREE.Box3(

@@ -5,7 +5,7 @@
  *   the top voxel takes the surface (or path) colour, buried voxels their
  *   stratum's colour, so cliffs show layered bands.
  * - `detail`: ¼-unit voxels for everything built on the terrain: bridge
- *   decks, stairs and the Landmark models.
+ *   decks, stairs and the Landmark models (each filling its footprint).
  *
  * Both grids index one shared colour list.
  */
@@ -117,13 +117,7 @@ export function worldToVoxels(world: World): WorldVoxels {
   const detail = new VoxelGrid(1 / DETAIL);
   addBridges(world, detail, colours);
   addStairs(world, detail, colours);
-  for (const landmark of world.landmarks) {
-    buildLandmark(landmark, detail, colours, {
-      x: landmark.cell.x * DETAIL,
-      y: landmark.y * DETAIL,
-      z: landmark.cell.z * DETAIL,
-    });
-  }
+  for (const landmark of world.landmarks) buildLandmark(landmark, detail, colours);
 
   return { terrain, detail, colours: colours.table.colours, terrainSolid };
 }

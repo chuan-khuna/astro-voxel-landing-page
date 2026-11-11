@@ -17,7 +17,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, placeholder parts, sky, lights) as OKLCH, `oklchToLinear`. | no |
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid and the ¼-unit detail grid with a shared colour list. `meshWorld(world)`: both grids meshed. | no |
-| `landmarkModels.ts` | The ¼-unit Landmark models (placeholders for now), and `landmarkExtent(id)`: the box a model fills, measured from what it draws. | no |
+| `landmarkModels.ts` | The ¼-unit Landmark models (placeholders for now), each filling its footprint, and `landmarkExtent(landmark)`: the box a Landmark covers, measured from what its model draws and never smaller than its footprint. | no |
 | `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`. | no |
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
@@ -39,7 +39,7 @@ spans world `[x·size, (x+1)·size)`):
 | Grid | Voxel size | Contents |
 |---|---|---|
 | terrain | 1 unit | Every land column from y = 0 to its height. The top voxel takes the surface colour (sand, grass, peak) or the path colour; buried voxels take their stratum's colour. |
-| detail | ¼ unit (`DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), and the Landmark models. |
+| detail | ¼ unit (`DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), and the Landmark models, each filling its footprint. |
 
 Colours: each grid voxel holds a colour id into one shared list
 (`ColourTable`). Biome colours come from `world.biome`; the House, sky and
@@ -49,12 +49,25 @@ Every chroma is at most 0.10.
 ### Landmark models
 
 `landmarkModels.ts` draws one model per placed Landmark into the detail grid,
-with its origin at the min corner of the Landmark's cell and local y = 0 the
-first voxel above the ground. Models are simple placeholders (a mast for the
-Station, a whitewashed block with a blue door and dome for the House, hedges
-for the Garden, a plank platform for the Dock, a post and box for the
-Mailbox). Later tickets replace a model by editing its entry in `MODELS`; the
-`variant` field is passed through for when more variants exist.
+with its origin at the min corner of the Landmark's footprint (see
+`world-generator.md`, "Landmark footprints") and local y = 0 the first voxel
+above the ground. Each model gets its footprint's size in ¼ voxels
+(`4 × width` by `4 × depth`), its ground height, and, in local ¼ voxels, the
+Garden's tree cells and the Dock's jetty cells, and fills that footprint.
+Models are simple placeholders:
+
+| Landmark | Placeholder |
+|---|---|
+| Station (2×2) | a paved pad, a low hut and a grey mast with an accent light |
+| House (3×3) | a whitewashed block on a plinth, blue door, windows, flat roof and blue dome |
+| Garden | one tree per tree cell, each filling its cell (trunk, 4×4 canopy); a flower in every other cell |
+| Dock (2×1) | a plank platform on the land cells; a plank deck level with the ground over each jetty cell, on posts down to the sea floor |
+| Mailbox (1×1) | a post with a blue box the width of the cell |
+
+`landmarkModels.test.ts` checks that every model reaches every footprint
+(and jetty) cell and nothing outside it, and that each tree's canopy fills
+its cell. Later tickets replace a model by editing its entry in `MODELS`;
+the `variant` field is passed through for when more variants exist.
 
 ## Mesher
 
@@ -216,13 +229,14 @@ on the isometric axis above the target.
 - **Landmark hotspots** (`landmarkHotspots.ts`): the home page renders one
   link per placed Landmark (`a.hotspot[data-hotspot]`, route and label from
   the Landmark list) inside the frame, hidden until the World is shown. On
-  every frame each link is sized to the screen rectangle of its model's box
-  (`landmarkExtent`, measured from the model's voxels, so a model of any
-  footprint is covered; at least 28 px a side). Hover and keyboard focus
+  every frame each link is sized to the screen rectangle of its Landmark's
+  box (`landmarkExtent`: the model's voxels, and never less than the whole
+  footprint and the Dock's jetty, so the hotspot covers the whole footprint;
+  at least 28 px a side). The Garden's hotspot covers its trees. Hover and keyboard focus
   show an outline and the Landmark's label: the hover affordance and the
   keyboard focus. If a hotspot takes focus while off screen, the camera
   cuts to centre on it. The frame uses `overflow: clip`, so focusing a
-  hotspot never scrolls the frame. This is not GPU picking; trees and
+  hotspot never scrolls the frame. This is not GPU picking; single trees and
   other pickable things (later tickets) may need real picking.
 
 ## Budget
@@ -232,14 +246,15 @@ below that today (counts for the voxel meshes; the sea adds a few hundred):
 
 | Seed | Isles | Terrain | Detail | Total |
 |---|---|---|---|---|
-| default (`lanternfish`) | 2 | 1,330 | 610 | 1,940 |
-| `2` | 3 | 1,962 | 806 | 2,768 |
-| `3` | 3 | 3,442 | 1,118 | 4,560 |
-| `13` | 4 | 2,168 | 1,302 | 3,470 |
+| default (`lanternfish`) | 2 | 1,330 | 1,208 | 2,538 |
+| `2` | 3 | 1,956 | 1,558 | 3,514 |
+| `3` | 3 | 3,422 | 1,336 | 4,758 |
+| `13` | 4 | 2,100 | 1,872 | 3,972 |
 
-Highest over Seeds `0`–`299`: 4,662. Meshing takes about 15–25 ms per World.
+Counts are with no Projects (the home page passes zero for now). Highest
+over Seeds `0`–`299`: 5,370; with 24 trees in the Garden, 7,432. Meshing takes about 15–25 ms per World.
 `mesher.test.ts` checks the budget on 40 sampled Seeds, including 4-Isle
-ones. Trees, boats, ships and decoration (later tickets) will add most of the
+ones. Real tree models, boats, ships and decoration (later tickets) will add most of the
 remaining triangles.
 
 ## Not yet built

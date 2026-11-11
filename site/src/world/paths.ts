@@ -10,27 +10,27 @@ const STEPS: ReadonlyArray<{ dx: number; dz: number; facing: Facing }> = [
 const CLIMB_COST = 3;
 
 /**
- * The cheapest walkable route from `from` to `to` over land and bridges.
- * A step may change height by at most one voxel (a stair); two or more is a
- * cliff. Cells in `blocked` are never entered. Returns null if there is no
- * route.
+ * The cheapest walkable route from any cell of `from` to any cell of `to`
+ * over land and bridges. A step may change height by at most one voxel (a
+ * stair); two or more is a cliff. Cells in `blocked` are never entered.
+ * Returns null if there is no route.
  */
-export function findPath(terrain: Terrain, bridges: Bridge[], from: Cell, to: Cell, blocked: Cell[]): Cell[] | null {
+export function findPath(terrain: Terrain, bridges: Bridge[], from: Cell[], to: Cell[], blocked: Cell[]): Cell[] | null {
   const { width, depth } = terrain;
   const walk = walkHeights(terrain, bridges);
   const closed = new Set(blocked.map((c) => c.z * width + c.x));
-  const start = from.z * width + from.x;
-  const goal = to.z * width + to.x;
+  const starts = from.map((c) => c.z * width + c.x).filter((i) => walk[i] !== undefined && !closed.has(i));
+  const goals = new Set(to.map((c) => c.z * width + c.x).filter((i) => walk[i] !== undefined && !closed.has(i)));
 
   // Dial's algorithm: costs are small integers, so buckets replace a heap.
   const cost = new Array<number>(walk.length).fill(Infinity);
   const previous = new Array<number>(walk.length).fill(-1);
-  const buckets: number[][] = [[start]];
-  cost[start] = 0;
+  const buckets: number[][] = [starts];
+  for (const i of starts) cost[i] = 0;
   for (let c = 0; c < buckets.length; c++) {
     for (const i of buckets[c] ?? []) {
       if (cost[i] !== c) continue;
-      if (i === goal) return trace(previous, goal, width);
+      if (goals.has(i)) return trace(previous, i, width);
       const x = i % width;
       const z = Math.floor(i / width);
       for (const { dx, dz } of STEPS) {
@@ -38,7 +38,7 @@ export function findPath(terrain: Terrain, bridges: Bridge[], from: Cell, to: Ce
         const nz = z + dz;
         if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue;
         const j = nz * width + nx;
-        if (walk[j] === undefined || (closed.has(j) && j !== goal)) continue;
+        if (walk[j] === undefined || closed.has(j)) continue;
         const climb = Math.abs(walk[j]! - walk[i]!);
         if (climb > 1) continue;
         const next = c + 1 + climb * CLIMB_COST;

@@ -141,14 +141,34 @@ export interface Biome {
   colours: Record<BiomeColourRole, Oklch>;
 }
 
+/**
+ * The ground a placed Landmark stands on: a rectangle of whole cells.
+ * `origin` is its min (north-west) corner cell; `width` runs east (x),
+ * `depth` south (z); `cells` lists every cell it covers.
+ */
+export interface Footprint {
+  origin: Cell;
+  width: number;
+  depth: number;
+  cells: Cell[];
+}
+
 export interface PlacedLandmark {
   id: PlacedLandmarkId;
   isle: number;
-  cell: Cell;
-  /** Ground height under the Landmark, in voxels. */
+  /** Flat land of one Isle, all at height `y`; it overlaps nothing else. */
+  footprint: Footprint;
+  /** Ground height under the whole footprint, in voxels. */
   y: number;
   /** Which model variant to draw. Every Landmark has only variant 0 for now. */
   variant: number;
+  /** Garden only (empty otherwise): one cell per tree, in Project order, inside the footprint. */
+  trees: Cell[];
+  /**
+   * Dock only (empty otherwise): the jetty's sea cells, in a straight line
+   * from the one beside the footprint outwards. Its deck is at height `y`.
+   */
+  jetty: Cell[];
 }
 
 /** A camera view: what to look at and how much of the World to fit. */

@@ -4,6 +4,9 @@ import type { Isle, StratumKind, SurfaceKind, Terrain } from './types';
 
 /** Sea margin, in cells, kept around the land on every side. */
 const SEA_MARGIN = 4;
+/** The safe layout: one round Isle this wide, rising this many steps at most, so every footprint fits. */
+const SAFE_RADIUS = 10;
+const SAFE_PEAK = 2;
 /** Smallest Isle, in cells, that a layout may keep. */
 const MIN_ISLE_CELLS = 30;
 /** How far noise pushes the coast in or out, as a share of an Isle's radius. */
@@ -116,7 +119,7 @@ export function buildTerrain(rng: Rng, options: TerrainOptions): { terrain: Terr
 
 function placeIsleSpecs(rng: Rng, options: TerrainOptions): IsleSpec[] | null {
   const { minPeak, maxPeak } = options.relief;
-  if (options.safe) return [{ cx: 0, cz: 0, radius: 9, peak: minPeak }];
+  if (options.safe) return [{ cx: 0, cz: 0, radius: SAFE_RADIUS, peak: Math.min(minPeak, SAFE_PEAK) }];
 
   // Weighted: two and three Isles are the most common.
   const roll = rng();
@@ -222,7 +225,7 @@ export function isShore(terrain: Terrain, x: number, z: number): boolean {
   });
 }
 
-function surfaceOf(terrain: Terrain, isles: Isle[]): SurfaceKind[] {
+export function surfaceOf(terrain: Terrain, isles: Isle[]): SurfaceKind[] {
   const { width, heights, isle } = terrain;
   const top = isles.map(() => 0);
   heights.forEach((h, i) => {

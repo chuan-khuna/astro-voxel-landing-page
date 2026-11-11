@@ -41,22 +41,154 @@ describe('generateWorld', () => {
     }
   });
 
-  it('puts every placed Landmark on land of the Isle it names', () => {
+  /** Every cell a Landmark covers: its footprint, plus the Dock's jetty. */
+  const coveredCells = (l: World['landmarks'][number]) => [...l.footprint.cells, ...l.jetty];
+  const key = (c: { x: number; z: number }) => `${c.x},${c.z}`;
+  const isSeaAt = (world: World, x: number, z: number) => world.terrain.isle[z * world.terrain.width + x] === -1;
+  const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+
+  it('gives each placed Landmark a rectangular footprint: origin, width, depth and the cells it covers', () => {
+    const sizes: Record<string, Array<[number, number]>> = {
+      house: [[3, 3]],
+      station: [[2, 2]],
+      mailbox: [[1, 1]],
+      dock: [[2, 1], [1, 2]],
+    };
     for (const seed of sampledSeeds) {
-      const { terrain, landmarks } = worldFor(seed);
-      for (const l of landmarks) {
-        const i = l.cell.z * terrain.width + l.cell.x;
-        expect(terrain.isle[i], `${seed} ${l.id}`).toBe(l.isle);
-        expect(terrain.heights[i], `${seed} ${l.id}`).toBeGreaterThan(0);
-        expect(l.y).toBe(terrain.heights[i]);
+      for (const l of worldFor(seed).landmarks) {
+        const { origin, width, depth, cells } = l.footprint;
+        const rectangle = [];
+        for (let z = origin.z; z < origin.z + depth; z++) for (let x = origin.x; x < origin.x + width; x++) rectangle.push({ x, z });
+        expect(cells.map(key).toSorted(), `${seed} ${l.id}`).toEqual(rectangle.map(key).toSorted());
+        if (l.id === 'garden') {
+          expect(width, seed).toBeGreaterThanOrEqual(3);
+          expect(depth, seed).toBeGreaterThanOrEqual(3);
+        } else {
+          expect(sizes[l.id], `${seed} ${l.id}`).toContainEqual([width, depth]);
+        }
       }
     }
   });
 
-  it('never stacks two placed Landmarks on one cell', () => {
+  it('stands every footprint on flat land of the Isle it names, at the Landmark\'s height', () => {
     for (const seed of sampledSeeds) {
-      const cells = worldFor(seed).landmarks.map((l) => `${l.cell.x},${l.cell.z}`);
-      expect(new Set(cells).size, seed).toBe(cells.length);
+      const { terrain, landmarks } = worldFor(seed);
+      for (const l of landmarks) {
+        expect(l.y, `${seed} ${l.id}`).toBeGreaterThan(0);
+        for (const c of l.footprint.cells) {
+          const i = c.z * terrain.width + c.x;
+          expect(terrain.isle[i], `${seed} ${l.id}`).toBe(l.isle);
+          expect(terrain.heights[i], `${seed} ${l.id} ${key(c)}`).toBe(l.y);
+        }
+      }
+    }
+  });
+
+  it('never overlaps two footprints, a bridge or bridge end, or the Dock-to-House path', () => {
+    for (const seed of sampledSeeds) {
+      const world = worldFor(seed);
+      const { width } = world.terrain;
+      const covered = world.landmarks.flatMap((l) => coveredCells(l).map(key));
+      expect(new Set(covered).size, seed).toBe(covered.length);
+      const coveredSet = new Set(covered);
+      for (const b of world.bridges) {
+        // The bridge cells and the land cell beyond each end.
+        const first = b.cells[0]!;
+        const last = b.cells.at(-1)!;
+        const ends = SIDES.flatMap(([dx, dz]) => [
+          { x: first.x + dx, z: first.z + dz },
+          { x: last.x + dx, z: last.z + dz },
+        ]).filter((c) => world.terrain.isle[c.z * width + c.x] !== -1);
+        for (const c of [...b.cells, ...ends]) expect(coveredSet.has(key(c)), `${seed} bridge ${key(c)}`).toBe(false);
+      }
+      for (const p of world.paths) for (const c of p.cells) expect(coveredSet.has(key(c)), `${seed} path ${key(c)}`).toBe(false);
+    }
+  });
+
+  it('keeps footprints out of the sea, except the Dock\'s jetty, which reaches 2–3 cells straight out to sea', () => {
+    for (const seed of sampledSeeds) {
+      const world = worldFor(seed);
+      for (const l of world.landmarks) {
+        for (const c of l.footprint.cells) expect(isSeaAt(world, c.x, c.z), `${seed} ${l.id}`).toBe(false);
+        if (l.id !== 'dock') expect(l.jetty, `${seed} ${l.id}`).toEqual([]);
+      }
+      const dock = world.landmarks.find((l) => l.id === 'dock')!;
+      expect(dock.jetty.length, seed).toBeGreaterThanOrEqual(2);
+      expect(dock.jetty.length, seed).toBeLessThanOrEqual(3);
+      for (const c of dock.jetty) expect(isSeaAt(world, c.x, c.z), `${seed} jetty ${key(c)}`).toBe(true);
+      // The jetty starts beside a footprint cell and runs straight on, away from it.
+      const start = dock.jetty[0]!;
+      const root = dock.footprint.cells.find((c) => Math.abs(c.x - start.x) + Math.abs(c.z - start.z) === 1);
+      expect(root, seed).toBeDefined();
+      const dx = start.x - root!.x;
+      const dz = start.z - root!.z;
+      dock.jetty.forEach((c, k) => expect(c, seed).toEqual({ x: root!.x + dx * (k + 1), z: root!.z + dz * (k + 1) }));
+    }
+  });
+
+  it('lays out the Garden with one cell per tree, inside it, plus room for paths', () => {
+    for (const projects of [0, 1, 6, 9, 24, 500]) {
+      for (const seed of sampledSeeds.slice(0, 40)) {
+        const garden = generateWorld(seed, { ...counts, projects }).landmarks.find((l) => l.id === 'garden')!;
+        expect(garden.trees, `${seed} ${projects}`).toHaveLength(Math.min(projects, 24));
+        const inside = new Set(garden.footprint.cells.map(key));
+        const trees = garden.trees.map(key);
+        expect(new Set(trees).size).toBe(trees.length);
+        for (const t of trees) expect(inside.has(t), `${seed} tree ${t}`).toBe(true);
+        expect(garden.footprint.cells.length).toBeGreaterThan(trees.length);
+      }
+    }
+    for (const seed of sampledSeeds) {
+      for (const l of worldFor(seed).landmarks) if (l.id !== 'garden') expect(l.trees, `${seed} ${l.id}`).toEqual([]);
+    }
+  });
+
+  it('grows the Garden with the number of trees', () => {
+    const area = (projects: number) =>
+      generateWorld('harbour', { ...counts, projects }).landmarks.find((l) => l.id === 'garden')!.footprint.cells.length;
+    expect(area(0)).toBe(9);
+    expect(area(24)).toBeGreaterThan(area(6));
+  });
+
+  /**
+   * Is any terrain or bridge in front of this point, seen from the fixed
+   * isometric camera? The camera looks along −(1, 1, 1), so march the ray
+   * from the point towards (1, 1, 1) until it clears the highest ground.
+   */
+  const hiddenFromCamera = (world: World, px: number, py: number, pz: number) => {
+    const { width, depth, heights } = world.terrain;
+    const top = Math.max(...heights, ...world.bridges.map((b) => b.y));
+    const deck = new Map(world.bridges.flatMap((b) => b.cells.map((c) => [key(c), b.y] as const)));
+    for (let t = 0.001; py + t <= top; t += 0.02) {
+      const x = px + t;
+      const y = py + t;
+      const z = pz + t;
+      const cx = Math.floor(x);
+      const cz = Math.floor(z);
+      if (cx >= width || cz >= depth) return false;
+      if (y < heights[cz * width + cx]!) return true;
+      const deckY = deck.get(`${cx},${cz}`);
+      if (deckY !== undefined && y < deckY && y > deckY - 0.25) return true;
+    }
+    return false;
+  };
+
+  it('never hides a Landmark behind terrain or a bridge from the isometric camera', () => {
+    for (const seed of sampledSeeds) {
+      const world = worldFor(seed);
+      for (const l of world.landmarks) {
+        // Every point of the ground the Landmark covers, on a ¼-cell grid. Points
+        // above it (the model) are then visible too: the ray from a higher point
+        // runs above the ray from the ground point below it.
+        for (const c of coveredCells(l)) {
+          for (let i = 0; i <= 4; i++) {
+            for (let k = 0; k <= 4; k++) {
+              const hidden = hiddenFromCamera(world, c.x + i / 4, l.y, c.z + k / 4);
+              expect(hidden, `${seed} ${l.id} ${key(c)} +${i / 4},${k / 4}`).toBe(false);
+            }
+          }
+        }
+      }
     }
   });
 
@@ -66,19 +198,21 @@ describe('generateWorld', () => {
       expect(views.overview.radius).toBeGreaterThan(0);
       expect(views['house-interior'].radius).toBeGreaterThan(0);
       const house = landmarks.find((l) => l.id === 'house')!;
-      // House Interior is derived from the House's position.
-      expect(Math.floor(views['house-interior'].target.x)).toBe(house.cell.x);
-      expect(Math.floor(views['house-interior'].target.z)).toBe(house.cell.z);
+      // House Interior is derived from the House's position: the middle of its footprint.
+      const { origin, width, depth } = house.footprint;
+      expect(views['house-interior'].target).toEqual({ x: origin.x + width / 2, y: house.y, z: origin.z + depth / 2 });
     }
   });
 
-  it('frames every Landmark inside the Overview', () => {
+  it('frames every cell each Landmark covers inside the Overview', () => {
     for (const seed of sampledSeeds) {
       const { views, landmarks } = worldFor(seed);
       const { target, radius } = views.overview;
       for (const l of landmarks) {
-        expect(Math.abs(l.cell.x + 0.5 - target.x), `${seed} ${l.id}`).toBeLessThanOrEqual(radius);
-        expect(Math.abs(l.cell.z + 0.5 - target.z), `${seed} ${l.id}`).toBeLessThanOrEqual(radius);
+        for (const c of coveredCells(l)) {
+          expect(Math.abs(c.x + 0.5 - target.x), `${seed} ${l.id}`).toBeLessThanOrEqual(radius);
+          expect(Math.abs(c.z + 0.5 - target.z), `${seed} ${l.id}`).toBeLessThanOrEqual(radius);
+        }
       }
     }
   });
@@ -216,9 +350,9 @@ describe('generateWorld', () => {
   it('puts the Dock on the shoreline, at the water\'s edge', () => {
     for (const seed of sampledSeeds) {
       const { terrain, landmarks } = worldFor(seed);
-      const { cell } = landmarks.find((l) => l.id === 'dock')!;
-      const seaBeside = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(
-        ([dx, dz]) => terrain.isle[(cell.z + dz!) * terrain.width + cell.x + dx!] === -1,
+      const { footprint } = landmarks.find((l) => l.id === 'dock')!;
+      const seaBeside = footprint.cells.some((c) =>
+        SIDES.some(([dx, dz]) => terrain.isle[(c.z + dz) * terrain.width + c.x + dx] === -1),
       );
       expect(seaBeside, seed).toBe(true);
     }
@@ -241,15 +375,21 @@ describe('generateWorld', () => {
     return world.terrain.isle[i] === -1 ? undefined : world.terrain.heights[i];
   };
 
-  it('lays a walkable path from the Dock to the House, over land and bridges', () => {
+  it('lays a walkable path from beside the Dock to beside the House, over land and bridges', () => {
     for (const seed of sampledSeeds) {
       const world = worldFor(seed);
-      const at = (id: string) => world.landmarks.find((l) => l.id === id)!.cell;
+      const landmark = (id: string) => world.landmarks.find((l) => l.id === id)!;
+      /** Is `c` one step from the Landmark's footprint, and at most one voxel above or below it? */
+      const beside = (id: string, c: { x: number; z: number }) => {
+        const l = landmark(id);
+        const touches = l.footprint.cells.some((f) => Math.abs(f.x - c.x) + Math.abs(f.z - c.z) === 1);
+        return touches && Math.abs(walkHeight(world, c)! - l.y) <= 1;
+      };
       const paths = world.paths.filter((p) => p.from === 'dock' && p.to === 'house');
       expect(paths, seed).toHaveLength(1);
       const { cells } = paths[0]!;
-      expect(cells[0], seed).toEqual(at('dock'));
-      expect(cells.at(-1), seed).toEqual(at('house'));
+      expect(beside('dock', cells[0]!), seed).toBe(true);
+      expect(beside('house', cells.at(-1)!), seed).toBe(true);
       cells.forEach((c, k) => {
         const h = walkHeight(world, c);
         expect(h, `${seed} path cell ${k} is on land or a bridge`).toBeDefined();
