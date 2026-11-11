@@ -1,0 +1,26 @@
+/**
+ * Schemas of the content collections, apart from `content.config.ts` so
+ * they can be tested without Astro. Content is validated against them at
+ * build time; a mistake fails the build.
+ */
+import { z } from 'astro/zod';
+
+/** Tree shapes a Project can hint at. The Garden draws one shape for now. */
+export const TREE_HINTS = ['round', 'tall', 'bushy'] as const;
+
+/** A Project: one piece of past work, shown as one tree in the Garden. The MDX body is its case study. */
+export const projectSchema = z.object({
+  title: z.string().min(1),
+  /** One or two sentences for the Garden's list and the page's meta description. */
+  summary: z.string().min(1),
+  /** The Client it was for, by name. */
+  client: z.string().min(1),
+  year: z.number().int().min(1900).max(2100),
+  tags: z.array(z.string().min(1)).default([]),
+  /** Which tree shape it would like in the Garden. */
+  tree: z.enum(TREE_HINTS).optional(),
+  /** A cover image under `public/`, with its alt text. */
+  cover: z.object({ src: z.string().min(1), alt: z.string() }).optional(),
+});
+
+export type ProjectData = z.infer<typeof projectSchema>;

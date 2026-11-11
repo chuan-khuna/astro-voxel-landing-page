@@ -26,7 +26,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, as a `THREE.Group`. | yes |
 | `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, swapping Worlds. | yes |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it. | yes |
-| `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models. | yes |
+| `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, and the Garden's tree links over their trees. | yes |
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
 meshing run in the Web Worker. Only geometry upload, materials and the sea
@@ -66,8 +66,9 @@ Models are simple placeholders:
 | Mailbox (1×1) | a post with a blue box the width of the cell |
 
 `landmarkModels.test.ts` checks that every model reaches every footprint
-(and jetty) cell and nothing outside it, and that each tree's canopy fills
-its cell. Later tickets replace a model by editing its entry in `MODELS`;
+(and jetty) cell and nothing outside it, that each tree's canopy fills
+its cell, and that `treeExtent` (a tree's box, for its link) is its cell up
+to the top of its canopy, 2 units tall. Later tickets replace a model by editing its entry in `MODELS`;
 the `variant` field is passed through for when more variants exist.
 
 ## Mesher
@@ -237,8 +238,25 @@ on the isometric axis above the target.
   show an outline and the Landmark's label: the hover affordance and the
   keyboard focus. If a hotspot takes focus while off screen, the camera
   cuts to centre on it. The frame uses `overflow: clip`, so focusing a
-  hotspot never scrolls the frame. This is not GPU picking; single trees and
-  other pickable things (later tickets) may need real picking.
+  hotspot never scrolls the frame. This is not GPU picking.
+- **Tree links** (ticket 08): right after the Garden's hotspot, the page
+  renders one link per Garden tree (`a.hotspot.tree[data-project]`, also
+  `data-hotspot="garden"`) to `/garden/<id>`, labelled with the Project's
+  title, for the first 24 Projects by id. `setWorld` pairs them with the
+  World's tree cells through `gardenTrees` (`src/lib/gardenTrees.ts`), so
+  tree `k` is the `k`-th Project by id; a link with no tree is hidden. The
+  screen rectangles round neighbouring trees' isometric boxes
+  (`treeExtent`: the cell, 2 units tall) overlap, so a tree's link is only
+  the middle of its tree: with `s` screen px per world unit, `0.7·s` wide
+  and `0.8·s` tall round the box's centre. Neighbouring trees sit `0.71·s`
+  apart across or `0.82·s` apart down the screen, so no link covers another
+  tree's. A tree link under 12 px wide gets `data-small` and stops taking
+  the pointer (clicks fall through to the Garden's hotspot); it still takes
+  keyboard focus. At the Overview trees are small on most Seeds, so a click
+  on the Garden opens `/garden`; with the camera at the Garden each tree is
+  about 38 × 44 px on a 1280 px wide desktop and 13 × 15 px on a phone. The
+  page marks the open Project's tree link with `aria-current="page"` (an
+  outline).
 
 ### Landmark focus and flights
 
@@ -281,7 +299,7 @@ below that today (counts for the voxel meshes; the sea adds a few hundred):
 | `3` | 3 | 3,422 | 1,336 | 4,758 |
 | `13` | 4 | 2,100 | 1,872 | 3,972 |
 
-Counts are with no Projects (the pages pass zero for now). Highest
+Counts are with no Projects. Highest
 over Seeds `0`–`299`: 5,370; with 24 trees in the Garden, 7,432. Meshing takes about 15–25 ms per World.
 `mesher.test.ts` checks the budget on 40 sampled Seeds, including 4-Isle
 ones. Real tree models, boats, ships and decoration (later tickets) will add most of the
@@ -289,6 +307,5 @@ remaining triangles.
 
 ## Not yet built
 
-Day/Night lighting, picking of trees (Landmarks
-use hotspots), animation (water, trees, ships), the reduced-decoration tier,
+Day/Night lighting, animation (water, trees, ships), the reduced-decoration tier,
 real Landmark models, and the Guide's dissolve and re-form on a new Seed.

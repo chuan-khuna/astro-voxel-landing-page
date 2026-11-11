@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateWorld, type PlacedLandmark } from '../world';
 import { VoxelGrid } from './mesher';
-import { buildLandmark, landmarkExtent } from './landmarkModels';
+import { buildLandmark, landmarkExtent, treeExtent } from './landmarkModels';
 import { DETAIL, worldColours } from './worldVoxels';
 
 const counts = { projects: 6, clients: 0, partners: 0 };
@@ -64,5 +64,32 @@ describe('landmarkExtent', () => {
     const station = worlds[0]!.landmarks.find((l) => l.id === 'station')!;
     // A 2×2 pad with a mast 17 quarter-voxels tall.
     expect(landmarkExtent(station)).toEqual({ min: { x: 0, y: 0, z: 0 }, max: { x: 2, y: 4.25, z: 2 } });
+  });
+});
+
+describe('treeExtent', () => {
+  it('is the box of one tree: its cell, from the ground up to the top of its canopy', () => {
+    for (const world of worlds) {
+      const garden = world.landmarks.find((l) => l.id === 'garden')!;
+      const { origin } = garden.footprint;
+      for (const t of garden.trees) {
+        // A tree is 8 quarter voxels tall: 2 world units.
+        expect(treeExtent(garden, t), `${world.seed} ${t.x},${t.z}`).toEqual({
+          min: { x: t.x - origin.x, y: 0, z: t.z - origin.z },
+          max: { x: t.x - origin.x + 1, y: 2, z: t.z - origin.z + 1 },
+        });
+      }
+    }
+  });
+
+  it('holds every voxel the Garden draws in the tree\'s cell', () => {
+    const world = worlds[1]!;
+    const garden = world.landmarks.find((l) => l.id === 'garden')!;
+    const voxels = voxelsOf(garden, world);
+    for (const t of garden.trees) {
+      const { max } = treeExtent(garden, t);
+      const own = voxels.filter((v) => Math.floor(v.x / DETAIL) === t.x && Math.floor(v.z / DETAIL) === t.z);
+      for (const v of own) expect(v.y + 1).toBeLessThanOrEqual(garden.y * DETAIL + max.y * DETAIL);
+    }
   });
 });

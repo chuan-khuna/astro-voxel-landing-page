@@ -301,6 +301,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 **Content counts and generation**
 - The World generator receives only counts and stable ids from content, never the copy.
 - Projects are placed in a stable order by id, so adding a Project adds a tree without reshuffling unrelated ones where possible.
+- **Done (ticket 08).** The generator still gets only the Project count. The site pairs tree `k` with the `k`-th Project by id (`site/src/lib/gardenTrees.ts`). Each tree is its own link to `/garden/<id>`, over the middle of the tree so neighbouring trees never share a click target. It stops taking the pointer when the tree is too small on screen, so a click on a far-out Garden opens `/garden`. The `projects` schema lives in `site/src/lib/contentSchemas.ts`; `cover` is an optional `{ src, alt }`, and the tree variant hint is `tree` (`round`, `tall`, `bushy`), not drawn yet.
 
 ### Mock data
 

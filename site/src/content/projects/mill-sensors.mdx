@@ -1,0 +1,24 @@
+---
+title: Listening to an old mill
+summary: Vibration sensors and anomaly detection that warn a paper mill before a bearing fails.
+client: Northbank Paper Co.
+year: 2023
+tags: [iot, anomaly-detection, ml]
+tree: round
+---
+
+## The question
+
+The mill's machines are older than most of its staff. When a bearing
+failed, the line stopped for two days.
+
+## What we built
+
+Cheap vibration sensors on every critical bearing, a streaming pipeline,
+and an anomaly model trained on what "healthy" sounds like for each
+machine. Alerts arrive with a plain explanation and a chart, not a score.
+
+## What changed
+
+Two failing bearings were replaced on a planned stop in the first year.
+Neither line stopped unplanned.

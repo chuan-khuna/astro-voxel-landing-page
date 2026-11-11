@@ -1,0 +1,58 @@
+---
+/**
+ * The Garden's list of every Project, in tree order (by id), each linking
+ * to its case study at `/garden/<id>`. Projects beyond the Garden's tree cap
+ * have no tree but are listed all the same.
+ */
+import { getCollection } from 'astro:content';
+import { treeOrder } from '../lib/gardenTrees';
+
+interface Props {
+  /** The Garden's route, which each Project's page sits under. */
+  route: string;
+}
+const { route } = Astro.props;
+const projects = treeOrder(await getCollection('projects'));
+---
+
+{
+  projects.length === 0 ? (
+    <p>No Projects yet. The Garden is waiting for its first tree.</p>
+  ) : (
+    <ul class="projects" aria-label="Projects">
+      {projects.map((project) => (
+        <li>
+          <a href={`${route}/${project.id}`} data-seed-link>
+            {project.data.title}
+          </a>
+          <p class="meta">
+            {project.data.client} · {project.data.year}
+          </p>
+          <p class="summary">{project.data.summary}</p>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+<style>
+  .projects {
+    display: grid;
+    gap: 0.9rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .projects a {
+    color: var(--brand);
+    font-weight: 600;
+  }
+  .meta,
+  .summary {
+    margin: 0.15rem 0 0;
+  }
+  .meta {
+    font-size: 0.875rem;
+    opacity: 0.8;
+  }
+</style>

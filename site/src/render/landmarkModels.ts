@@ -39,6 +39,9 @@ interface Shape {
 
 type Model = (draw: Draw, colours: WorldColours, shape: Shape) => void;
 
+/** How tall a Garden tree is, in ¼ voxels. */
+const TREE_HEIGHT = 8;
+
 const MODELS: Record<PlacedLandmarkId, Model> = {
   /** A paved pad with a low hut and a grey mast topped by an accent light. */
   station: ({ box }, { fixed, biome }, { w, d }) => {
@@ -74,7 +77,7 @@ const MODELS: Record<PlacedLandmarkId, Model> = {
         if (treeAt.has(`${x},${z}`)) {
           box(x + 1, 0, z + 1, x + 3, 3, z + 3, fixed('trunk'));
           box(x, 3, z, x + 4, 7, z + 4, biome('foliage'));
-          box(x + 1, 7, z + 1, x + 3, 8, z + 3, biome('foliage', 0.04));
+          box(x + 1, 7, z + 1, x + 3, TREE_HEIGHT, z + 3, biome('foliage', 0.04));
           set(x, 3, z, biome('foliage', -0.04));
         } else {
           set(x + 1, 0, z + 2, (x + z) % 8 === 0 ? fixed('bougainvillea') : fixed('bougainLight'));
@@ -175,4 +178,15 @@ export function landmarkExtent(landmark: PlacedLandmark): ModelExtent {
     min: { x: unit(min.x), y: unit(min.y), z: unit(min.z) },
     max: { x: unit(max.x), y: unit(max.y), z: unit(max.z) },
   };
+}
+
+/**
+ * The box one Garden tree covers, in world units relative to the Garden's
+ * model origin (like `landmarkExtent`): its cell, from the ground to the top
+ * of its canopy. Used to size the tree's own hotspot.
+ */
+export function treeExtent(garden: PlacedLandmark, tree: Cell): ModelExtent {
+  const x = tree.x - garden.footprint.origin.x;
+  const z = tree.z - garden.footprint.origin.z;
+  return { min: { x, y: 0, z }, max: { x: x + 1, y: TREE_HEIGHT / DETAIL, z: z + 1 } };
 }

@@ -2,6 +2,7 @@ import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { LANDMARK_IDS } from './world';
+import { projectSchema } from './lib/contentSchemas';
 
 /**
  * `pages`: copy that is not a content item of its own: the home hook and
@@ -18,4 +19,14 @@ const pages = defineCollection({
   }),
 });
 
-export const collections = { pages };
+/**
+ * `projects`: one MDX file per Project; the body is its case study. The id
+ * (the file name) is its URL slug, `/garden/<id>`, and sets its tree's place
+ * in the Garden (trees go in order by id).
+ */
+const projects = defineCollection({
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/projects' }),
+  schema: projectSchema,
+});
+
+export const collections = { pages, projects };

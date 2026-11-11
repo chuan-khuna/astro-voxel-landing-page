@@ -36,18 +36,23 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | Path | What it holds |
 |---|---|
 | `src/data/site.ts` | The site data module: company identity, brand colour and font, SEO defaults, default Seed, brand Biome (the Biome the default Seed always gets), and the Landmark list (id, route, label, Story Order). `landmarksInStoryOrder` is the sorted list. |
-| `src/content.config.ts` | Content collections. Only `pages` for now (MDX): `title`, an optional `landmark` id and an optional meta `description`. |
+| `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id and an optional meta `description`) and `projects` (MDX, schema `projectSchema`). |
+| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema` (see "Projects" below). Tested in `contentSchemas.test.ts`. |
+| `src/content/projects/` | One MDX file per Project; the file name is its id and URL slug, the body its case study. Six mock Projects. |
 | `src/content/pages/` | `home.mdx` (the home hook) and one intro per section, found by its `landmark`: `services.mdx` (station), `about.mdx` (house), `team.mdx` (house-interior), `garden.mdx`, `dock.mdx`, `contact.mdx` (mailbox). |
 | `src/world/` | The World generator. See `world-generator.md`. |
 | `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`), camera rig (pan, zoom and flights), Landmark focus and hotspots. See `rendering-and-shading.md`. |
 | `src/lib/seedUrl.ts` | The Seed in the URL: `seedFromUrl`, `rollSeed` (numeric) and `withSeed` (keep the Seed on a route link). Tested in `seedUrl.test.ts`. |
+| `src/lib/gardenTrees.ts` | `treeOrder(projects)`: Projects sorted by id (tree order). `gardenTrees(world, projectIds)`: the World's tree cells, each paired with its Project (tree `k` is the `k`-th Project by id; none beyond the cap). Tested in `gardenTrees.test.ts`. |
 | `src/lib/landmarkRoutes.ts` | `landmarkForPath(pathname)`: the Landmark a route belongs to, from the Landmark list. A trailing slash and `index.html` are ignored, `/garden/<slug>` belongs to the Garden, and any other route gives `null`. Tested in `landmarkRoutes.test.ts`. |
 | `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order. Its links carry `data-seed-link`, so they keep a rolled Seed; the current section's link has `aria-current="page"`. |
 | `src/components/SectionPanel.astro` | A section's panel over the World: heading, close link and the intro copy. |
+| `src/components/ProjectList.astro` | The Garden's list of every Project in tree order: title (a link to its page), Client, year and summary. |
 | `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), and Astro's `<ClientRouter />`. |
-| `src/layouts/WorldPage.astro` | Every page: hero, the World frame with Landmark hotspots, dice button, Landmark menu, an optional `panel` slot over the World, and the client script that runs the World across routes. |
+| `src/layouts/WorldPage.astro` | Every page: hero, the World frame with Landmark hotspots and the Garden's tree links, dice button, Landmark menu, an optional `panel` slot over the World, and the client script that runs the World across routes. |
 | `src/pages/index.astro` | The home page: the World and the home hook. |
-| `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. |
+| `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Garden's page also lists every Project. |
+| `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. |
 
 Company identity, the default Seed and the Landmark list live only in
 `src/data/site.ts`. Landmark ids are typed against the generator's id lists.
@@ -55,7 +60,8 @@ Company identity, the default Seed and the Landmark list live only in
 ## Pages and routes
 
 Every page is the World plus, on a section page, that section's panel. The
-counts are all 0 until the Project, Client and Partner collections exist.
+World gets the Project count from the `projects` collection; the Client and
+Partner counts are 0 until those collections exist.
 
 - **Home (`/`):** the company name (the page's `h1`) and tagline, the World,
   the dice button with the current Seed, the Landmark menu and the home hook.
@@ -64,6 +70,14 @@ counts are all 0 until the Project, Client and Partner collections exist.
   the title is `<section> · <company>`, and the description comes from the
   `pages` entry. The Contact panel also lists the email, phone, address and
   socials from site data.
+- **Garden (`/garden`):** the intro copy, then every Project in tree order
+  (by id), each linking to its page. Projects beyond the Garden's 24 trees
+  are listed too.
+- **Project pages (`/garden/<id>`):** the panel's heading is the Project's
+  title, then a link back to all Projects, the Client and year, the tags, the
+  cover image if any, the summary (also the meta description) and the case
+  study. The camera goes to the Garden (`/garden/<id>` belongs to it), and
+  the Project's tree link is marked current.
 - **Panel:** a side panel over the right of the World on screens 48rem and
   wider (`min(24rem, 42%)` wide), and a bottom sheet (up to 55dvh) on
   narrower ones; the page gets bottom padding so the sheet never hides its
@@ -122,6 +136,13 @@ route on every `astro:after-swap`:
   Tab order, before the dice button and the Landmark menu. A drag that starts
   on a hotspot pans and does not follow the link. The open panel covers any
   hotspot under it.
+- **Trees:** each Garden tree has its own link (`a.hotspot.tree[data-project]`)
+  to its Project's page, labelled with the Project's title, over the middle
+  of the tree. Hover or focus shows its outline and title; clicking it
+  opens the Project's page and the camera goes to the Garden. When the
+  camera is far out a tree is too small to aim at, and a click there opens
+  the Garden instead. Tree links come right after the Garden's hotspot in
+  the Tab order. See "Tree links" in `rendering-and-shading.md`.
 - The script passes the frame and hotspots to `mountWorld(canvas, world,
   meshed, { frame, hotspots })`. See "Camera and interaction" in
   `rendering-and-shading.md`.
@@ -150,6 +171,30 @@ route on every `astro:after-swap`:
 - **Seed across routes:** after each World is shown and after each page
   swap, every `a[data-seed-link]` is rewritten with `withSeed`, e.g.
   `/garden?seed=1234`. The default Seed is left out of links.
+
+## Projects
+
+A Project is one MDX file in `src/content/projects/`. Adding a file adds
+the Project to the Garden's list, gives it a page and grows a tree (up to
+24). The schema (`projectSchema`, validated at build time, so a mistake
+fails the build):
+
+| Field | Type |
+|---|---|
+| `title` | non-empty string |
+| `summary` | non-empty string: the list entry and the page's meta description |
+| `client` | non-empty string: the Client's name |
+| `year` | whole number, 1900–2100 |
+| `tags` | list of strings, default none |
+| `tree` | optional tree shape hint: `round`, `tall` or `bushy` (not drawn yet; every tree has one shape) |
+| `cover` | optional `{ src, alt }`: an image under `public/` (the mock Projects have none) |
+
+**Trees.** The World generator gets only the Project count. It lays out
+one tree cell per Project, in order, up to 24. The site takes Projects in
+a stable order by id (`treeOrder`), so tree `k` is the `k`-th Project by
+id, and a new Project whose id sorts last adds a tree without moving the
+others' Projects (it may still change the World's layout; see
+`world-generator.md`).
 
 ## Rendering
 

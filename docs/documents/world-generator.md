@@ -191,7 +191,10 @@ the Biome.
 
 Later tickets: boats, ships, decoration, Data Card anchors, House Interior
 room layout, and Landmark variants beyond 0. Of `ContentCounts`, only
-`projects` is used yet (the Garden's trees).
+`projects` is used yet (the Garden's trees). The site passes the size of
+the `projects` collection and pairs tree `k` with the `k`-th Project by id
+(`site/src/lib/gardenTrees.ts`; see `site-project.md`); the generator never
+sees ids. `MAX_TREES` (24) is exported from `index.ts` for the site.
 
 ## Tests
 

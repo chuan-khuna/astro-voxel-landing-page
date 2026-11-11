@@ -10,9 +10,11 @@
  */
 import Base from './Base.astro';
 import LandmarkMenu from '../components/LandmarkMenu.astro';
+import { getCollection } from 'astro:content';
 import { site } from '../data/site';
-import { PLACED_LANDMARK_IDS } from '../world';
+import { MAX_TREES, PLACED_LANDMARK_IDS } from '../world';
 import type { ContentCounts } from '../world';
+import { treeOrder } from '../lib/gardenTrees';
 
 interface Props {
   title?: string;
@@ -21,11 +23,14 @@ interface Props {
 const { title, description } = Astro.props;
 const hasPanel = Astro.slots.has('panel');
 
-// The Project, Client and Partner collections arrive in later tickets.
-const counts: ContentCounts = { projects: 0, clients: 0, partners: 0 };
+const projects = treeOrder(await getCollection('projects'));
+// The Client and Partner collections arrive in later tickets.
+const counts: ContentCounts = { projects: projects.length, clients: 0, partners: 0 };
 
 // One hotspot link per placed Landmark; the World positions them over its model.
 const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly string[]).includes(l.id));
+// One link per Garden tree, right after the Garden's own link: a tree per Project, in order by id, up to the cap.
+const treeLinks = projects.slice(0, MAX_TREES);
 ---
 
 <Base title={title} description={description}>
@@ -54,9 +59,24 @@ const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly s
           data-counts={JSON.stringify(counts)}></canvas>
         {
           hotspots.map((landmark) => (
-            <a class="hotspot" href={landmark.route} data-hotspot={landmark.id} data-seed-link draggable="false" hidden>
-              <span class="hotspot-label">{landmark.label}</span>
-            </a>
+            <>
+              <a class="hotspot" href={landmark.route} data-hotspot={landmark.id} data-seed-link draggable="false" hidden>
+                <span class="hotspot-label">{landmark.label}</span>
+              </a>
+              {landmark.id === 'garden' &&
+                treeLinks.map((project) => (
+                  <a
+                    class="hotspot tree"
+                    href={`${landmark.route}/${project.id}`}
+                    data-hotspot="garden"
+                    data-project={project.id}
+                    data-seed-link
+                    draggable="false"
+                    hidden>
+                    <span class="hotspot-label">{project.data.title}</span>
+                  </a>
+                ))}
+            </>
           ))
         }
       </div>
@@ -128,6 +148,16 @@ const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly s
       }
     };
 
+    /** Mark the tree of the Project page now open, if any (the tree links are persisted, so the page cannot). */
+    const markCurrentTree = () => {
+      const here = location.pathname.replace(/\/(index\.html)?$/, '');
+      for (const link of frame.querySelectorAll<HTMLAnchorElement>('a[data-project]')) {
+        const current = new URL(link.href).pathname.replace(/\/$/, '') === here;
+        if (current) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+      }
+    };
+
     /**
      * Where a Landmark should sit on the frame so the open panel does not
      * cover it: the middle of the part of the frame the panel leaves free.
@@ -193,6 +223,7 @@ const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly s
     /** A new page is in: show its Seed's World, or move the camera for its route. */
     const onRoute = async () => {
       keepSeedOnLinks();
+      markCurrentTree();
       if (currentSeed() !== shownSeed) return showSeed(currentSeed());
       if (!mounting) return;
       followRoute(await mounting, flightMs());
@@ -214,6 +245,7 @@ const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly s
     });
 
     document.addEventListener('astro:after-swap', () => void onRoute());
+    markCurrentTree();
     void showSeed(currentSeed());
   }
 </script>
@@ -327,6 +359,15 @@ const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly s
   .hotspot:hover .hotspot-label,
   .hotspot:focus-visible .hotspot-label {
     opacity: 1;
+  }
+  /* A tree too small on screen to aim at: the pointer goes to the Garden's link under it. */
+  .hotspot.tree[data-small] {
+    pointer-events: none;
+  }
+  /* The tree of the Project page that is open. */
+  .hotspot.tree[aria-current='page'] {
+    outline: 2px solid var(--brand);
+    outline-offset: 1px;
   }
   @media (prefers-reduced-motion: reduce) {
     .hotspot-label {
