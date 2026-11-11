@@ -39,7 +39,7 @@ id.
 | Collection | Format | Schema | One per | Shows |
 |---|---|---|---|---|
 | `pages` | MDX | inline in `content.config.ts` | Section of the site, plus the home hook | Intro copy, meta title and description, the Guide's and the Tour's lines |
-| `projects` | MDX | `projectSchema` | Project | `/garden`, `/garden/<id>`, a tree in the Garden |
+| `projects` | MDX | `projectSchema` | Project | `/garden`, `/garden/<id>`, a flower or a tree in the Garden |
 | `services` | MDX | `serviceSchema` | Service | `/services` |
 | `clients` | YAML | `clientSchema` | Client | `/dock`, a moored boat |
 | `partners` | YAML | `partnerSchema` | Partner | `/dock`, a sailing ship |
@@ -67,8 +67,9 @@ in the intro card under the tagline).
 ## Projects
 
 A Project is one MDX file in `src/content/projects/`. Adding a file adds
-the Project to the Garden's list, gives it a page and grows a tree (up to
-24). The schema (`projectSchema`, validated at build time, so a mistake
+the Project to the Garden's list, gives it a page and, if the Garden has
+room, grows a plant: a flower for a Pinned Project, a tree for any other.
+The schema (`projectSchema`, validated at build time, so a mistake
 fails the build):
 
 | Field | Type |
@@ -78,15 +79,24 @@ fails the build):
 | `client` | non-empty string: the Client's name |
 | `year` | whole number, 1900–2100 |
 | `tags` | list of strings, default none |
+| `pinned` | optional boolean: a Pinned Project, which blooms as a flower at the front of the Garden and leads the Garden's list (the mock content pins `archive-search`, `mill-sensors` and `tide-forecasting`) |
 | `tree` | optional tree shape hint: `round`, `tall` or `bushy` (not drawn yet; every tree has one shape) |
 | `cover` | optional `{ src, alt }`: an image under `public/`, shown on its page and the picture of its link preview (the mock Projects have none) |
 
-**Trees.** The World generator gets only the Project count. It lays out
-one tree cell per Project, in order, up to 24. The site takes Projects in
-a stable order by id (`treeOrder`), so tree `k` is the `k`-th Project by
-id, and a new Project whose id sorts last adds a tree without moving the
-others' Projects (it may still change the World's layout; see
-`world-generator.md`).
+**Flowers and trees** (polish ticket 05, `src/lib/gardenPlants.ts`). The
+World generator gets only the Project and Pinned Project counts
+(`gardenCountsOf`). The site takes Projects in Garden order
+(`projectOrder`): Pinned Projects by id, then the rest by id; the
+Garden's list (`/garden`) and the sitemap use the same order. The first six
+Pinned Projects bloom as flowers in the bed's front two rows; the next
+three Projects in that order (Pinned Projects beyond six first) grow as
+trees in its back row (`plantedProjects`). So the Garden shows at most 9
+Projects, and the rest are only on `/garden`. Other Projects never take an
+empty flower cell: with fewer than six Pinned Projects those cells stay
+grass. `gardenPlants(world, projects)` pairs each flower and tree cell with
+its Project. Flower `k` and tree `k` keep their cells as Projects are
+added (the Garden is always 5×5), but a new Project whose id sorts first
+moves the others along.
 
 ## Services
 
@@ -145,11 +155,12 @@ developer.
 ## What reaches the World
 
 The World generator gets only counts and stable ids from content, never the
-copy (`ContentCounts`: `projects`, `clients`, `partners`; see
+copy (`ContentCounts`: `projects`, `pinned`, `clients`, `partners`; see
 `world-generator.md`). `WorldPage.astro` counts the collections at build
-time. Services and Team Members do not change the World. Items are taken in
-order by id (`treeOrder`), so adding one whose id sorts last adds a tree or
-a boat without moving the others' items.
+time. Services and Team Members do not change the World. Projects are
+taken in Garden order (`projectOrder`, above) and Clients by id, so adding
+one whose id sorts last adds a plant (while the Garden has room) or a boat
+without moving the others' items.
 
 ## What reaches a page's link preview
 

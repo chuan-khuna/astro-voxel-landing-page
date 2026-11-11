@@ -46,7 +46,7 @@ layers 2-7
 
 | Field | Meaning |
 |---|---|
-| `kind` | What the structure is: a Landmark (`house`, `station`, `mailbox`, `dock`) today; later trees, flowers, boats, ships, Decoration, creatures. |
+| `kind` | What the structure is: a Landmark (`house`, `station`, `mailbox`, `dock`, `garden`: the Garden's fence), a Garden plant (`tree`, `flower`), a House Interior `room` or the `developer`; later boats, ships, Decoration, creatures. |
 | `biome` | The Biome whose style it is (`tropical`, `northern`, `autumn`, `volcanic`), or `any` for one shared by every Biome. |
 | `variant` | Its Variant number within that kind and Biome, from 1 with no gaps. |
 | `footprint` | Its footprint in cells, `<width>x<depth>`; each cell is `scale` voxels (8 by default), so every layer is `scale × width` characters wide and `scale × depth` rows deep. |
@@ -76,11 +76,11 @@ the terrain:
 
 | Group | Roles |
 |---|---|
-| Ground and floors | `plinth`, `concrete`, `floor`, `rug`, `post`, `deck`, `deckDark` |
+| Ground and floors | `plinth`, `concrete`, `floor`, `rug`, `post`, `postDark`, `deck`, `deckDark` |
 | Walls | `wall`, `wallShade`, `bamboo`, `bambooDark`, `timber`, `timberDark`, `brick`, `brickDark`, `mortar`, `stone`, `stoneDark` |
 | Roofs | `roof`, `thatch`, `thatchDark`, `shingle`, `shingleDark`, `tile`, `tileDark`, `slate`, `slateDark`, `snow` |
 | Openings and trim | `door`, `doorWood`, `window`, `frame`, `trim`, `accent` (the Biome's accent), `metal`, `metalDark`, `flag` (a mailbox's red flag), `canvas` (sail, awning, rope), `lamp` |
-| Plants | `foliage`, `foliageLight` (the Biome's foliage), `flower`, `flowerLight` |
+| Plants | `foliage`, `foliageLight`, `foliageDark` (the Biome's foliage), `leafGold` (autumn leaves), `flower`, `flowerLight`, and for the Garden's flowers `stem`, `stemLight`, `stemDark` (one green in every Biome), `petalWhite`, `petalYellow`, `petalOrange`, `petalRed`, `petalBlue`, `petalBlueLight` and `pollen` |
 | House Interior | `screen` (the computer's screen, which glows with code), `fire` (a hearth or brazier), `desk`, `chair`, and the developer's `skin`, `hair`, `shirt`, `trousers`, `shoe` |
 
 A new material is a new role in `roles.ts` (and, if needed, a fixed colour
@@ -132,16 +132,18 @@ biome)` lists one kind's Variants for a Biome.
   sides. The Gallery's **Turn** shows quarter turns, not this mirror.
 - `landmarkStructure(world, landmark)`: the Landmark's Variant, the file of
   its kind in the World's Biome numbered by the Landmark's `variant` (the
-  generator's pick, `world-generator.md`). The Garden has none yet.
+  generator's pick, `world-generator.md`); the Garden's is its fence.
 - `landmarkPlacement(world, landmark)`: its footprint's origin, on the
   ground. The House faces its door (`housePlacement`: its plot's origin);
   the Mailbox faces the same way, onto the yard; a Dock whose footprint
   runs north to south (1×2) is laid along it with the `east` mirror; the
-  Station faces south.
+  Garden's fence turns its gate the Garden's way (`door`, south or east;
+  the fence is the same on every side but the gate); the Station faces
+  south.
 - `drawHousePart(world, colours, part, paint)` and `houseStructure(world)`:
   one part of the World's House Variant, and that Variant.
 - `drawStructures(world, …)`: the World's structure grid: the House's base,
-  the Station, the Mailbox and the Dock's things. The House Interior's room
+  the Station, the Mailbox, the Dock's things and the Garden's fence. The House Interior's room
   joins the grid at ⅛ unit (`drawWorldRoom`, below).
 - `houseWindowFaces(world)`: the open +x and +z faces of window glass, lit
   at Night (`rendering-and-shading.md`, "The House and its room").
@@ -151,8 +153,8 @@ greedy-meshed once with it, with the soft-voxel material at ⅛ unit.
 
 ## Repeated structures
 
-`render/structureMeshes.ts` is ready for structures that repeat (trees,
-flowers, Decoration, boats, ships): `structureInstances(structure,
+`render/structureMeshes.ts` draws structures that repeat (the Garden's
+flowers and trees; later Decoration, boats, ships): `structureInstances(structure,
 colours, placements, { part?, pivot? })` meshes the structure once
 (`structureGeometry`) and draws every copy as one `InstancedMesh`, in the
 soft-voxel material in local space. A placement is a point in world units
@@ -160,15 +162,17 @@ and a number of quarter turns about a pivot (by default the middle of the
 footprint, on the ground); `instanceMatrix` builds its transform (one
 quarter turn takes +z to +x). Copies move by whole voxels and turn by
 quarter turns, so their seams stay on voxel edges. The Model Gallery uses
-it today; Garden plants (polish ticket 05) are the first World use.
+it for every model, and the World for the Garden's plants (`render/garden.ts`,
+see "The Garden" below).
 
 ## The Landmark Variants
 
-Each Landmark but the Garden has one style per Biome and a few Variants in
-it (polish ticket 03): the House 3, the Station 2, the Mailbox 3 and the Dock
-2 per Biome, 40 files in all. The counts are `LANDMARK_VARIANTS` in
-`world/landmarks.ts`, which the generator picks from; a data test holds
-the files to it. The Garden's plants come in polish ticket 05.
+Each Landmark has one style per Biome and a few Variants in it (polish
+ticket 03): the House 3, the Station 2, the Mailbox 3 and the Dock 2 per
+Biome, 40 files; and the Garden 1, its fence (polish ticket 05), 44 in all. The
+counts are `LANDMARK_VARIANTS` in `world/landmarks.ts`, which the
+generator picks from; a data test holds the files to it. The Garden's
+flowers and trees are structures of their own ("The Garden" below).
 
 Except the first House of each Biome (polish ticket 01), they were drawn
 with throwaway generator scripts (a roof generator for the House; box, disc
@@ -254,6 +258,42 @@ checks them in the World: each Landmark draws its own Variant from the
 World's Biome, fills its footprint on its ground, the Mailbox faces the
 House's door, and the Dock's things stand on its deck.
 
+### The Garden
+
+Polish ticket 05. The Garden is 5×5: a 3×3 bed inside a fence one cell
+wide (`world-generator.md`, "The Garden"). Each Biome has a fence
+(`garden/<biome>-1`), a tree (`tree/<biome>-1`) and two flowers
+(`flower/<biome>-1`, `-2`), drawn with a throwaway generator script and
+committed as plain ASCII.
+
+- **Fence** (40×40, at most 8 layers, so at most 1 unit): a fence along
+  the middle of the ring of cells round the bed, the bed left empty, a
+  gate in the middle of +z between two taller posts (`door: +z`). Tropical:
+  bamboo, a pink gate, flowers on the gate posts. Northern: a split-rail
+  log fence, snow on every post, a plank gate. Autumn: a white picket
+  fence, a green gate. Volcanic: a low dry-stone wall, an iron gate
+  between posts with embers on top.
+- **Tree** (8×8, 24–28 layers, 3–3.5 units): a 2×2 trunk and a crown at
+  most 6×6 (x and z 1–6 in the cell's 8×8), so neighbouring trees keep 2
+  voxels apart and never merge into a hedge. Tropical: a coconut palm.
+  Northern: a spruce in three tiers, snow on each. Autumn: a round oak in
+  red and gold. Volcanic: a dragon tree, an umbrella crown on fanning
+  branches, red berries beneath.
+- **Flower** (8×8, 10–14 layers, 1.25–1.75 units): a 2×2 green stem with
+  two leaves and a bloom 5–6 voxels across, filling the cell. Tropical: a
+  pink hibiscus and a white frangipani. Northern: a blue crocus and a
+  white daisy. Autumn: a sunflower and an orange chrysanthemum. Volcanic:
+  a fire lily and an ember tulip. A Garden takes its Biome's flowers in
+  turn, so neighbours differ.
+
+`GARDEN_HEIGHT` (`world/landmarks.ts`) holds each to its height band:
+the fence 1, a flower 1.75, a tree 3.5 units (`LANDMARK_HEIGHT.garden`);
+placement keeps the other Landmarks in view past them. `structures.test.ts`
+checks that every Biome has a tree and its flowers numbered from 1, the
+fence's size, empty bed and gate, the trees' height and 6×6 crown and the
+flowers' height and bloom. The fence is the one structure that does not
+fill its whole footprint (its bed is empty).
+
 ## The House Interior rooms
 
 One room per Biome (polish ticket 04), drawn at 1/16 unit (`scale: 16`,
@@ -305,7 +345,7 @@ screen; their head and hands are moving parts.
 `structures.test.ts` reads every `*.structure` file from disk and checks
 that it parses, that the build-time module holds the same voxels, that it
 uses only known roles, and that it fills its declared footprint (every
-cell has voxels; the grid is the footprint's size). `parse.test.ts`
+cell has voxels, but the Garden fence's bed; the grid is the footprint's size). `parse.test.ts`
 checks the format on a small inline structure, including its errors.
 
 For the House Interior, `structures.test.ts` checks one 1/16-unit room per
@@ -328,7 +368,9 @@ renderer (`WebGPURenderer`, WebGL 2 fallback), soft-voxel material, sun,
 sky light and Day and Night tokens (the light only: window glow shows in the World, not here). **Turn** turns every model a quarter
 turn; **Lift lids** lifts the House lids to show the interior; a House
 Interior room (kind `room`) shows furnished, the developer at the
-computer, at its own 1/16 unit; **Night**
+computer, at its own 1/16 unit; a Garden fence (kind `garden`) shows
+planted full, six flowers and three trees, as a World lays them out
+(`plantedGarden`); **Night**
 switches the light, and the page's own colours follow (the site's theme
 tokens and fonts). On a phone the buttons show icons only (their names stay
 as tooltips and for screen readers). It renders on demand and on resize.

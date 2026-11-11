@@ -2,8 +2,34 @@ import type { Rng } from './prng';
 import { surfaceOf } from './terrain';
 import type { BiomeId, Boat, Bridge, Cell, Facing, Footprint, Isle, PlacedLandmark, PlacedLandmarkId, Terrain } from './types';
 
-/** Most trees the Garden shows; Projects beyond the cap stay on their pages only. */
-export const MAX_TREES = 24;
+/** The Garden's side, in cells: a 3×3 bed inside a fence one cell wide. */
+export const GARDEN_SIZE = 5;
+/** Most Pinned Projects that bloom as flowers, in the bed's front two rows (3×2). */
+export const MAX_FLOWERS = 6;
+/** Most Projects that grow as trees, in the bed's back row (3×1). */
+export const MAX_TREES = 3;
+/**
+ * The bed's cells inside the Garden, local to its footprint's origin: the
+ * flowers' front two rows, the front row (nearest the camera) first, and
+ * the trees' back row, each west to east. Plant `k` of a kind always
+ * takes the same cell, so adding Projects never moves a plant.
+ */
+export const GARDEN_BED: { flowers: readonly Cell[]; trees: readonly Cell[] } = {
+  flowers: [3, 2].flatMap((z) => [1, 2, 3].map((x) => ({ x, z }))),
+  trees: [1, 2, 3].map((x) => ({ x, z: 1 })),
+};
+/**
+ * How many flowers and trees the Garden shows for `projects` Projects, of
+ * which `pinned` are pinned: the first `MAX_FLOWERS` Pinned Projects bloom
+ * as flowers; the rest of them, then the other Projects, grow as trees, up
+ * to `MAX_TREES`. Other Projects never take a flower's cell: an empty one
+ * stays grass.
+ */
+export function gardenCounts(projects: number, pinned = 0): { flowers: number; trees: number } {
+  const all = Math.max(0, projects);
+  const flowers = Math.min(Math.max(0, pinned), all, MAX_FLOWERS);
+  return { flowers, trees: Math.min(all - flowers, MAX_TREES) };
+}
 /** Most boats moored at the Dock; Clients beyond the cap stay on the Dock's page only. */
 export const MAX_BOATS = 12;
 /** Boats moor at most this many cells (Chebyshev) from the jetty. */
@@ -28,10 +54,18 @@ export const LANDMARK_HEIGHT: Record<PlacedLandmarkId, number> = {
   mailbox: 2,
 };
 /**
+ * How tall, in units above the Garden's ground, each part of the Garden may
+ * stand: its fence (round the edge), a flower (the bed's front two rows) and
+ * a tree (its back row, `LANDMARK_HEIGHT.garden`). Placement keeps the other
+ * Landmarks in view past these columns, so no fence, flower or tree may be
+ * taller (the structure files' tests hold them to it).
+ */
+export const GARDEN_HEIGHT = { fence: 1, flower: 1.75, tree: LANDMARK_HEIGHT.garden } as const;
+/**
  * How many Variants each Landmark has in each Biome's style: the structure
  * files `structures/<landmark>/<biome>-<n>.structure`, numbered from 1 (a
- * data test holds the files to this table). The Garden has one until its
- * plants are drawn (polish ticket 05).
+ * data test holds the files to this table). The Garden's Variant is its
+ * fence; its flowers and trees are structures of their own (`render/gardenPlants.ts`).
  */
 export const LANDMARK_VARIANTS: Record<BiomeId, Record<PlacedLandmarkId, number>> = {
   tropical: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
@@ -68,7 +102,7 @@ export interface Placement {
  * Place the five Landmarks, each on a footprint of whole cells:
  *
  * - the Station (2×2) on its Isle's high ground, levelled up to the top;
- * - the Garden (at least 3×3, one cell per tree plus paths), then the House's
+ * - the Garden (5×5: a 3×3 bed of flowers and trees in a fence), then the House's
  *   plot (4×4: the House 3×3 and its front yard) on the Garden's Isle;
  * - the Dock (2×1) on the shoreline, with a 2–3 cell jetty straight out to sea;
  * - the Mailbox (1×1) in the House's front yard, in the plot's south-east
@@ -79,7 +113,7 @@ export interface Placement {
  * `MAX_LEVELLING` voxels. Footprints keep a cell apart and stay off bridges
  * and bridge ends. No footprint (or jetty) may be hidden from the fixed
  * isometric camera by terrain, a bridge, or another Landmark's model (each
- * as tall as `LANDMARK_HEIGHT` allows). Each Landmark tries the Isles in a
+ * as tall as `LANDMARK_HEIGHT` allows; the Garden's parts as `GARDEN_HEIGHT`). Each Landmark tries the Isles in a
  * Seed-shuffled order. Returns null if some Landmark has no valid footprint.
  */
 export function placeLandmarks(
@@ -87,9 +121,8 @@ export function placeLandmarks(
   source: Terrain,
   isles: Isle[],
   bridges: Bridge[],
-  counts: { trees: number; boats: number },
+  counts: { projects: number; pinned: number; boats: number },
 ): Placement | null {
-  const treeCount = counts.trees;
   const boatCount = Math.min(Math.max(0, counts.boats), MAX_BOATS);
   const terrain: Terrain = { ...source, heights: [...source.heights] };
   const { width, depth, heights, isle } = terrain;
@@ -210,6 +243,12 @@ export function placeLandmarks(
       for (const c of rectangle(origin, HOUSE_CELLS, HOUSE_CELLS).cells) tops.set(index(c.x, c.z), y + LANDMARK_HEIGHT.house);
       const mailbox = mailboxCorner(origin);
       tops.set(index(mailbox.x, mailbox.z), y + LANDMARK_HEIGHT.mailbox);
+    } else if (id === 'garden') {
+      // The fence round the edge, the flowers' rows and the trees' row, each as tall as it may stand.
+      const { origin } = footprint;
+      for (const c of footprint.cells) tops.set(index(c.x, c.z), y + GARDEN_HEIGHT.fence);
+      for (const c of GARDEN_BED.flowers) tops.set(index(origin.x + c.x, origin.z + c.z), y + GARDEN_HEIGHT.flower);
+      for (const c of GARDEN_BED.trees) tops.set(index(origin.x + c.x, origin.z + c.z), y + GARDEN_HEIGHT.tree);
     } else {
       for (const c of [...footprint.cells, ...jetty]) tops.set(index(c.x, c.z), y + LANDMARK_HEIGHT[id]);
     }
@@ -245,7 +284,7 @@ export function placeLandmarks(
   };
 
   const placed: PlacedLandmark[] = [];
-  const settle = (id: PlacedLandmarkId, owner: Isle, candidate: Candidate, trees: Cell[] = []) => {
+  const settle = (id: PlacedLandmarkId, owner: Isle, candidate: Candidate, plants: { flowers: Cell[]; trees: Cell[] } = { flowers: [], trees: [] }) => {
     for (const c of candidate.footprint.cells) heights[index(c.x, c.z)] = candidate.y;
     const model = modelOf(id, candidate);
     for (const [i, t] of model) standing[i] = Math.max(standing[i]!, t);
@@ -258,7 +297,7 @@ export function placeLandmarks(
       y: candidate.y,
       variant: 1,
       door: null,
-      trees,
+      ...plants,
       jetty: candidate.jetty,
     };
     placed.push(landmark);
@@ -300,26 +339,26 @@ export function placeLandmarks(
   settle('station', station.owner, station.picked);
 
   // The Garden, the largest footprint, goes next; the House joins it on its Isle.
-  const layout = gardenLayout(Math.min(Math.max(0, treeCount), MAX_TREES));
-  const across = rng() < 0.5;
-  const garden = firstInView('garden', (owner) => {
-    // Try one orientation first, chosen by the Seed; either will do.
-    const upright = levelledDown(owner, layout.width, layout.depth);
-    const turned = layout.width === layout.depth ? [] : levelledDown(owner, layout.depth, layout.width);
-    return across ? [turned, upright] : [upright, turned];
-  });
+  const garden = firstInView('garden', (owner) => [levelledDown(owner, GARDEN_SIZE, GARDEN_SIZE)]);
   if (!garden) return null;
   const home = garden.owner;
   const { origin } = garden.picked.footprint;
-  const turned = garden.picked.footprint.width !== layout.width;
-  const trees = layout.trees.map(({ x, z }) => (turned ? { x: origin.x + z, z: origin.z + x } : { x: origin.x + x, z: origin.z + z }));
-  settle('garden', home, garden.picked, trees);
+  const shown = gardenCounts(counts.projects, counts.pinned);
+  const inGarden = (c: Cell) => ({ x: origin.x + c.x, z: origin.z + c.z });
+  const placedGarden = settle('garden', home, garden.picked, {
+    flowers: GARDEN_BED.flowers.slice(0, shown.flowers).map(inGarden),
+    trees: GARDEN_BED.trees.slice(0, shown.trees).map(inGarden),
+  });
 
   const house = pickInView('house', levelledDown(home, HOUSE_PLOT, HOUSE_PLOT));
   if (!house) return null;
   const placedHouse = settle('house', home, house);
   // Its door faces the way the Seed says; `generateWorld` turns it if the path cannot reach it.
   placedHouse.door = rng() < 0.5 ? 'south' : 'east';
+  // The Garden's gate faces the House: the side (of the two the camera sees) the House lies further towards.
+  const towards = (axis: 'x' | 'z') =>
+    house.footprint.origin[axis] + HOUSE_CELLS / 2 - (origin[axis] + GARDEN_SIZE / 2);
+  placedGarden.door = towards('z') >= towards('x') ? 'south' : 'east';
 
   // The Dock: a 2×1 footprint on the shore with a jetty straight out to sea,
   // at the water's level if it can.
@@ -387,6 +426,7 @@ export function placeLandmarks(
     y: house.y,
     variant: 1,
     door: null,
+    flowers: [],
     trees: [],
     jetty: [],
   });
@@ -421,29 +461,3 @@ export function houseYard(house: PlacedLandmark, door: Facing = house.door ?? 's
 
 /** The House plot's south-east corner, where the Mailbox stands: the plot's corner nearest the camera. */
 const mailboxCorner = (origin: Cell): Cell => ({ x: origin.x + HOUSE_PLOT - 1, z: origin.z + HOUSE_PLOT - 1 });
-
-/** The Garden's tree rows (local z) for a depth: two rows of trees, then a path row, repeating. */
-const treeRows = (depth: number) => Array.from({ length: depth }, (_, z) => z).filter((z) => z % 3 !== 2);
-
-/**
- * The Garden's shape for `count` trees: pairs of tree rows with a path row
- * between them, at least 3×3, as small and square as it can be, and always
- * with room for a path. Trees fill the rows in order, so tree `k` is always
- * in the same place.
- */
-function gardenLayout(count: number): { width: number; depth: number; trees: Cell[] } {
-  let best: { width: number; depth: number } | null = null;
-  for (let area = 9; !best; area++) {
-    for (let depth = 3; depth <= area / 3; depth++) {
-      if (area % depth !== 0) continue;
-      const width = area / depth;
-      if (width < 3 || Math.abs(width - depth) > 2) continue;
-      if (width * treeRows(depth).length < count || area <= count) continue;
-      if (!best || Math.abs(width - depth) < Math.abs(best.width - best.depth)) best = { width, depth };
-    }
-  }
-  const rows = treeRows(best.depth);
-  const trees: Cell[] = [];
-  for (let k = 0; k < count; k++) trees.push({ x: k % best.width, z: rows[Math.floor(k / best.width)]! });
-  return { ...best, trees };
-}

@@ -9,6 +9,8 @@
 /** What the generator needs from content: counts only, never the copy. */
 export interface ContentCounts {
   projects: number;
+  /** How many of the Projects are Pinned Projects (default 0): they take the Garden's places first, as flowers. */
+  pinned?: number;
   clients: number;
   partners: number;
 }
@@ -169,14 +171,25 @@ export interface PlacedLandmark {
   /** Its Landmark Variant: 1 to its count in the Biome's style (`LANDMARK_VARIANTS`), picked by the Seed. */
   variant: number;
   /**
-   * The House only (null otherwise): the way its door faces, south (+z) or
-   * east (+x), the two sides the camera sees. The House fills the north-west
-   * 3×3 of its 4×4 plot (`footprint`); the other seven cells are its front
-   * yard, and the Dock-to-House path ends just outside the yard, in line
-   * with the door (`houseYard`).
+   * The House and the Garden only (null otherwise): the way the House's
+   * door, or the Garden's gate, faces: south (+z) or east (+x), the two
+   * sides the camera sees. The House fills the north-west 3×3 of its 4×4
+   * plot (`footprint`); the other seven cells are its front yard, and the
+   * Dock-to-House path ends just outside the yard, in line with the door
+   * (`houseYard`). The Garden's gate is in the middle of its fence on the
+   * side facing the House.
    */
   door: Facing | null;
-  /** Garden only (empty otherwise): one cell per tree, in Project order, inside the footprint. */
+  /**
+   * Garden only (empty otherwise): one cell per Pinned Project that blooms
+   * as a flower, in Garden order (`gardenPlants`), in the bed's front two
+   * rows (`GARDEN_BED`).
+   */
+  flowers: Cell[];
+  /**
+   * Garden only (empty otherwise): one cell per Project that grows as a
+   * tree, in Garden order after the flowers, in the bed's back row.
+   */
   trees: Cell[];
   /**
    * Dock only (empty otherwise): the jetty's sea cells, in a straight line

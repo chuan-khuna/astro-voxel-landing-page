@@ -285,7 +285,7 @@ Garden แสดง Project ได้สูงสุด 9 รายการ ท
 
 ## คำถามที่ยังเปิดอยู่
 
-- **Garden:** ถ้ามี Pinned Project น้อยกว่า 6 จะให้ Project อื่นมาปลูกเป็นต้นไม้ในช่องดอกไม้ที่ว่างไหม
+- **Garden:** ถ้ามี Pinned Project น้อยกว่า 6 จะให้ Project อื่นมาปลูกเป็นต้นไม้ในช่องดอกไม้ที่ว่างไหม · ticket 05 สมมติว่า "ไม่" (ช่องที่ว่างเป็นหญ้า) รอผู้ใช้ยืนยันใน `docs/todo.md`
 - **Station:** จัด Service แบบแถว 6×4 หรือวง 6×6 · ปรับผังอย่างไรเมื่อจำนวน Service เปลี่ยน · Service คลิกได้ไหม
 - **เกาะ:** รัศมีใน ticket 02 ยังพอสำหรับ footprint ที่ใหญ่ขึ้นไหม (House 4×4, Garden 5×5, Station ~6×4) · หลัง ticket 02: House 4×4 และ Garden ถึง 6×5 (24 ต้น) วางได้โดยไม่มี World ไหนตกไป safe layout ส่วน Station group ยังต้องวัดใน ticket 15
 

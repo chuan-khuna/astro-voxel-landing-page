@@ -54,7 +54,7 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
     const { isles } = built;
     const bridges = buildBridges(rng, built.terrain, isles);
     if (!bridges) continue;
-    const placement = placeLandmarks(rng, built.terrain, isles, bridges, { trees: counts.projects, boats: counts.clients });
+    const placement = placeLandmarks(rng, built.terrain, isles, bridges, { projects: counts.projects, pinned: counts.pinned ?? 0, boats: counts.clients });
     if (!placement) continue;
     const { boats, terrain } = placement;
     const found = dockToHouse(terrain, bridges, placement.landmarks);

@@ -1,23 +1,24 @@
 ---
 /**
- * The Garden's list of every Project, in tree order (by id), each linking
- * to its case study at `/garden/<id>`. Projects beyond the Garden's tree cap
- * have no tree but are listed all the same.
+ * The Garden's list of every Project, in Garden order (Pinned Projects
+ * first, then the rest, each by id), each linking to its case study at
+ * `/garden/<id>`. Projects beyond the Garden's places have no plant but are
+ * listed all the same.
  */
 import { getCollection } from 'astro:content';
-import { treeOrder } from '../lib/gardenTrees';
+import { projectOrder } from '@/lib/gardenPlants';
 
 interface Props {
   /** The Garden's route, which each Project's page sits under. */
   route: string;
 }
 const { route } = Astro.props;
-const projects = treeOrder(await getCollection('projects'));
+const projects = projectOrder(await getCollection('projects'));
 ---
 
 {
   projects.length === 0 ? (
-    <p>No Projects yet. The Garden is waiting for its first tree.</p>
+    <p>No Projects yet. The Garden is waiting for its first plant.</p>
   ) : (
     <ul class="projects" aria-label="Projects">
       {projects.map((project) => (

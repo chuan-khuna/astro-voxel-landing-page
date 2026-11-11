@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { LANDMARK_HEIGHT, generateWorld, type PlacedLandmark } from '@/world';
 import { VoxelGrid } from './mesher';
-import { buildLandmark, landmarkExtent, treeExtent } from './landmarkModels';
+import { buildLandmark, landmarkExtent } from './landmarkModels';
 import { worldColours } from './worldVoxels';
 import { GROUND_DETAIL } from './voxelTiers';
 
-const counts = { projects: 6, clients: 0, partners: 0 };
+const counts = { projects: 6, pinned: 2, clients: 0, partners: 0 };
 const worlds = ['lighthouse', '694157692', 'harbour', '7', '42'].map((seed) => generateWorld(seed, counts));
 
 /** Every ¼ voxel a Landmark's model draws, in world grid coordinates. */
@@ -18,28 +18,16 @@ const voxelsOf = (landmark: PlacedLandmark, world = worlds[0]!) => {
 };
 
 describe('Landmark models', () => {
-  it('draw only the Garden and the Dock’s deck and jetty at ¼ unit: the rest are structures', () => {
+  it('draw only the Dock’s deck and jetty at ¼ unit: the rest are structures', () => {
     for (const world of worlds) {
-      for (const l of world.landmarks.filter((l) => l.id === 'station' || l.id === 'mailbox' || l.id === 'house')) expect(voxelsOf(l, world), `${world.seed} ${l.id}`).toHaveLength(0);
-      for (const l of world.landmarks.filter((l) => l.id === 'garden' || l.id === 'dock')) {
+      for (const l of world.landmarks.filter((l) => l.id !== 'dock')) expect(voxelsOf(l, world), `${world.seed} ${l.id}`).toHaveLength(0);
+      for (const l of world.landmarks.filter((l) => l.id === 'dock')) {
         const voxels = voxelsOf(l, world);
         const reached = new Set(voxels.map((v) => `${Math.floor(v.x / GROUND_DETAIL)},${Math.floor(v.z / GROUND_DETAIL)}`));
         for (const c of [...l.footprint.cells, ...l.jetty]) expect(reached.has(`${c.x},${c.z}`), `${world.seed} ${l.id} ${c.x},${c.z}`).toBe(true);
         // ...and nothing outside it.
         const inside = new Set([...l.footprint.cells, ...l.jetty].map((c) => `${c.x},${c.z}`));
         for (const key of reached) expect(inside.has(key), `${world.seed} ${l.id} ${key}`).toBe(true);
-      }
-    }
-  });
-
-  it('give each Garden tree a model that fills its whole cell', () => {
-    for (const world of worlds) {
-      const garden = world.landmarks.find((l) => l.id === 'garden')!;
-      const voxels = voxelsOf(garden, world);
-      for (const t of garden.trees) {
-        // A canopy layer covers all 4×4 ¼ voxels of the tree's cell.
-        const layer = voxels.filter((v) => Math.floor(v.x / GROUND_DETAIL) === t.x && Math.floor(v.z / GROUND_DETAIL) === t.z && v.y === garden.y * GROUND_DETAIL + 4);
-        expect(layer, `${world.seed} tree ${t.x},${t.z}`).toHaveLength(GROUND_DETAIL * GROUND_DETAIL);
       }
     }
   });
@@ -99,29 +87,19 @@ describe('landmarkExtent', () => {
   });
 });
 
-describe('treeExtent', () => {
-  it('is the box of one tree: its cell, from the ground up to the top of its canopy', () => {
-    for (const world of worlds) {
-      const garden = world.landmarks.find((l) => l.id === 'garden')!;
-      const { origin } = garden.footprint;
-      for (const t of garden.trees) {
-        // A tree is 8 quarter voxels tall: 2 world units.
-        expect(treeExtent(garden, t), `${world.seed} ${t.x},${t.z}`).toEqual({
-          min: { x: t.x - origin.x, y: 0, z: t.z - origin.z },
-          max: { x: t.x - origin.x + 1, y: 2, z: t.z - origin.z + 1 },
-        });
-      }
-    }
-  });
-
-  it('holds every voxel the Garden draws in the tree\'s cell', () => {
-    const world = worlds[1]!;
-    const garden = world.landmarks.find((l) => l.id === 'garden')!;
-    const voxels = voxelsOf(garden, world);
-    for (const t of garden.trees) {
-      const { max } = treeExtent(garden, t);
-      const own = voxels.filter((v) => Math.floor(v.x / GROUND_DETAIL) === t.x && Math.floor(v.z / GROUND_DETAIL) === t.z);
-      for (const v of own) expect(v.y + 1).toBeLessThanOrEqual(garden.y * GROUND_DETAIL + max.y * GROUND_DETAIL);
+describe('the Garden’s extent', () => {
+  it('covers its fence and its plants: as tall as its trees, or about 1 unit with none', () => {
+    for (const seed of ['lighthouse', 'harbour']) {
+      const extent = (projects: number, pinned: number) => {
+        const world = generateWorld(seed, { ...counts, projects, pinned });
+        return landmarkExtent(world, world.landmarks.find((l) => l.id === 'garden')!);
+      };
+      const bare = extent(0, 0);
+      expect(bare.min, seed).toEqual({ x: 0, y: 0, z: 0 });
+      expect([bare.max.x, bare.max.z], seed).toEqual([5, 5]);
+      expect(bare.max.y, seed).toBeLessThanOrEqual(1);
+      expect(extent(2, 2).max.y, seed).toBeLessThanOrEqual(1.75);
+      expect(extent(6, 2).max.y, seed).toBeGreaterThanOrEqual(3);
     }
   });
 });

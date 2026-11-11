@@ -89,6 +89,16 @@ export const FIXED_COLOURS = {
   tile: oklch(0.58, 0.1, 40),
   slate: oklch(0.36, 0.02, 265),
   snow: oklch(0.96, 0.01, 230),
+  // The Garden's plants (polish 05): petals and leaves beside the Biome's foliage.
+  /** Flower stems and leaves: one green in every Biome, so a flower never reads as a tree. */
+  stem: oklch(0.58, 0.09, 140),
+  petalWhite: oklch(0.94, 0.02, 95),
+  petalYellow: oklch(0.86, 0.1, 95),
+  petalOrange: oklch(0.74, 0.1, 58),
+  petalRed: oklch(0.6, 0.1, 25),
+  petalBlue: oklch(0.66, 0.09, 280),
+  pollen: oklch(0.8, 0.1, 80),
+  leafGold: oklch(0.74, 0.1, 75),
 } as const satisfies Record<string, Oklch>;
 
 export type FixedColour = keyof typeof FIXED_COLOURS;

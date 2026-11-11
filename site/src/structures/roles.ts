@@ -19,6 +19,7 @@ export const STRUCTURE_ROLES = {
   floor: { fixed: 'floorWood' },
   rug: { fixed: 'rug' },
   post: { fixed: 'trunk' },
+  postDark: { fixed: 'trunk', dl: -0.08 },
   deck: { fixed: 'plank' },
   deckDark: { fixed: 'plank', dl: -0.06 },
   // Walls.
@@ -63,8 +64,22 @@ export const STRUCTURE_ROLES = {
   // Plants.
   foliage: { biome: 'foliage' },
   foliageLight: { biome: 'foliage', dl: 0.05 },
+  foliageDark: { biome: 'foliage', dl: -0.05 },
+  /** Autumn's turning leaves, beside the Biome's foliage. */
+  leafGold: { fixed: 'leafGold' },
   flower: { fixed: 'bougainvillea' },
   flowerLight: { fixed: 'bougainLight' },
+  // The Garden's flowers: stems and leaves, petals and the pollen at their heart.
+  stem: { fixed: 'stem' },
+  stemLight: { fixed: 'stem', dl: 0.05 },
+  stemDark: { fixed: 'stem', dl: -0.06 },
+  petalWhite: { fixed: 'petalWhite' },
+  petalYellow: { fixed: 'petalYellow' },
+  petalOrange: { fixed: 'petalOrange' },
+  petalRed: { fixed: 'petalRed' },
+  petalBlue: { fixed: 'petalBlue' },
+  petalBlueLight: { fixed: 'petalBlue', dl: 0.07 },
+  pollen: { fixed: 'pollen' },
   // The House Interior's rooms (1/16 unit) and the developer at work.
   /** The computer's screen: the glowing code is drawn over its +x face (`interiorModel.ts`). */
   screen: { fixed: 'screenDark' },

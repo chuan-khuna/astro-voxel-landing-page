@@ -10,9 +10,9 @@ const valid = {
 };
 
 describe('projectSchema', () => {
-  it('accepts a Project with the required fields, and the optional tree hint and cover', () => {
+  it('accepts a Project with the required fields, and the optional pinned flag, tree hint and cover', () => {
     expect(projectSchema.parse(valid)).toEqual(valid);
-    const full = { ...valid, tree: 'tall', cover: { src: '/covers/tide.png', alt: 'A tide chart' } };
+    const full = { ...valid, pinned: true, tree: 'tall', cover: { src: '/covers/tide.png', alt: 'A tide chart' } };
     expect(projectSchema.parse(full)).toEqual(full);
   });
 
@@ -28,6 +28,7 @@ describe('projectSchema', () => {
     expect(projectSchema.safeParse({ ...valid, year: 1899 }).success).toBe(false);
     expect(projectSchema.safeParse({ ...valid, tree: 'palm-ish' }).success).toBe(false);
     expect(projectSchema.safeParse({ ...valid, summary: '' }).success).toBe(false);
+    expect(projectSchema.safeParse({ ...valid, pinned: 'yes' }).success).toBe(false);
   });
 });
 

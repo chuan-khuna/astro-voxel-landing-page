@@ -9,7 +9,10 @@ import { GUIDE_MOODS } from './guideLines';
 /** Tree shapes a Project can hint at. The Garden draws one shape for now. */
 export const TREE_HINTS = ['round', 'tall', 'bushy'] as const;
 
-/** A Project: one piece of past work, shown as one tree in the Garden. The MDX body is its case study. */
+/**
+ * A Project: one piece of past work, shown in the Garden as a tree, or as a
+ * flower if it is a Pinned Project. The MDX body is its case study.
+ */
 export const projectSchema = z.object({
   title: z.string().min(1),
   /** One or two sentences for the Garden's list and the page's meta description. */
@@ -18,6 +21,11 @@ export const projectSchema = z.object({
   client: z.string().min(1),
   year: z.number().int().min(1900).max(2100),
   tags: z.array(z.string().min(1)).default([]),
+  /**
+   * A Pinned Project: highlighted, it blooms as a flower at the front of the
+   * Garden (the first six by id) and is listed first on `/garden`.
+   */
+  pinned: z.boolean().optional(),
   /** Which tree shape it would like in the Garden. */
   tree: z.enum(TREE_HINTS).optional(),
   /** A cover image under `public/`, with its alt text. */

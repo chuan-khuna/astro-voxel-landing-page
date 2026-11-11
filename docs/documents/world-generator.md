@@ -25,8 +25,9 @@ const world: World = generateWorld(seed, { projects, clients, partners });
 
 `index.ts` also exports the Landmark id lists (`PLACED_LANDMARK_IDS`,
 `VIEW_LANDMARK_IDS`, `LANDMARK_IDS`), the Biome lists (`BIOME_IDS`,
-`BIOME_COLOUR_ROLES`), `MAX_SEED_LENGTH` and the caps `MAX_TREES` (24) and
-`MAX_BOATS` (12). The site data module and the
+`BIOME_COLOUR_ROLES`), `MAX_SEED_LENGTH`, the Garden's layout
+(`GARDEN_SIZE` 5, `GARDEN_BED`, `GARDEN_HEIGHT`, `gardenCounts`) and the caps
+`MAX_FLOWERS` (6), `MAX_TREES` (3) and `MAX_BOATS` (12). The site data module and the
 `pages` collection schema type their Landmark ids against these, so a typo
 is a type or build error.
 
@@ -39,7 +40,7 @@ imports, so the generator stays pure.
 | File | What it does |
 |---|---|
 | `generateWorld.ts` | The public function: Seed fallback, Biome choice, the retry loop, the Dock-to-House route, derived views. |
-| `landmarks.ts` | Landmark footprints: placement, levelling, the occlusion check, the Garden's tree layout and the Dock's berths (the moored boats). |
+| `landmarks.ts` | Landmark footprints: placement, levelling, the occlusion check, the Garden's bed (its flowers and trees) and gate, and the Dock's berths (the moored boats). |
 | `ships.ts` | The Partners' sailing routes: loops through open sea. |
 | `buoys.ts` | The buoys: sea marks just off the Isles, nearest the Dock first. |
 | `terrain.ts` | Isle layout, noise heights, surface kinds, cliff strata. |
@@ -73,7 +74,7 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `bridges` | Straight bridges over the sea: `from` and `to` Isle ids, the sea `cells` spanned (in order from `from`), and the deck height `y`, which equals the land height at both ends. |
 | `paths` | Walkable paths between Landmarks. For now one: Dock to House, as 4-connected cells over land and bridges. |
 | `stairs` | One per single-step height change along a path: the lower `cell`, its height `y`, and the `facing` the stairs climb towards. |
-| `landmarks` | The five placed Landmarks: id, Isle, `footprint` (`origin` cell, `width` along x, `depth` along z, and every `cells` entry it covers), ground height `y` (the whole footprint is at this height), `variant` (its Landmark Variant, 1 to `LANDMARK_VARIANTS[biome][id]`; see "Landmark Variants"), `door` (House only, else null: `south` or `east`, the way its door faces; see "House plot"), `trees` (Garden only: one cell per tree, in Project order) and `jetty` (Dock only: its sea cells, from the shore outwards). |
+| `landmarks` | The five placed Landmarks: id, Isle, `footprint` (`origin` cell, `width` along x, `depth` along z, and every `cells` entry it covers), ground height `y` (the whole footprint is at this height), `variant` (its Landmark Variant, 1 to `LANDMARK_VARIANTS[biome][id]`; see "Landmark Variants"), `door` (House and Garden only, else null: `south` or `east`, the way the House's door or the Garden's gate faces; see "House plot" and "The Garden"), `flowers` and `trees` (Garden only: one cell per flower and per tree, in Garden order; see "The Garden") and `jetty` (Dock only: its sea cells, from the shore outwards). |
 | `boats` | One per Client, up to 12 (`MAX_BOATS`), in Client order: the berth `cell` (a sea cell beside the jetty or off its tip; it may lie past the grid's edge, in the open sea) and the `facing` its bow points, out to sea along the jetty. |
 | `ships` | One per Partner, in Partner order: `cells`, a closed loop of sea cells (each an 8-neighbour of the one before, the last of the first) sailed in order, and `phase` (0–1), how far round it the ship starts. Cells may lie past the grid's edge. |
 | `buoys` | Up to 4 (`MAX_BUOYS`) sea cells, each with a buoy (its lamp glows at Night; see `rendering-and-shading.md`). Inside the grid, clear of the ships, boats, jetty and bridges. |
@@ -142,7 +143,7 @@ footprints that keep every rule:
 |---|---|
 | Station | 2 × 2, containing a cell at its Isle's top height |
 | House | 4 × 4: the House's plot (see "House plot") |
-| Garden | at least 3 × 3, sized to its trees (below); either orientation |
+| Garden | 5 × 5: a 3 × 3 bed inside a fence one cell wide (below) |
 | Dock | 2 × 1 or 1 × 2 on land, plus a jetty of 2–3 sea cells running straight out from one of its cells |
 | Mailbox | 1 × 1, a cell of the House's plot (not placed on its own) |
 
@@ -166,25 +167,35 @@ footprints that keep every rule:
   model) are then visible too, because their rays run higher. The check uses
   the terrain as levelled for that footprint. Lowering ground never hides
   anything, and the Station (the only raise) is placed first, so a footprint
-  checked once stays in view. The Garden's trees are inside its footprint,
+  checked once stays in view. The Garden's plants are inside its footprint,
   so they count as part of the Garden.
 - **Never hidden by another Landmark.** Each placed Landmark's model counts
   as a column as tall as `LANDMARK_HEIGHT` allows over the cells it stands
   on: Station 6 units, House 4 (its plot's 3 × 3 only; the yard is ground),
   Garden 3.5, Dock 1 (over its jetty too), Mailbox 2 (its yard cell, set
-  with the House). The heights leave room for the polish models (a Station
-  of 5–6, Garden trees of 3–3.5); `landmarkModels.test.ts` checks that no
-  model is taller. A candidate must be in view past the models already
+  with the House). The Garden is three bands (`GARDEN_HEIGHT`): its fence
+  ring 1, the flowers' two rows 1.75 and the trees' row 3.5, whether or
+  not a plant stands there. The heights leave room for the polish models (a Station
+  of 5–6, Garden trees of 3–3.5); `landmarkModels.test.ts` and the
+  structure data tests check that no model is taller. A candidate must be in view past the models already
   placed, and its own model must hide none of them (the same ray march,
   skipped when the model lies wholly west or north of a Landmark, since
   rays run towards +x and +z). The Mailbox, in the House's own yard, is
   not an occluder of its House.
-- **The Garden.** Trees shown are `min(projects, 24)`. The layout is pairs of
-  tree rows with a path row between them (local rows with `z mod 3 = 2` are
-  paths), at least 3 × 3, the smallest area that fits the trees and still
-  has room for a path, as square as it can be (sides differ by at most 2).
-  Tree `k` fills the rows in order, so it keeps its place: 0–6 trees give
-  3 × 3, 24 trees give 6 × 5.
+- **The Garden** (polish ticket 05). Always 5 × 5, whatever the content: a
+  3 × 3 bed (local cells 1–3) inside a fence one cell wide. The camera
+  looks from the south-east, so the bed's back row is its north row (local
+  z = 1) and its front two rows are z = 3 and z = 2. `gardenCounts(projects,
+  pinned)`: the first `MAX_FLOWERS` (6) Pinned Projects bloom as flowers;
+  the Pinned Projects after them, then the other Projects, grow as trees,
+  up to `MAX_TREES` (3). So the Garden shows at most 9 Projects, Pinned
+  Projects take places first, and other Projects never take an empty
+  flower cell (it stays grass). Flower `k` takes `GARDEN_BED.flowers[k]`
+  (the front row west to east, then the second row), tree `k`
+  `GARDEN_BED.trees[k]` (west to east), so a plant keeps its place as
+  Projects are added. The fence's gate faces the House: south or east (the
+  sides the camera sees), whichever the House lies further towards from
+  the Garden's middle (`door`). There is no path to the gate.
 
 ### House plot
 
@@ -276,7 +287,7 @@ be bridged, a Landmark has no valid footprint, or there is no path), the
 layout is redone from a Seed derived from the given one (`<seed>#retry<n>`).
 After 8 noise layouts comes the safe layout: one round Isle of radius 14
 (the smallest lone Isle; 10, then 12 before polish ticket 02) with no noise and at most 2 terrace steps, flat enough that every footprint,
-even a 24-tree Garden, fits in view. So
+the 5 × 5 Garden included, fits in view. So
 retry always ends, in at most 9 attempts, and the same input always gives
 the same World.
 
@@ -287,6 +298,19 @@ after the larger Isles and the Landmark-on-Landmark check):
 |---|---|---|---|---|---|
 | 6 Projects, 6 or 12 Clients, 3 Partners | 56% → 24% | 1.7% → 0 | 9 → 16 ms | 17 → 26 ms | 54 → 70 ms |
 | 24 Projects, 12 Clients, 6 Partners | 74% → 33% | 13% → 0 | 16 → 29 ms | 32 → 58 ms | 58 → 154 ms |
+
+Polish ticket 05 fixed the Garden at 5 × 5 (it was 3 × 3 for up to 6
+Projects, up to 6 × 5 for 24) and gave it three height bands. Measured
+over Seeds `seed-0` to `seed-399` on one machine (before → after; the
+numbers above came from another run, so compare within a row):
+
+| Content | Retried | Safe layout | Mean | Worst |
+|---|---|---|---|---|
+| 8 Projects, 6 Clients, 4 Partners | 29% → 30.5% | 0 → 1 (`seed-30`) | 19 → 26 ms | 70 → 102 ms |
+| 24 Projects, 12 Clients, 6 Partners | 35.5% → 30.5% | 0 → 1 (`seed-30`) | 33 → 27 ms | 132 → 103 ms |
+
+The Garden's size no longer depends on the Projects, so both rows now give
+the same layouts.
 
 Larger Isles leave more room, so far fewer layouts fail; most retries now
 come from bridges (no straight, level run of at most 12 cells between two
@@ -308,7 +332,8 @@ the Biome.
 Each placed Landmark carries a `variant`: which of its Biome's Variants it
 shows (polish ticket 03). `LANDMARK_VARIANTS` (`landmarks.ts`) says how
 many each Landmark has per Biome: the House 3, the Station 2, the Mailbox 3,
-the Dock 2 and the Garden 1 (until polish ticket 05). The renderer draws
+the Dock 2 and the Garden 1 (its fence; its flowers and trees are
+structures of their own, `voxel-structures.md`). The renderer draws
 the structure file of that kind, Biome and number
 (`voxel-structures.md`, "The Landmark Variants"); a data test holds the
 files to the table.
@@ -328,12 +353,12 @@ the same 200 Seeds keep their Variants with the largest content counts.
 
 ## Not yet built
 
-Later tickets: decoration, Data Card anchors, the Garden's Variants (polish
-ticket 05), and boat and ship kinds (ASCII structures, ADR
-0004). The site passes the sizes of the `projects`, `clients` and
-`partners` collections; it pairs tree `k` with the `k`-th Project by id
-(`site/src/lib/gardenTrees.ts`; see `site-project.md`); the generator never
-sees ids.
+Later tickets: decoration, Data Card anchors, and boat and ship kinds
+(ASCII structures, ADR 0004). The site passes the sizes of the `projects`,
+`clients` and `partners` collections and how many Projects are pinned; it
+pairs flower `k` with the `k`-th Pinned Project by id and tree `k` with the
+next Projects in Garden order (`site/src/lib/gardenPlants.ts`; see
+`content-model.md`); the generator never sees ids.
 
 ## Tests
 
@@ -346,11 +371,15 @@ Seeds, never snapshots:
 - footprints: rectangles of the right size, on flat land of the named Isle
   at the Landmark's height, never overlapping each other (but the Mailbox,
   which stands on the House's plot), a bridge, a bridge end or the path; out of the sea except the Dock's 2–3 cell straight jetty;
-  the Garden holds one cell per tree (capped at 24) plus room for paths and
-  grows with the trees; no ground point of any footprint or jetty (¼-cell
+  the Garden is 5 × 5 with its gate south or east (both seen), and holds
+  `min(pinned, 6)` flowers in its bed's front two rows and at most 3 trees
+  in its back row, at most `min(projects, 9)` plants, each plant keeping
+  its cell as Projects are added (0 Projects and every Project pinned
+  included); no ground point of any footprint or jetty (¼-cell
   grid) is hidden from the isometric camera by terrain or a bridge (an
   independent ray march in the test), nor by another Landmark's model at
-  its `LANDMARK_HEIGHT` (the Mailbox excepted for its own House);
+  its `LANDMARK_HEIGHT` (the Garden in its three bands; the Mailbox
+  excepted for its own House);
 - 1–4 Isles, with every count seen; each Isle's radius in its range for
   the count (14–18, 10–14, 9–12) and the Isle at least that wide; whole-step heights, sea at 0, mostly
   three or more land heights; sea all round; each Isle one connected piece

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, GARDEN_HEIGHT, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -54,6 +54,7 @@ describe('generateWorld', { timeout: 20_000 }, () => {
       house: [[4, 4]],
       station: [[2, 2]],
       mailbox: [[1, 1]],
+      garden: [[5, 5]],
       dock: [[2, 1], [1, 2]],
     };
     for (const seed of sampledSeeds) {
@@ -62,12 +63,7 @@ describe('generateWorld', { timeout: 20_000 }, () => {
         const rectangle = [];
         for (let z = origin.z; z < origin.z + depth; z++) for (let x = origin.x; x < origin.x + width; x++) rectangle.push({ x, z });
         expect(cells.map(key).toSorted(), `${seed} ${l.id}`).toEqual(rectangle.map(key).toSorted());
-        if (l.id === 'garden') {
-          expect(width, seed).toBeGreaterThanOrEqual(3);
-          expect(depth, seed).toBeGreaterThanOrEqual(3);
-        } else {
-          expect(sizes[l.id], `${seed} ${l.id}`).toContainEqual([width, depth]);
-        }
+        expect(sizes[l.id], `${seed} ${l.id}`).toContainEqual([width, depth]);
       }
     }
   });
@@ -129,28 +125,73 @@ describe('generateWorld', { timeout: 20_000 }, () => {
     }
   });
 
-  it('lays out the Garden with one cell per tree, inside it, plus room for paths', () => {
-    for (const projects of [0, 1, 6, 9, 24, 500]) {
-      for (const seed of sampledSeeds.slice(0, 40)) {
-        const garden = generateWorld(seed, { ...counts, projects }).landmarks.find((l) => l.id === 'garden')!;
-        expect(garden.trees, `${seed} ${projects}`).toHaveLength(Math.min(projects, 24));
-        const inside = new Set(garden.footprint.cells.map(key));
-        const trees = garden.trees.map(key);
-        expect(new Set(trees).size).toBe(trees.length);
-        for (const t of trees) expect(inside.has(t), `${seed} tree ${t}`).toBe(true);
-        expect(garden.footprint.cells.length).toBeGreaterThan(trees.length);
+  it('fixes the Garden at 5×5: a 3×3 bed inside a one-cell fence, its gate south or east', () => {
+    const gates = new Set<string>();
+    for (const seed of sampledSeeds) {
+      const garden = worldFor(seed).landmarks.find((l) => l.id === 'garden')!;
+      expect([garden.footprint.width, garden.footprint.depth], seed).toEqual([5, 5]);
+      expect(['south', 'east'], seed).toContain(garden.door);
+      gates.add(garden.door!);
+    }
+    expect([...gates].toSorted()).toEqual(['east', 'south']);
+  });
+
+  it('blooms the first Pinned Projects as flowers in the bed\'s front two rows, and grows the rest as trees in its back row', () => {
+    const cases: Array<[projects: number, pinned: number, flowers: number, trees: number]> = [
+      [0, 0, 0, 0],
+      [1, 0, 0, 1],
+      [6, 0, 0, 3],
+      [6, 3, 3, 3],
+      [4, 2, 2, 2],
+      [6, 6, 6, 0],
+      [9, 9, 6, 3],
+      [12, 12, 6, 3],
+      [24, 2, 2, 3],
+      [500, 500, 6, 3],
+    ];
+    for (const [projects, pinned, flowers, trees] of cases) {
+      for (const seed of sampledSeeds.slice(0, 20)) {
+        const garden = generateWorld(seed, { ...counts, projects, pinned }).landmarks.find((l) => l.id === 'garden')!;
+        const label = `${seed} ${projects}/${pinned}`;
+        expect(garden.flowers, label).toHaveLength(flowers);
+        expect(garden.trees, label).toHaveLength(trees);
+        expect(garden.flowers.length + garden.trees.length, label).toBeLessThanOrEqual(Math.min(projects, 9));
+        const { origin } = garden.footprint;
+        const local = (c: { x: number; z: number }) => ({ x: c.x - origin.x, z: c.z - origin.z });
+        // The bed is the 3×3 inside the fence; the back row is its north row, as the camera sees it.
+        for (const c of garden.trees.map(local)) {
+          expect(c.z, label).toBe(1);
+          expect(c.x, label).toBeGreaterThanOrEqual(1);
+          expect(c.x, label).toBeLessThanOrEqual(3);
+        }
+        for (const c of garden.flowers.map(local)) {
+          expect([2, 3], label).toContain(c.z);
+          expect(c.x, label).toBeGreaterThanOrEqual(1);
+          expect(c.x, label).toBeLessThanOrEqual(3);
+        }
+        const all = [...garden.flowers, ...garden.trees].map(key);
+        expect(new Set(all).size, label).toBe(all.length);
       }
     }
     for (const seed of sampledSeeds) {
-      for (const l of worldFor(seed).landmarks) if (l.id !== 'garden') expect(l.trees, `${seed} ${l.id}`).toEqual([]);
+      for (const l of worldFor(seed).landmarks) {
+        if (l.id === 'garden') continue;
+        expect(l.trees, `${seed} ${l.id}`).toEqual([]);
+        expect(l.flowers, `${seed} ${l.id}`).toEqual([]);
+      }
     }
   });
 
-  it('grows the Garden with the number of trees', () => {
-    const area = (projects: number) =>
-      generateWorld('harbour', { ...counts, projects }).landmarks.find((l) => l.id === 'garden')!.footprint.cells.length;
-    expect(area(0)).toBe(9);
-    expect(area(24)).toBeGreaterThan(area(6));
+  it('keeps each plant in its place as Projects are added behind it', () => {
+    const garden = (projects: number, pinned: number) => generateWorld('harbour', { ...counts, projects, pinned }).landmarks.find((l) => l.id === 'garden')!;
+    const before = garden(2, 1);
+    const after = garden(5, 2);
+    expect(after.flowers.slice(0, 1).map((c) => [c.x - after.footprint.origin.x, c.z - after.footprint.origin.z])).toEqual(
+      before.flowers.map((c) => [c.x - before.footprint.origin.x, c.z - before.footprint.origin.z]),
+    );
+    expect(after.trees.slice(0, 1).map((c) => [c.x - after.footprint.origin.x, c.z - after.footprint.origin.z])).toEqual(
+      before.trees.map((c) => [c.x - before.footprint.origin.x, c.z - before.footprint.origin.z]),
+    );
   });
 
   /**
@@ -209,7 +250,15 @@ describe('generateWorld', { timeout: 20_000 }, () => {
       // The House stands on its plot's 3×3; the rest of the plot is yard, at ground level.
       const columns = (l: World['landmarks'][number]) => {
         const cells = l.id === 'house' ? l.footprint.cells.filter((c) => c.x - l.footprint.origin.x < HOUSE_CELLS && c.z - l.footprint.origin.z < HOUSE_CELLS) : coveredCells(l);
-        return new Map(cells.map((c) => [key(c), l.y + LANDMARK_HEIGHT[l.id]] as const));
+        // The Garden: its fence round the edge, flowers in the bed's front two rows and trees in its back row.
+        const height = (c: { x: number; z: number }) => {
+          if (l.id !== 'garden') return LANDMARK_HEIGHT[l.id];
+          const x = c.x - l.footprint.origin.x;
+          const z = c.z - l.footprint.origin.z;
+          if (x < 1 || x > 3 || z < 1 || z > 3) return GARDEN_HEIGHT.fence;
+          return z === 1 ? GARDEN_HEIGHT.tree : GARDEN_HEIGHT.flower;
+        };
+        return new Map(cells.map((c) => [key(c), l.y + height(c)] as const));
       };
       for (const target of landmarks) {
         for (const other of landmarks) {
@@ -417,7 +466,7 @@ describe('generateWorld', { timeout: 20_000 }, () => {
       const house = landmarks.find((l) => l.id === 'house')!;
       expect(['south', 'east'], seed).toContain(house.door);
       doors.add(house.door!);
-      for (const l of landmarks) if (l.id !== 'house') expect(l.door, `${seed} ${l.id}`).toBeNull();
+      for (const l of landmarks) if (l.id !== 'house' && l.id !== 'garden') expect(l.door, `${seed} ${l.id}`).toBeNull();
     }
     expect([...doors].toSorted()).toEqual(['east', 'south']);
   });

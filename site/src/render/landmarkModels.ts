@@ -1,10 +1,11 @@
 /**
- * The ¼-unit parts of the Landmarks, drawn into the detail grid: the
- * Garden (a placeholder until polish ticket 05) and the Dock's plank deck
- * and jetty on posts (ground detail, ADR 0006). Everything else a Landmark
- * shows is its Variant's ⅛-unit structure (`structureModels.ts`): the
- * House, the Station, the Mailbox and the things on the Dock's deck. The
- * House's room is the House Interior's, drawn at ⅛ unit (`interiorModel.ts`).
+ * The ¼-unit parts of the Landmarks, drawn into the detail grid: the Dock's
+ * plank deck and jetty on posts (ground detail, ADR 0006). Everything else a
+ * Landmark shows is its Variant's ⅛-unit structure (`structureModels.ts`):
+ * the House, the Station, the Mailbox, the things on the Dock's deck and
+ * the Garden's fence. The House's room is the House Interior's, drawn at ⅛
+ * unit (`interiorModel.ts`); the Garden's plants are instanced structures
+ * (`gardenPlants.ts`).
  *
  * A model is drawn with its origin at the min corner of the footprint's
  * origin cell, on top of the ground: local x runs 0 to `4 × width`, local z
@@ -15,6 +16,7 @@ import type { VoxelGrid } from './mesher';
 import type { WorldColours } from './worldVoxels';
 import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 import { drawStructure, landmarkPlacement, landmarkStructure } from './structureModels';
+import { gardenPlantsOf, plantExtent } from './gardenPlants';
 
 interface Origin {
   x: number;
@@ -35,8 +37,6 @@ interface Shape {
   d: number;
   /** Ground height in ¼ voxels (how far down the sea floor is). */
   ground: number;
-  /** Garden: the min corner of each tree's cell. */
-  trees: Array<{ x: number; z: number }>;
   /** Dock: the min corner of each jetty cell. */
   jetty: Array<{ x: number; z: number }>;
   variant: number;
@@ -44,31 +44,13 @@ interface Shape {
 
 type Model = (draw: Draw, colours: WorldColours, shape: Shape) => void;
 
-/** How tall a Garden tree is, in ¼ voxels. */
-const TREE_HEIGHT = 8;
-
 const MODELS: Record<PlacedLandmarkId, Model> = {
   /** The Station is a structure (`structureModels.ts`): nothing at ¼ unit. */
   station: () => {},
   /** The House is a structure (`structureModels.ts`), its room the House Interior's (`interiorModel.ts`): nothing at ¼ unit. */
   house: () => {},
-  /** One tree per Project, each filling its cell, and a flower in every other cell. */
-  garden: ({ box, set }, { biome, fixed }, { w, d, trees }) => {
-    const treeAt = new Set(trees.map((t) => `${t.x},${t.z}`));
-    for (let z = 0; z < d; z += GROUND_DETAIL) {
-      for (let x = 0; x < w; x += GROUND_DETAIL) {
-        if (treeAt.has(`${x},${z}`)) {
-          box(x + 1, 0, z + 1, x + 3, 3, z + 3, fixed('trunk'));
-          box(x, 3, z, x + 4, 7, z + 4, biome('foliage'));
-          box(x + 1, 7, z + 1, x + 3, TREE_HEIGHT, z + 3, biome('foliage', 0.04));
-          set(x, 3, z, biome('foliage', -0.04));
-        } else {
-          set(x + 1, 0, z + 2, (x + z) % 8 === 0 ? fixed('bougainvillea') : fixed('bougainLight'));
-          set(x + 2, 0, z + 1, biome('foliage', -0.04));
-        }
-      }
-    }
-  },
+  /** The Garden's fence is a structure, its plants instanced structures (`gardenPlants.ts`): nothing at ¼ unit. */
+  garden: () => {},
   /** A plank platform on the shore and a jetty on posts out over the sea. */
   dock: ({ box }, { fixed }, { w, d, ground, jetty }) => {
     box(0, 0, 0, w, 1, d, fixed('plank'));
@@ -94,7 +76,6 @@ function shapeOf(landmark: PlacedLandmark): Shape {
     w: width * GROUND_DETAIL,
     d: depth * GROUND_DETAIL,
     ground: landmark.y * GROUND_DETAIL,
-    trees: landmark.trees.map(local),
     jetty: landmark.jetty.map(local),
     variant: landmark.variant,
   };
@@ -119,7 +100,8 @@ export function buildLandmark(landmark: PlacedLandmark, grid: VoxelGrid, colours
 /**
  * The box a Landmark covers, in world units relative to its model's origin
  * (the min corner of its footprint, on the ground): everything its ¼-unit
- * model and its Variant's structure draw (the House with its lid on), and at least the whole footprint and jetty; for the House, the
+ * model and its Variant's structure draw (the House with its lid on, the
+ * Garden with its plants), and at least the whole footprint and jetty; for the House, the
  * House itself (its 3×3 and its roof), not its yard, where the Mailbox
  * stands. Used to size the Landmark's hotspot over the canvas (so it covers
  * the whole footprint), the Guide's spot beside it and its Data Card.
@@ -155,25 +137,19 @@ export function landmarkExtent(world: Pick<World, 'biome' | 'landmarks'>, landma
   const colours = { biome: anyColour, fixed: anyColour } as Omit<WorldColours, 'table'> as WorldColours;
   MODELS[landmark.id](draw, colours, shape);
   // The Landmark's Variant (the whole House, its lid on), at ⅛ unit.
-  if (landmark.id !== 'garden') {
-    const { origin } = landmark.footprint;
-    const at = { x: origin.x * STRUCTURE, y: landmark.y * STRUCTURE, z: origin.z * STRUCTURE };
-    drawStructure(landmarkStructure(world, landmark), landmarkPlacement(world, landmark), colours, (x, y, z) =>
-      cover(STRUCTURE, x - at.x, y - at.y, z - at.z, x - at.x + 1, y - at.y + 1, z - at.z + 1),
-    );
+  const { origin } = landmark.footprint;
+  const at = { x: origin.x * STRUCTURE, y: landmark.y * STRUCTURE, z: origin.z * STRUCTURE };
+  drawStructure(landmarkStructure(world, landmark), landmarkPlacement(world, landmark), colours, (x, y, z) =>
+    cover(STRUCTURE, x - at.x, y - at.y, z - at.z, x - at.x + 1, y - at.y + 1, z - at.z + 1),
+  );
+  // The Garden's plants.
+  if (landmark.id === 'garden') {
+    for (const plant of gardenPlantsOf(world)) {
+      const { min: lo, max: hi } = plantExtent(landmark, plant);
+      cover(1, lo.x, lo.y, lo.z, hi.x, hi.y, hi.z);
+    }
   }
   // Posts reaching down to the sea floor are not part of what a visitor clicks.
   min.y = Math.max(min.y, -1 / GROUND_DETAIL);
   return { min, max };
-}
-
-/**
- * The box one Garden tree covers, in world units relative to the Garden's
- * model origin (like `landmarkExtent`): its cell, from the ground to the top
- * of its canopy. Used to size the tree's own hotspot.
- */
-export function treeExtent(garden: PlacedLandmark, tree: Cell): ModelExtent {
-  const x = tree.x - garden.footprint.origin.x;
-  const z = tree.z - garden.footprint.origin.z;
-  return { min: { x, y: 0, z }, max: { x: x + 1, y: TREE_HEIGHT / GROUND_DETAIL, z: z + 1 } };
 }

@@ -2,7 +2,8 @@
  * World to three.js objects: meshes the World's voxel grids into chunked
  * `BufferGeometry` with the soft-voxel material, plus the sea, the
  * Partners' sailing ships (`ships.ts`), the House's moving parts (`house.ts`:
- * its lid and its lights) and the buoys' lamps. The House Interior is a
+ * its lid and its lights), the Garden's plants (`garden.ts`, instanced) and
+ * the buoys' lamps. The House Interior is a
  * scene of its own (`interior.ts`).
  * `setTheme` recolours the sea and lights the lamps and the House's windows
  * at Night; it never moves or adds anything.
@@ -18,6 +19,7 @@ import { voxelMaterial } from './voxelMaterial';
 import { meshWorld, type MeshedWorld } from './worldVoxels';
 import { buildFleet, type Fleet } from './ships';
 import { buildHouse, type HouseParts } from './house';
+import { buildGardenPlants } from './garden';
 
 /** Sea cells this close to land (Chebyshev) are shallow water. */
 const SHALLOW_REACH = 2;
@@ -25,7 +27,7 @@ export const SEA_LEVEL = 0.15;
 
 export interface WorldObjects {
   group: THREE.Group;
-  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure and room, boats, ships, the House's lid); the sea adds a handful more. */
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure and room, boats, ships, the House's lid, the Garden's plants); the sea adds a handful more. */
   triangles: number;
   /** The Partners' ships, which sail: `ships.sail(seconds)` moves them. */
   ships: Fleet;
@@ -67,10 +69,12 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
   group.add(house.group);
   const lamps = buildLamps(world);
   group.add(lamps.group);
+  const plants = buildGardenPlants(world);
+  group.add(plants.group);
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + house.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + house.triangles + plants.triangles,
     ships,
     house,
     setTheme: (theme) => {
@@ -86,6 +90,7 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
       for (const m of materials) m.dispose();
       sea.dispose();
       lamps.dispose();
+      plants.dispose();
     },
   };
 }

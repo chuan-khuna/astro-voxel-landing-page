@@ -26,8 +26,8 @@ const pages = defineCollection({
 
 /**
  * `projects`: one MDX file per Project; the body is its case study. The id
- * (the file name) is its URL slug, `/garden/<id>`, and sets its tree's place
- * in the Garden (trees go in order by id).
+ * (the file name) is its URL slug, `/garden/<id>`, and sets its plant's place
+ * in the Garden (Pinned Projects, then the rest, each in order by id).
  */
 const projects = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/projects' }),

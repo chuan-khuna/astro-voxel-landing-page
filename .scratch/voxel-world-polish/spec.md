@@ -130,9 +130,10 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 - Other Projects, and Pinned Projects beyond six, grow as trees in the back row (3×1), up to 3.
 - One plant per cell, so the Garden shows at most 9 Projects. Pinned Projects take places first.
 - Projects beyond that are not in the World but stay on `/garden`, where Pinned Projects are listed first.
-- Open: whether other Projects may take empty flower cells when fewer than six are pinned.
+- Other Projects never take an empty flower cell: with fewer than six Pinned Projects, those cells stay grass. (This was open; ticket 05 assumed it while the user was away, and it is logged in `docs/todo.md` to confirm.)
 - Trees use the Biome's tree species with a 6×6 canopy in an 8×8 cell, so each plant reads separately.
 - No Decoration inside the Garden: an empty Garden is a grass patch.
+- Built in ticket 05: the gate faces the House, south or east (the sides the camera sees); there is no path to it. The fence is the Garden's Landmark Variant (`garden/<biome>-1.structure`); each Biome has a tree and two flowers (`tree/`, `flower/`), the flowers taken in turn. Placement treats the Garden as three height bands (`GARDEN_HEIGHT`: fence 1, flowers 1.75, trees 3.5 units).
 
 **Boats and ships**
 - Client boats and Partner ships each have several kinds, styled per Biome.
@@ -228,7 +229,7 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
   - Variants come from the Biome's set.
   - Decoration never overlaps a footprint, path, bridge end or the Garden, and never occludes a Landmark.
   - Isle radii fall in the new ranges.
-  - Pinned flowers number at most 6, trees at most 3, and flowers plus trees at most 9.
+  - Pinned flowers number min(pinned, 6), trees at most 3, and flowers plus trees at most min(Projects, 9).
 - **Structure files** are tested as data:
   - each parses
   - each uses only known roles

@@ -70,7 +70,7 @@ build` skips the capture the same way.
 | `src/lib/theme.ts` | Which theme shows: `ThemeChoice` (`auto`, `day`, `night`), `parseThemeChoice` (a stored value; Auto for anything else), `resolveTheme(choice, prefersDark)`, `nextThemeChoice` (Auto → Day → Night → Auto) and `themeBootScript`, the inline `<head>` script. Tested in `theme.test.ts` (the boot script runs against a fake page). |
 | `src/lib/renderStats.ts` | The render stats overlay's rules: `statsAvailable(dev, url)` (in `astro dev`, or with `?stats`), `parseStatsOn` (the stored on or off) and `withStats` (keep `?stats` on a route link). Tested in `renderStats.test.ts`. See "Render stats". |
 | `src/lib/seedUrl.ts` | The Seed in the URL: `seedFromUrl`, `rollSeed` (numeric) and `withSeed` (keep the Seed on a route link). Tested in `seedUrl.test.ts`. |
-| `src/lib/gardenTrees.ts` | `treeOrder(projects)`: Projects sorted by id (tree order). `gardenTrees(world, projectIds)`: the World's tree cells, each paired with its Project (tree `k` is the `k`-th Project by id; none beyond the cap). Tested in `gardenTrees.test.ts`. |
+| `src/lib/gardenPlants.ts` | `projectOrder(projects)`: Projects in Garden order (Pinned Projects, then the rest, each by id). `gardenCountsOf(projects)`: the Project and Pinned Project counts the World generator gets. `plantedProjects(projects)`: the Projects that get a plant, and which kind (the first six Pinned Projects flowers, the next three trees). `gardenPlants(world, projects)`: the World's flower and tree cells, each paired with its Project. Tested in `gardenPlants.test.ts`; see `content-model.md`, "Projects". |
 | `src/lib/contactDetails.ts` | `contactDetails(company)`: the Contact panel's details, from `site.company`: email, phone, address, then each social, each with a label, the text shown and a link (none for the address). Tested in `contactDetails.test.ts`. |
 | `src/lib/renderTier.ts` | The render tier: `renderTier(device, override)` (`reduced` for a touch device whose screen's shorter side is under 600px, `full` otherwise; `?tier=full` or `?tier=reduced` overrides), `pixelRatio(device)` (the DPR cap) and `ambientFrameDue` (the 30 fps gate for ambient frames). Tested in `renderTier.test.ts`. See "Phones and the render tier". |
 | `src/lib/worldStill.ts` | The World still's files: `STILL_SIZE` (1600×1000), `STILL_WIDTHS` (800, 1600), `stillPath(theme, width)` (`/stills/world-<theme>-<width>.webp`), `stillSrcset`, `stripStills(html)` (a page without its still), and the OG image: `OG_IMAGE` (`/stills/og-world-day.jpg`, 1200×630 JPEG), `OG_CROP` (the part of the still it shows) and `stripOgStill(html)` (a page without the OG still's tags). Tested in `worldStill.test.ts`. See "World still". |
@@ -81,13 +81,13 @@ build` skips the capture the same way.
 | `src/components/Logo.astro` | The logo mark beside the company name: one isometric voxel in three shades of the brand colour. |
 | `src/components/SectionPanel.astro` | A section's panel over the World, as a floating card: heading, close link and the intro copy. |
 | `src/components/ServiceList.astro` | The Station's list of every Service in `order`: icon, title, summary and body. |
-| `src/components/ProjectList.astro` | The Garden's list of every Project in tree order: title (a link to its page), Client, year and summary. |
+| `src/components/ProjectList.astro` | The Garden's list of every Project in Garden order (Pinned Projects first): title (a link to its page), Client, year and summary. |
 | `src/components/DockList.astro` | The Dock's two lists: Clients (by id) and Partners (closest tier first), each with its logo or initials. |
 | `src/components/TeamList.astro` | Team's list of every Team Member in `order`: avatar or initials, name, role and bio. |
 | `src/components/ContactList.astro` | Contact's details (`contactDetails`) as a definition list in an `<address>`. |
 | `src/lib/seo.ts` | What a page says about itself: `canonicalUrl(siteUrl, path)`, `pageMeta` (the canonical URL and the Open Graph and Twitter tags), `sitemapXml(siteUrl, paths)` and `robotsTxt(siteUrl)`. Tested in `seo.test.ts`. See "SEO and link previews". |
 | `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), the canonical link and the Open Graph and Twitter tags (`pageMeta`; the page's `image`, or the OG image), Astro's `<ClientRouter />`, the self-hosted Jersey fonts, the theme's boot script and colour tokens (`themeBootScript`, `themeCss()`, both inline in `<head>`), the card and font tokens, and the inline script that turns on the full-screen layout (`data-world="live"`). |
-| `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's tree links, the Data Cards and the Guide's button and speech bubble, and the HUD floating over it (company name, theme toggle, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice and Tour buttons, the Tour's card), and the client script that runs the World and the Tour across routes. |
+| `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's plant links, the Data Cards and the Guide's button and speech bubble, and the HUD floating over it (company name, theme toggle, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice and Tour buttons, the Tour's card), and the client script that runs the World and the Tour across routes. |
 | `src/pages/index.astro` | The home page: the World and the home hook. |
 | `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project, the Dock's every Client and Partner, Team's every Team Member, and Contact the company's contact details; About links on to Team. |
 | `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. Its cover, if any, is its link preview's image. |
@@ -112,9 +112,9 @@ Partners. Team Members do not change the World.
   `pages` entry.
 - **Services (`/services`):** the intro copy, then every Service in `order`
   (then by id): an icon, the title, the summary and the body.
-- **Garden (`/garden`):** the intro copy, then every Project in tree order
-  (by id), each linking to its page. Projects beyond the Garden's 24 trees
-  are listed too.
+- **Garden (`/garden`):** the intro copy, then every Project in Garden
+  order (Pinned Projects first, then the rest, each by id), each linking
+  to its page. Projects beyond the Garden's nine places are listed too.
 - **Dock (`/dock`):** the intro copy, then two groups, each with its own
   heading: **Clients** (moored at the Dock, one boat each), in order by id,
   each with its logo or initials, name and industry; and **Partners**
@@ -137,7 +137,7 @@ Partners. Team Members do not change the World.
   title, then a link back to all Projects, the Client and year, the tags, the
   cover image if any, the summary (also the meta description) and the case
   study. The camera goes to the Garden (`/garden/<id>` belongs to it), and
-  the Project's tree link is marked current.
+  the Project's plant link is marked current.
 - **Panel:** a floating card; see "Full-screen layout" below. It slides
   in, with no animation under reduced motion. Its close link goes to `/`
   and keeps the Seed; Escape does the same (an open menu popover takes
@@ -241,7 +241,7 @@ chosen once in `mountWorld`): no MSAA, a 1024px shadow map instead of
 2048px, and frames that only ambient motion asks for (ships sailing, the
 Guide idling, the developer working) at most 30 a second. Camera moves
 (drags, pinches, flights) always render every frame. The tier changes how
-the World is drawn, never what is in it: every Landmark, tree, boat, ship
+the World is drawn, never what is in it: every Landmark, plant, boat, ship
 and buoy is there in both, and Decoration and Ambient Life (polish) will
 read the tier for their density. The DPR cap stays 1.5 on touch devices and
 2 elsewhere.
@@ -368,13 +368,14 @@ route on every `astro:after-swap`:
   come after the name, the menu and the panel, and before the dice button. A drag that starts
   on a hotspot pans and does not follow the link. The open panel covers any
   hotspot under it.
-- **Trees:** each Garden tree has its own link (`a.hotspot.tree[data-project]`)
-  to its Project's page, labelled with the Project's title, over the middle
-  of the tree. Hover or focus shows its outline and title; clicking it
-  opens the Project's page and the camera goes to the Garden. When the
-  camera is far out a tree is too small to aim at, and a click there opens
-  the Garden instead. Tree links come right after the Garden's hotspot in
-  the Tab order. See "Tree links" in `rendering-and-shading.md`.
+- **Plants:** each Garden flower and tree has its own link
+  (`a.hotspot.plant[data-project]`) to its Project's page, labelled with
+  the Project's title, over the middle of the plant. Hover or focus shows
+  its outline and title; clicking it opens the Project's page and the
+  camera goes to the Garden. When the camera is far out a plant is too
+  small to aim at, and a click there opens the Garden instead. Plant links
+  come right after the Garden's hotspot in the Tab order, the flowers
+  first. See "Plant links" in `rendering-and-shading.md`.
 - The script passes the frame and hotspots to `mountWorld(canvas, world,
   meshed, { frame, hotspots })`. See "Camera and interaction" in
   `rendering-and-shading.md`.
@@ -477,7 +478,7 @@ points at a missing file.
 
 **Sitemap and robots.** `src/pages/sitemap.xml.ts` writes `/sitemap.xml`
 (`sitemapXml`): every Landmark route in Story Order, then every Project's
-page in tree order, as canonical URLs. `src/pages/robots.txt.ts` writes
+page in Garden order, as canonical URLs. `src/pages/robots.txt.ts` writes
 `/robots.txt` (`robotsTxt`): every crawler may index everything, and it
 names the sitemap.
 

@@ -75,7 +75,7 @@ describe('the House in the World', () => {
 });
 
 describe('the Landmark Variants in the World', () => {
-  const placed = (world: World) => world.landmarks.filter((l) => l.id !== 'garden');
+  const placed = (world: World) => world.landmarks;
 
   it('draws each Landmark\'s own Variant, from the World\'s Biome', () => {
     const seen = new Set<string>();
@@ -90,7 +90,7 @@ describe('the Landmark Variants in the World', () => {
     for (const id of ['house', 'station', 'mailbox', 'dock']) expect([...seen].filter((k) => k.startsWith(`${id}/`)).length, id).toBeGreaterThan(1);
   });
 
-  it('meshes every Landmark\'s structure in the World\'s ⅛-unit grid, filling its footprint on its ground (the House\'s lid apart)', () => {
+  it('meshes every Landmark\'s structure in the World\'s ⅛-unit grid, filling its footprint on its ground (the House\'s lid and the Garden\'s bed apart)', () => {
     for (const world of worlds.slice(0, 12)) {
       const { structure } = worldToVoxels(world);
       const cells = new Map<string, number>();
@@ -102,6 +102,8 @@ describe('the Landmark Variants in the World', () => {
         const ground = l.id === 'house' ? houseYard(l).house : l.footprint;
         for (let z = 0; z < ground.depth; z++) {
           for (let x = 0; x < ground.width; x++) {
+            // The Garden's bed holds its plants, which are instanced, not in the grid.
+            if (l.id === 'garden' && x >= 1 && x <= 3 && z >= 1 && z <= 3) continue;
             const key = `${ground.origin.x + x},${ground.origin.z + z}`;
             expect(cells.has(key), `${world.seed} ${l.id} ${key}`).toBe(true);
             expect(cells.get(key), `${world.seed} ${l.id} ${key}`).toBeGreaterThanOrEqual(l.y * STRUCTURE);

@@ -26,9 +26,12 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid, the ¼-unit detail grid and the ⅛-unit structure grid with a shared colour list. `drawDetail(world, grid, colours, drawn?)`: the detail grid's parts in order (bridges, stairs, each Landmark, boats, buoys), telling `drawn` after each. `meshWorld(world)`: the three grids meshed. | no |
 | `interiorModel.ts` | The House Interior's room, pure (see `voxel-structures.md`, "The House Interior rooms"): `furnishedRoom(biome)` (the room with the developer seated in it, 1/16 unit), `coarsen` (a structure at a coarser scale), `interiorPlacement` and `drawWorldRoom` (the room's place in the World, and the room at ⅛ unit in the structure grid), `developerBox`, `screenFace`, `roomLight`, `DEVELOPER_PARTS`, and `showsInterior` (when the Interior scene takes over). | no |
 | `structureModels.ts` | Structures placed in a World (see `voxel-structures.md`): `structureColour` (a colour role's id), `drawStructure` (a structure, or one part, at a placement, turned to its door), `landmarkStructure` and `landmarkPlacement` (a placed Landmark's Variant, and where and which way it stands), `houseStructure` and `housePlacement` (the same for the House), `drawStructures` (the structure grid's contents) and `houseWindowFaces` (the lit window faces). | no |
-| `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, trees, House room, boats, ships, buoys, bridges, stairs), the total and those in the three meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); trees are the voxels in each tree's box (`treeExtent`), the House room the House Interior's room at ⅛ unit in the structure grid (`drawWorldRoom`); the House Interior scene is not counted; the House's structure (base and lid, ⅛ unit) counts with the Landmarks; ships are `shipVoxels` × ships. About 2 ms. | no |
+| `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, plants, House room, boats, ships, buoys, bridges, stairs), the total and those in the three meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); plants are each Garden plant's structure voxels (`gardenPlantsOf`; instanced, outside the grids), the House room the House Interior's room at ⅛ unit in the structure grid (`drawWorldRoom`); the House Interior scene is not counted; the House's structure (base and lid, ⅛ unit) counts with the Landmarks; ships are `shipVoxels` × ships. About 2 ms. | no |
 | `frameMeter.ts` | `createFrameMeter()`: FPS and frame time from frame timestamps, smoothed (exponential, 0.1); a gap over 250 ms ends a burst and the next starts afresh; `'idle'` with no frame for 500 ms or only a lone frame. | no |
-| `landmarkModels.ts` | The ¼-unit parts of the Landmarks (the Garden's placeholder trees, the Dock's deck and jetty), and `landmarkExtent(world, landmark)`: the box a Landmark covers, measured from its ¼-unit parts and its Variant's structure and never smaller than its footprint (for the House, the House's 3×3 up to its roof). | no |
+| `landmarkModels.ts` | The ¼-unit parts of the Landmarks (the Dock's deck and jetty), and `landmarkExtent(world, landmark)`: the box a Landmark covers, measured from its ¼-unit parts, its Variant's structure and, for the Garden, its plants, and never smaller than its footprint (for the House, the House's 3×3 up to its roof). | no |
+| `gardenPlants.ts` | The Garden's plants (polish ticket 05): `plantStructure` (the Biome's tree; its flowers in turn), `gardenPlantsOf(world)` (every flower and tree with its cell and structure), `plantExtent` (a plant's box, for its link) and `plantedGarden(biome)` (a fence planted full, for the Model Gallery). | no |
+| `garden.ts` | `buildGardenPlants(world)`: one `InstancedMesh` per plant structure, one instance per plant, on the Garden's ground. | yes |
+| `plantLinks.ts` | `plantLinkSize(kind, pxPerUnit)`: a plant link's size on screen, so no link covers another plant (see "Plant links"). | no |
 | `buoyModel.ts` | `drawBuoy(cell, grid, colours)`: a buoy in the detail grid; `buoyLamp(cell)`: its lamp's box, which glows at Night. | no |
 | `houseMotion.ts` | `ROOF_LIFT`, `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame) and `developerPose(seconds)` (typing and reading). | no |
 | `vesselModels.ts` | `drawBoat(boat, grid, colours)`: a Client's boat in its berth, drawn into the detail grid; `shipVoxels(colours)`: the Partner ship's own small grid, centred on `SHIP_ORIGIN`, bow towards +x. | no |
@@ -52,7 +55,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it (`onInput` hears that input). | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
-| `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, the Garden's tree links over their trees and, while the House is open, the developer's link over the developer. | yes |
+| `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, the Garden's plant links over their flowers and trees and, while the House is open, the developer's link over the developer. | yes |
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
 meshing run in the Web Worker. Only geometry upload, materials, the sea,
@@ -68,8 +71,8 @@ each in its own integer voxel coordinates (voxel `(x, y, z)` spans world
 | Grid | Voxel size | Contents |
 |---|---|---|
 | terrain | 1 unit (`TERRAIN`) | Every land column from y = 0 to its height. The top voxel takes the surface colour (sand, grass, peak) or the path colour (the path's cells, and the House yard's cell in front of its door); buried voxels take their stratum's colour. |
-| detail | ¼ unit (`GROUND_DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Garden and the Dock's deck and jetty (`landmarkModels.ts`), the Clients' moored boats and the buoys. |
-| structure | ⅛ unit (`STRUCTURE = 8` per unit) | Placed structures (`structureModels.ts`, `voxel-structures.md`): each Landmark's Variant: the House's base (its lid is a mesh of its own), the Station, the Mailbox and the things on the Dock's deck; and the House Interior's room coarsened to ⅛ unit (`drawWorldRoom`), seen while the lid lifts. The Garden, boats and ships move here as later tickets redraw them. |
+| detail | ¼ unit (`GROUND_DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Dock's deck and jetty (`landmarkModels.ts`), the Clients' moored boats and the buoys. |
+| structure | ⅛ unit (`STRUCTURE = 8` per unit) | Placed structures (`structureModels.ts`, `voxel-structures.md`): each Landmark's Variant: the House's base (its lid is a mesh of its own), the Station, the Mailbox, the things on the Dock's deck and the Garden's fence; and the House Interior's room coarsened to ⅛ unit (`drawWorldRoom`), seen while the lid lifts. The Garden's flowers and trees are ⅛-unit structures too, but instanced (`garden.ts`), not in this grid. Boats and ships move here as later tickets redraw them. |
 
 The House Interior's tier (`INTERIOR`, 1/16 unit) belongs to its own scene
 (`interior.ts`; see "The House and its room").
@@ -87,7 +90,7 @@ with its origin at the min corner of the Landmark's footprint (see
 `world-generator.md`, "Landmark footprints") and local y = 0 the first voxel
 above the ground. Each model gets its footprint's size in ¼ voxels
 (`4 × width` by `4 × depth`), its ground height, and, in local ¼ voxels, the
-Garden's tree cells and the Dock's jetty cells, and fills that footprint.
+Dock's jetty cells, and fills that footprint.
 Since polish ticket 03 most of what a Landmark shows is its Variant's ⅛-unit
 structure (`structureModels.ts`, `voxel-structures.md`); only these stay at ¼ unit:
 
@@ -95,19 +98,37 @@ structure (`structureModels.ts`, `voxel-structures.md`); only these stay at ¼ u
 |---|---|
 | Station (2×2) | none: the Station is its Variant's structure |
 | House (4×4 plot) | none: the House is a structure and its room the House Interior's (see "The House and its room") |
-| Garden | one tree per tree cell, each filling its cell (trunk, 4×4 canopy); a flower in every other cell (a placeholder until polish ticket 05) |
+| Garden (5×5) | none: its fence is its Variant's structure and its flowers and trees are instanced structures (see "The Garden") |
 | Dock (2×1) | a plank platform on the land cells (ground detail, ADR 0006), which the Variant's things stand on; a plank deck level with the ground over each jetty cell, on posts down to the sea floor |
 | Mailbox (in the House's yard) | none: the Mailbox is its Variant's structure |
 
 `landmarkExtent(world, landmark)` is the box of both: the ¼-unit model and
 the Variant's structure as placed (the House whole, lid on, over its own
 3×3, not its yard, where the Mailbox has a box of its own).
-`landmarkModels.test.ts` checks that the Station, the House and the Mailbox
-draw nothing at ¼ unit, that the Garden and the Dock reach every footprint
-(and jetty) cell and nothing outside it, that each tree's canopy fills its cell, that `treeExtent` (a tree's box, for
-its link) is its cell up to the top of its canopy, 2 units tall, and that each
+`landmarkModels.test.ts` checks that every Landmark but the Dock draws
+nothing at ¼ unit, that the Dock reaches every footprint (and jetty) cell
+and nothing outside it, that the Garden's box is its 5×5, about 1 unit
+tall with no plants and as tall as its trees with them, and that each
 Landmark's box stays within `LANDMARK_HEIGHT` (the Station 5–6 units, the
 Mailbox 1–1.25 in its cell, the Dock's things at most 1).
+
+### The Garden
+
+The Garden (polish ticket 05) is its fence, its Landmark Variant drawn
+into the structure grid like the other Landmarks (its gate facing the
+Garden's `door`, south or east; the east mirror swaps x and z, and the
+fence is the same on every side but the gate), and a plant per planted
+Project in its 3×3 bed: a flower per Pinned Project in the front two rows,
+a tree in the back row (`world-generator.md`, "The Garden"). Each plant is
+the Biome's tree or one of its flowers (taken in turn, so neighbours
+differ), a ⅛-unit structure 1×1 with its crown or bloom at most 6×6 in
+the cell's 8×8, so neighbouring plants keep 2 voxels apart and read
+separately. `garden.ts` draws every copy of one structure with one
+`InstancedMesh` (`structureInstances`), its footprint's middle on the
+cell's middle, on the Garden's ground. The bed holds nothing else: an
+empty Garden is a grass patch in a fence. `gardenPlants.test.ts` checks
+the plants' order, kinds and Biome, the flowers alternating, and
+`plantExtent` (a plant's cell up to its top, within `LANDMARK_HEIGHT`).
 
 ## Mesher
 
@@ -593,7 +614,7 @@ on the isometric axis above the target.
   every frame each link is sized to the screen rectangle of its Landmark's
   box (`landmarkExtent`: the model's voxels, and never less than the whole
   footprint and the Dock's jetty, so the hotspot covers the whole footprint;
-  at least 28 px a side). The Garden's hotspot covers its trees. Hover and keyboard focus
+  at least 28 px a side). The Garden's hotspot covers its fence and plants. Hover and keyboard focus
   show an outline and the Landmark's label: the hover affordance and the
   keyboard focus. If a hotspot takes focus while off screen, the camera
   cuts to centre on it. The frame uses `overflow: clip`, so focusing a
@@ -606,24 +627,30 @@ on the isometric axis above the target.
   (`setInterior`), above the House's hotspot, which covers the room. While
   the House Interior scene shows, it is the only hotspot. On `/about/team` the page marks it with
   `aria-current="page"` (an outline).
-- **Tree links** (ticket 08): right after the Garden's hotspot, the page
-  renders one link per Garden tree (`a.hotspot.tree[data-project]`, also
+- **Plant links** (ticket 08, polish ticket 05): right after the Garden's
+  hotspot, the page renders one link per planted Project
+  (`a.hotspot.plant[data-project]`, `data-pinned` on a Pinned Project's, also
   `data-hotspot="garden"`) to `/garden/<id>`, labelled with the Project's
-  title, for the first 24 Projects by id. `setWorld` pairs them with the
-  World's tree cells through `gardenTrees` (`src/lib/gardenTrees.ts`), so
-  tree `k` is the `k`-th Project by id; a link with no tree is hidden. The
-  screen rectangles round neighbouring trees' isometric boxes
-  (`treeExtent`: the cell, 2 units tall) overlap, so a tree's link is only
-  the middle of its tree: with `s` screen px per world unit, `0.7·s` wide
-  and `0.8·s` tall round the box's centre. Neighbouring trees sit `0.71·s`
-  apart across or `0.82·s` apart down the screen, so no link covers another
-  tree's. A tree link under 12 px wide gets `data-small` and stops taking
-  the pointer (clicks fall through to the Garden's hotspot); it still takes
-  keyboard focus. At the Overview trees are small on most Seeds, so a click
-  on the Garden opens `/garden`; with the camera at the Garden each tree is
-  about 38 × 44 px on a 1280 px wide desktop and 13 × 15 px on a phone. The
-  page marks the open Project's tree link with `aria-current="page"` (an
-  outline).
+  title: the first six Pinned Projects (flowers), then the next three
+  Projects in Garden order (trees; `plantedProjects`). `setWorld` pairs them
+  with the World's flower and tree cells through `gardenPlants`
+  (`src/lib/gardenPlants.ts`); a link with no plant is hidden. The screen
+  rectangles round neighbouring plants' isometric boxes (`plantExtent`: the
+  cell, up to the plant's top) overlap, so a plant's link is only the middle
+  of its plant (`plantLinkSize`): with `s` screen px per world unit,
+  `0.7·s` wide, a flower's `0.8·s` tall and a tree's `2·s`, round the box's
+  centre. Cells side by side sit `0.71·s` apart across the screen, cells one
+  behind the other diagonally `0.82·s` apart down it, and a tree's centre
+  stands about `0.65·s` above that of the flower diagonally in front of it,
+  so no link covers another plant's (`plantLinks.test.ts` checks a full
+  Garden in every Biome). A plant link under 12 px wide gets `data-small`
+  and stops taking the pointer (clicks fall through to the Garden's
+  hotspot); it still takes keyboard focus. With the camera at the Garden
+  (`/garden`), flowers are 47 × 53 px and trees 47 × 133 px at 1440 × 900,
+  and 13 × 15 px and 13 × 37 px on a 390 × 844 phone, where the Garden fits
+  the strip above the bottom sheet; there they take the pointer but are
+  below a comfortable tap size (zooming in grows them). The page marks the
+  open Project's plant link with `aria-current="page"` (an outline).
 
 ### Data Cards
 
@@ -733,10 +760,15 @@ Station's mast and the round tower's cap costing the most. Polish ticket 04
 replaced the ¼-unit room (about 320) with the House Interior's room at ⅛ unit
 (about 1,000–1,200: 982 northern, 1,144 volcanic, 1,178 autumn, 1,208
 tropical); `lanternfish` reads 11,640. The House Interior is a scene of its
-own, about 3,500 triangles, rendered instead of the World. Real tree models and decoration (later tickets) will
-add most of the remaining triangles.
+own, about 3,500 triangles, rendered instead of the World. Polish ticket 05
+replaced the ¼-unit Garden with its ⅛-unit fence and instanced plants: with
+the site's six Projects (three pinned: three flowers, three trees)
+`data-triangles` reads 13,732 (`42`), 14,538 (`harbour`), 14,978
+(`lighthouse`), 16,696 (`lanternfish`) and 19,730 (`seed-2`), about 3,000–3,500
+more than before, mostly the fence and the trees' crowns. Decoration (a later
+ticket) will add most of the remaining triangles.
 
 ## Not yet built
 
-Animation of water and trees, boat and ship kinds, the reduced-decoration tier,
-and structures for the Garden, boats and ships.
+Animation of water and plants, boat and ship kinds, the reduced-decoration tier,
+and structures for boats and ships.

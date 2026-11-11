@@ -15,15 +15,15 @@
 import * as THREE from 'three/webgpu';
 import type { GroundPoint } from './cameraMath';
 import type { PlacedLandmarkId, World } from '@/world';
-import { landmarkExtent, treeExtent } from './landmarkModels';
-import { gardenTrees } from '@/lib/gardenTrees';
+import { landmarkExtent } from './landmarkModels';
+import { gardenPlants, type PlantKind } from '@/lib/gardenPlants';
+import { gardenPlantsOf, plantExtent } from './gardenPlants';
+import { plantLinkSize } from './plantLinks';
 
 /** Smallest hotspot side, in CSS px, so a far-away Landmark is still easy to hit. */
 const MIN_SIZE = 28;
-/** A tree's link narrower than this, in CSS px, does not take the pointer. */
-const MIN_TREE_SIZE = 12;
-/** A tree's link size, in screen px per world unit; see `place`. */
-const TREE_LINK = { w: 0.7, h: 0.8 };
+/** A plant's link narrower than this, in CSS px, does not take the pointer. */
+const MIN_PLANT_SIZE = 12;
 
 export interface LandmarkHotspots {
   /** A new World: new Landmark positions, and the box round the developer in its House (world units). */
@@ -38,8 +38,8 @@ export interface LandmarkHotspots {
 interface Placed {
   link: HTMLElement;
   box: THREE.Box3;
-  /** A Garden tree's link (one per Project), rather than a whole Landmark's. */
-  tree: boolean;
+  /** A Garden plant's link (one per planted Project): its kind; null for a whole Landmark's. */
+  plant: PlantKind | null;
   /** The developer's link, inside the House: shown only while it is open. */
   interior: boolean;
 }
@@ -72,34 +72,42 @@ export function createLandmarkHotspots(
   return {
     setWorld(world, developer) {
       placed = [];
-      const projectIds = links.flatMap((link) => (link.dataset.project ? [link.dataset.project] : []));
-      const trees = new Map(gardenTrees(world, projectIds).map((t) => [t.projectId, t.cell]));
+      const projects = links.flatMap((link) => (link.dataset.project ? [{ id: link.dataset.project, pinned: link.dataset.pinned !== undefined }] : []));
+      const structures = gardenPlantsOf(world);
+      // Each planted Project with its plant's structure; a plant with none (the page's
+      // pinned flags out of step with the World's counts) gets no link rather than an error.
+      const plants = new Map(
+        gardenPlants(world, projects).flatMap((p) => {
+          const placed = structures.find((s) => s.kind === p.kind && s.cell.x === p.cell.x && s.cell.z === p.cell.z);
+          return placed ? [[p.projectId, { ...p, structure: placed.structure }] as const] : [];
+        }),
+      );
       for (const link of links) {
         if (link.dataset.hotspot === 'house-interior') {
           if (!developer) continue;
-          placed.push({ link, box: developer.clone(), tree: false, interior: true });
+          placed.push({ link, box: developer.clone(), plant: null, interior: true });
           link.hidden = !open;
           continue;
         }
         const landmark = world.landmarks.find((l) => l.id === (link.dataset.hotspot as PlacedLandmarkId));
         const project = link.dataset.project;
-        const tree = project === undefined ? undefined : trees.get(project);
-        if (!landmark || (project !== undefined && !tree)) {
+        const plant = project === undefined ? undefined : plants.get(project);
+        if (!landmark || (project !== undefined && !plant)) {
           link.hidden = true;
           continue;
         }
         // The model's own extent, which always covers the whole footprint (and the Dock's jetty);
-        // a tree's link covers just its tree.
+        // a plant's link covers just its plant.
         const cell = landmark.footprint.origin;
         const origin = new THREE.Vector3(cell.x, landmark.y, cell.z);
-        const { min, max } = tree ? treeExtent(landmark, tree) : landmarkExtent(world, landmark);
+        const { min, max } = plant ? plantExtent(landmark, plant) : landmarkExtent(world, landmark);
         placed.push({
           link,
           box: new THREE.Box3(
             new THREE.Vector3(min.x, min.y, min.z).add(origin),
             new THREE.Vector3(max.x, max.y, max.z).add(origin),
           ),
-          tree: tree !== undefined,
+          plant: plant?.kind ?? null,
           interior: false,
         });
         link.hidden = false;
@@ -112,7 +120,7 @@ export function createLandmarkHotspots(
     place(camera) {
       const width = frame.clientWidth;
       const height = frame.clientHeight;
-      for (const { link, box, tree, interior } of placed) {
+      for (const { link, box, plant, interior } of placed) {
         if (interior && !open) continue;
         let left = Infinity;
         let top = Infinity;
@@ -130,17 +138,12 @@ export function createLandmarkHotspots(
         }
         let w = Math.max(MIN_SIZE, right - left);
         let h = Math.max(MIN_SIZE, bottom - top);
-        if (tree) {
-          // Trees stand side by side, and the screen rectangles round their isometric
-          // boxes overlap, so a tree's link is only the middle of its tree: with `s` px per
-          // world unit (a 1×1 box is √2·s wide), neighbouring trees sit 0.71·s apart
-          // across or 0.82·s apart down, so a 0.7·s × 0.8·s link never covers another tree's.
-          // One too small to aim at leaves the pointer to the Garden's own link; it
-          // still takes keyboard focus.
-          const s = (right - left) / Math.SQRT2;
-          w = TREE_LINK.w * s;
-          h = TREE_LINK.h * s;
-          link.toggleAttribute('data-small', w < MIN_TREE_SIZE);
+        if (plant) {
+          // Only the middle of its plant, so it never covers another plant's (`plantLinks.ts`),
+          // with `s` px a world unit (a 1×1 box is √2·s wide). One too small to aim at
+          // leaves the pointer to the Garden's own link; it still takes keyboard focus.
+          ({ w, h } = plantLinkSize(plant, (right - left) / Math.SQRT2));
+          link.toggleAttribute('data-small', w < MIN_PLANT_SIZE);
         }
         const cx = (left + right) / 2;
         const cy = (top + bottom) / 2;

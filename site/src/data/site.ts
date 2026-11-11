@@ -96,7 +96,7 @@ export const site = {
     /** What the World still shows, for anyone who cannot see it: its alt text and the OG image's. */
     imageAlt:
       `${company.name}'s World seen from above: voxel Isles in the sea with a lighthouse station (Services), ` +
-      'a house (About), a garden of trees (Projects), a dock with moored boats and ships sailing by (Clients & Partners) ' +
+      'a house (About), a fenced garden of flowers and trees (Projects), a dock with moored boats and ships sailing by (Clients & Partners) ' +
       'and a mailbox (Contact).',
   },
   /** The Seed visitors see first. Also used for an empty or too-long Seed. */

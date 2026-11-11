@@ -39,9 +39,9 @@ import Logo from '@/components/Logo.astro';
 import ThemeToggle from '@/components/ThemeToggle.astro';
 import { getCollection, getEntry } from 'astro:content';
 import { site, landmarksInStoryOrder, type DataCardMetric } from '@/data/site';
-import { MAX_TREES, PLACED_LANDMARK_IDS } from '@/world';
+import { PLACED_LANDMARK_IDS } from '@/world';
 import type { ContentCounts, LandmarkId } from '@/world';
-import { treeOrder } from '@/lib/gardenTrees';
+import { gardenCountsOf, plantedProjects, projectOrder } from '@/lib/gardenPlants';
 import type { GuideLines } from '@/lib/contentSchemas';
 import { tourSteps } from '@/lib/tour';
 import { STILL_SIZE, stillPath, stillSrcset } from '@/lib/worldStill';
@@ -56,10 +56,10 @@ interface Props {
 const { title, description, image } = Astro.props;
 const hasPanel = Astro.slots.has('panel');
 
-const projects = treeOrder(await getCollection('projects'));
-// The generator gets counts only: a tree per Project, a boat per Client, a ship per Partner.
+const projects = projectOrder(await getCollection('projects'));
+// The generator gets counts only: Projects and Pinned Projects for the Garden's plants, a boat per Client, a ship per Partner.
 const counts: ContentCounts = {
-  projects: projects.length,
+  ...gardenCountsOf(projects),
   clients: (await getCollection('clients')).length,
   partners: (await getCollection('partners')).length,
 };
@@ -68,8 +68,8 @@ const counts: ContentCounts = {
 const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly string[]).includes(l.id));
 // The developer inside the House links to Team; the World shows it while the House is open.
 const team = site.landmarks.find((l) => l.id === 'house-interior')!;
-// One link per Garden tree, right after the Garden's own link: a tree per Project, in order by id, up to the cap.
-const treeLinks = projects.slice(0, MAX_TREES);
+// One link per Garden plant, right after the Garden's own link, in Garden order: the flowers, then the trees.
+const plantLinks = plantedProjects(projects);
 // One Data Card per Landmark with a metric in site data, in Story Order; the World lays each over its Landmark.
 const metrics: Partial<Record<LandmarkId, DataCardMetric>> = site.dataCards;
 const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
@@ -194,12 +194,13 @@ const stillAlt = site.seo.imageAlt;
                 </a>
               )}
               {landmark.id === 'garden' &&
-                treeLinks.map((project) => (
+                plantLinks.map(({ project }) => (
                   <a
-                    class="hotspot tree"
+                    class="hotspot plant"
                     href={`${landmark.route}/${project.id}`}
                     data-hotspot="garden"
                     data-project={project.id}
+                    data-pinned={project.data.pinned ? '' : undefined}
                     data-seed-link
                     draggable="false"
                     hidden>
@@ -359,7 +360,7 @@ const stillAlt = site.seo.imageAlt;
     const guideFlightMs = (ms: number) => (ms > 0 ? GUIDE_FLIGHT_MS : 0);
     /** The cards floating over the World: the Guide's bubble keeps clear of them. */
     const covers = () => [...document.querySelectorAll<HTMLElement>('[data-covers-world]')].map((c) => c.getBoundingClientRect());
-    /** The Landmarks' hotspots on screen (not the trees within the Garden's): the Guide's bubble keeps off them when it can. */
+    /** The Landmarks' hotspots on screen (not the plants within the Garden's): the Guide's bubble keeps off them when it can. */
     const landmarks = () =>
       hotspots.filter((h) => !h.hidden && !h.dataset.project).map((h) => h.getBoundingClientRect());
     /** A Guide line with the Seed on show and the Guide's name filled in. */
@@ -399,7 +400,7 @@ const stillAlt = site.seo.imageAlt;
     };
 
     /**
-     * Mark the World link of the page now open, if any: a Project's tree, or
+     * Mark the World link of the page now open, if any: a Project's plant, or
      * the developer on Team (the links are persisted, so the page cannot).
      */
     const markCurrentLink = () => {
@@ -1136,8 +1137,8 @@ const stillAlt = site.seo.imageAlt;
   .hotspot:focus-visible .hotspot-label {
     opacity: 1;
   }
-  /* A tree too small on screen to aim at: the pointer goes to the Garden's link under it. */
-  .hotspot.tree[data-small] {
+  /* A plant too small on screen to aim at: the pointer goes to the Garden's link under it. */
+  .hotspot.plant[data-small] {
     pointer-events: none;
   }
   /* The developer in the open House: above the House's own link, which covers the room. */
@@ -1148,8 +1149,8 @@ const stillAlt = site.seo.imageAlt;
   .world[data-scene='interior'] .hotspot:not(.developer) {
     display: none;
   }
-  /* The tree of the Project page that is open, and the developer on Team. */
-  .hotspot.tree[aria-current='page'],
+  /* The plant of the Project page that is open, and the developer on Team. */
+  .hotspot.plant[aria-current='page'],
   .hotspot.developer[aria-current='page'] {
     outline: 2px solid var(--brand);
     outline-offset: 1px;

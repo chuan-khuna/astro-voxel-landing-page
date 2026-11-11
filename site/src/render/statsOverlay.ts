@@ -26,7 +26,7 @@ const GAP = 8;
 const KIND_LABELS: Record<VoxelKind, string> = {
   terrain: 'terrain',
   landmarks: 'Landmarks',
-  trees: 'trees',
+  plants: 'plants',
   houseRoom: 'House room',
   boats: 'boats',
   ships: 'ships',

@@ -6,7 +6,8 @@
  * light and Day and Night tokens. Each model is an `InstancedMesh` of one
  * (`structureMeshes.ts`), its lid (if it has one) a second one that lifts.
  * A House Interior room shows furnished, the developer at their computer
- * (`furnishedRoom`), at its own 1/16 unit. Renders on demand. Dev only
+ * (`furnishedRoom`), at its own 1/16 unit; a Garden fence shows planted
+ * full, six flowers and three trees (`plantedGarden`). Renders on demand. Dev only
  * (`/dev/models`).
  */
 import * as THREE from 'three/webgpu';
@@ -14,6 +15,7 @@ import { BIOMES } from '@/world/biomes';
 import { BIOME_IDS } from '@/world';
 import { STRUCTURES, type Structure } from '@/structures';
 import { furnishedRoom } from '@/render/interiorModel';
+import { plantedGarden } from '@/render/gardenPlants';
 import { THEME_TOKENS } from '@/data/theme';
 import type { Theme } from '@/lib/theme';
 import { LOOK, oklchToLinear } from '@/render/palette';
@@ -27,6 +29,8 @@ import type { Oklch } from '@/world';
 const SPACING = 6;
 /** Cells between the House Interior's rooms (2×2, and low): closer, so each shows larger. */
 const ROOM_SPACING = 4;
+/** Cells between the Gardens (5×5 with their ground): wider, so their ground patches never touch. */
+const GARDEN_SPACING = 8;
 /** Rows (in SPACING) between one row and the next: a row step is shallower on screen than a column step, so it needs more room. */
 const ROW_GAP = 1.8;
 /** Biomes side by side on a tall screen. */
@@ -194,12 +198,13 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
       clear();
       kindShown = kind;
       laidOutPortrait = isPortrait();
-      // A room shows furnished: the developer seated at its computer.
-      const list = STRUCTURES.filter((s) => s.kind === kind).map((s) => (s.kind === 'room' && s.biome ? furnishedRoom(s.biome) : s));
+      // A room shows furnished: the developer seated at its computer; a Garden planted full.
+      const dressed = (s: Structure) => (!s.biome ? s : s.kind === 'room' ? furnishedRoom(s.biome) : s.kind === 'garden' ? plantedGarden(s.biome) : s);
+      const list = STRUCTURES.filter((s) => s.kind === kind).map(dressed);
       const columns = BIOME_IDS.map((biome) => list.filter((s) => s.biome === biome));
       columns.push(list.filter((s) => s.biome === null));
       const used = columns.filter((column) => column.length > 0);
-      const spacing = kind === 'room' ? ROOM_SPACING : SPACING;
+      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'garden' ? GARDEN_SPACING : SPACING;
       const margin = kind === 'room' ? 2.5 : 4;
       const rows = Math.max(1, ...used.map((column) => column.length));
       used.forEach((column, c) => {

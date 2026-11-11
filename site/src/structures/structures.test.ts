@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BIOME_IDS, LANDMARK_HEIGHT, LANDMARK_VARIANTS } from '@/world';
+import { BIOME_IDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_VARIANTS } from '@/world';
 import { GROUND_DETAIL, INTERIOR, STRUCTURE } from '@/render/voxelTiers';
 import { STRUCTURES, STRUCTURE_FILES, variantsOf } from './index';
 import { parseStructure, structureVoxels, voxelAt, type Structure } from './parse';
@@ -32,19 +32,20 @@ describe('structure files', () => {
     for (const s of STRUCTURES) for (const { role } of s.palette) expect(Object.keys(STRUCTURE_ROLES), s.name).toContain(role);
   });
 
-  it('each fills its declared footprint: every cell has voxels, and nothing lies outside it', () => {
+  it('each fills its declared footprint: every cell has voxels (but the Garden fence’s bed), and nothing lies outside it', () => {
     for (const s of STRUCTURES) {
       expect(s.size.x, s.name).toBe(s.footprint.width * s.scale);
       expect(s.size.z, s.name).toBe(s.footprint.depth * s.scale);
       const reached = new Set<string>();
       for (const v of structureVoxels(s)) reached.add(`${Math.floor(v.x / s.scale)},${Math.floor(v.z / s.scale)}`);
-      for (let z = 0; z < s.footprint.depth; z++) for (let x = 0; x < s.footprint.width; x++) expect(reached.has(`${x},${z}`), `${s.name} ${x},${z}`).toBe(true);
+      const bed = (x: number, z: number) => s.kind === 'garden' && x >= 1 && x <= 3 && z >= 1 && z <= 3;
+      for (let z = 0; z < s.footprint.depth; z++) for (let x = 0; x < s.footprint.width; x++) expect(reached.has(`${x},${z}`), `${s.name} ${x},${z}`).toBe(!bed(x, z));
     }
   });
 });
 
 describe('the Landmark Variants', () => {
-  const KINDS = ['house', 'station', 'mailbox', 'dock'] as const;
+  const KINDS = ['house', 'station', 'mailbox', 'dock', 'garden'] as const;
   /** How far a structure reaches above the ground, in ⅛ voxels (its anchor may sit below its first layer). */
   const above = (s: Structure) => s.size.y - s.anchor.y;
 
@@ -102,6 +103,66 @@ describe('the Landmark Variants', () => {
       expect(s.anchor, s.name).toEqual({ x: 0, y: -deck, z: 0 });
       expect(s.door, s.name).toBeNull();
       expect(above(s), s.name).toBeLessThanOrEqual(STRUCTURE);
+    }
+  });
+});
+
+describe('the Garden', () => {
+  const ofKind = (kind: string) => STRUCTURES.filter((s) => s.kind === kind);
+  /** The span of a structure's voxels along an axis, in voxels (min and max inclusive). */
+  const span = (s: Structure, axis: 'x' | 'z', filter: (v: { y: number }) => boolean = () => true) => {
+    const values = [...structureVoxels(s)].filter(filter).map((v) => v[axis]);
+    return { min: Math.min(...values), max: Math.max(...values) };
+  };
+
+  it('gives every Biome a tree and at least one flower, numbered from 1', () => {
+    for (const biome of BIOME_IDS) {
+      expect(variantsOf('tree', biome).map((s) => s.variant), biome).toEqual([1]);
+      const flowers = variantsOf('flower', biome);
+      expect(flowers.length, biome).toBeGreaterThan(0);
+      expect(flowers.map((s) => s.variant), biome).toEqual(flowers.map((_, i) => i + 1));
+    }
+  });
+
+  it('fences a 5×5 Garden at most 1 unit tall, its bed left empty, its gate in the middle of +z', () => {
+    for (const s of ofKind('garden')) {
+      expect(s.footprint, s.name).toEqual({ width: 5, depth: 5 });
+      expect(s.door, s.name).toBe('+z');
+      expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
+      expect(s.size.y, s.name).toBeLessThanOrEqual(GARDEN_HEIGHT.fence * STRUCTURE);
+      const voxels = [...structureVoxels(s)];
+      // The gate: the middle of the +z side differs from the fence beside it (another role or another shape).
+      const cellOf = (cx: number) => voxels.filter((v) => v.z >= 4 * STRUCTURE && Math.floor(v.x / STRUCTURE) === cx).map((v) => `${v.x % STRUCTURE},${v.y},${v.z},${v.role}`).toSorted();
+      expect(cellOf(2), s.name).not.toEqual(cellOf(1));
+    }
+  });
+
+  it('keeps each tree 3–3.5 units tall, its crown 6×6 at most: 2 voxels clear of the next tree', () => {
+    for (const s of ofKind('tree')) {
+      expect(s.footprint, s.name).toEqual({ width: 1, depth: 1 });
+      expect(s.size.y, s.name).toBeGreaterThanOrEqual(24);
+      expect(s.size.y, s.name).toBeLessThanOrEqual(GARDEN_HEIGHT.tree * STRUCTURE);
+      for (const axis of ['x', 'z'] as const) {
+        const { min, max } = span(s, axis);
+        expect([min, max], `${s.name} ${axis}`).toEqual([1, 6]);
+      }
+    }
+  });
+
+  it('keeps each flower 1.25–1.75 units tall, its bloom 6×6 at most, filling its cell', () => {
+    for (const s of ofKind('flower')) {
+      expect(s.footprint, s.name).toEqual({ width: 1, depth: 1 });
+      expect(s.size.y, s.name).toBeGreaterThanOrEqual(10);
+      expect(s.size.y, s.name).toBeLessThanOrEqual(GARDEN_HEIGHT.flower * STRUCTURE);
+      // The bloom: the top half.
+      const bloom = (v: { y: number }) => v.y >= s.size.y / 2;
+      for (const axis of ['x', 'z'] as const) {
+        const all = span(s, axis);
+        expect(all.min, `${s.name} ${axis}`).toBeGreaterThanOrEqual(1);
+        expect(all.max, `${s.name} ${axis}`).toBeLessThanOrEqual(6);
+        const { min, max } = span(s, axis, bloom);
+        expect(max - min + 1, `${s.name} ${axis}`).toBeGreaterThanOrEqual(5);
+      }
     }
   });
 });

@@ -2,7 +2,7 @@
  * The render tier: how much the World spends on looks on this device. Small
  * touch devices (phones) get the reduced tier, everything else the full one.
  * A tier only changes how the World is drawn, never what is in it: every
- * Landmark, tree, boat, ship and buoy is there in both.
+ * Landmark, plant, boat, ship and buoy is there in both.
  *
  * Plain functions over a device description; no DOM.
  */
