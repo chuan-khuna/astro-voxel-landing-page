@@ -49,7 +49,7 @@ describe('countVoxels', () => {
   it('adds up to the voxels that are meshed, so no voxel counts twice', () => {
     const voxels = worldToVoxels(world);
     // The ships, the House's lid and the developer's head and hands are meshes of their own, outside the grids.
-    expect(tally.inGrids).toBe(voxels.terrain.count + voxels.detail.count);
+    expect(tally.inGrids).toBe(voxels.terrain.count + voxels.detail.count + voxels.structure.count);
     expect(tally.total).toBe(VOXEL_KINDS.reduce((sum, kind) => sum + tally[kind], 0));
     expect(tally.total).toBeGreaterThan(tally.inGrids + tally.ships);
   });

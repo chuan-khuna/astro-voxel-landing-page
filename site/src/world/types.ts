@@ -162,6 +162,14 @@ export interface PlacedLandmark {
   y: number;
   /** Which model variant to draw. Every Landmark has only variant 0 for now. */
   variant: number;
+  /**
+   * The House only (null otherwise): the way its door faces, south (+z) or
+   * east (+x), the two sides the camera sees. The House fills the north-west
+   * 3×3 of its 4×4 plot (`footprint`); the other seven cells are its front
+   * yard, and the Dock-to-House path ends just outside the yard, in line
+   * with the door (`houseYard`).
+   */
+  door: Facing | null;
   /** Garden only (empty otherwise): one cell per tree, in Project order, inside the footprint. */
   trees: Cell[];
   /**

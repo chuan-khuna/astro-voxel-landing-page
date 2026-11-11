@@ -12,7 +12,8 @@
  */
 import type { Boat } from '../world';
 import { VoxelGrid } from './mesher';
-import { DETAIL, type WorldColours } from './worldVoxels';
+import type { WorldColours } from './worldVoxels';
+import { GROUND_DETAIL } from './voxelTiers';
 
 /** A boat's size in ¼ voxels: length (bow to stern) and beam. */
 const BOAT_LENGTH = 4;
@@ -26,7 +27,7 @@ export function drawBoat(boat: Boat, grid: VoxelGrid, { fixed }: WorldColours): 
     const back = BOAT_LENGTH - 1 - u;
     const [dx, dz] =
       facing === 'east' ? [u, v + 1] : facing === 'west' ? [back, v + 1] : facing === 'south' ? [v + 1, u] : [v + 1, back];
-    grid.set(cell.x * DETAIL + dx, y, cell.z * DETAIL + dz, colour);
+    grid.set(cell.x * GROUND_DETAIL + dx, y, cell.z * GROUND_DETAIL + dz, colour);
   };
   const bowCorner = (u: number, v: number) => u === BOAT_LENGTH - 1 && v !== 1;
   for (let u = 0; u < BOAT_LENGTH; u++) {
@@ -54,7 +55,7 @@ export const SHIP_ORIGIN = { x: SHIP_LENGTH / 2, y: 0, z: SHIP_BEAM / 2 } as con
  * pennant. Bow towards +x.
  */
 export function shipVoxels({ fixed, biome }: WorldColours): VoxelGrid {
-  const grid = new VoxelGrid(1 / DETAIL);
+  const grid = new VoxelGrid(1 / GROUND_DETAIL);
   const bowCorner = (u: number, v: number) => u === SHIP_LENGTH - 1 && (v === 0 || v === SHIP_BEAM - 1);
   for (let u = 0; u < SHIP_LENGTH; u++) {
     for (let v = 0; v < SHIP_BEAM; v++) {

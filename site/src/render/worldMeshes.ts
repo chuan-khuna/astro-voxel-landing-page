@@ -24,7 +24,7 @@ export const SEA_LEVEL = 0.15;
 
 export interface WorldObjects {
   group: THREE.Group;
-  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks, boats, ships, the House's lid and developer); the sea and the screen add a handful more. */
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure, boats, ships, the House's lid and developer); the sea and the screen add a handful more. */
   triangles: number;
   /** The Partners' ships, which sail: `ships.sail(seconds)` moves them. */
   ships: Fleet;
@@ -37,9 +37,9 @@ export interface WorldObjects {
 
 /** Build the World's three.js objects. Pass `meshed` when it was meshed elsewhere (the Web Worker). */
 export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(world)): WorldObjects {
-  const { terrain, detail, voxelSizes } = meshed;
+  const { terrain, detail, structure, voxelSizes } = meshed;
   const group = new THREE.Group();
-  const materials = [voxelMaterial(voxelSizes[0]), voxelMaterial(voxelSizes[1])];
+  const materials = voxelSizes.map((size) => voxelMaterial(size));
   const geometries: THREE.BufferGeometry[] = [];
 
   const addChunks = (chunks: ChunkMesh[], material: THREE.Material, name: string) => {
@@ -56,6 +56,7 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
   };
   addChunks(terrain, materials[0]!, 'terrain');
   addChunks(detail, materials[1]!, 'detail');
+  addChunks(structure, materials[2]!, 'structure');
 
   const sea = buildSea(world);
   group.add(sea.group);
@@ -68,7 +69,7 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + ships.triangles + house.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + house.triangles,
     ships,
     house,
     setTheme: (theme) => {

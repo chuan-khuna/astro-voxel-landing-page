@@ -1,30 +1,35 @@
 /**
- * The House's moving parts as three.js meshes (its base and room are static,
- * in the World's detail grid; see `houseModel.ts`):
+ * The House's moving parts as three.js meshes (its base is static, in the
+ * World's ⅛-unit structure grid, and its room in the ¼-unit detail grid;
+ * see `structureModels.ts` and `houseModel.ts`):
  *
- * - the lid (roof, dome and front walls), which `setOpening` lifts off;
+ * - the lid (the House Variant's `lid` part: its roof and front walls),
+ *   which `setOpening` lifts off;
  * - the developer's head and hands, which `work(seconds)` animates;
  * - the computer's screen, a glowing plane that scrolls lines of code;
- * - the House's lights: a glowing pane over each window (`HOUSE_WINDOWS`),
- *   on the face the camera sees, shown at Night (`setLights`). The lid's
- *   panes lift with it.
+ * - the House's lights: a glowing square over each open face of window
+ *   glass (`houseWindowFaces`), shown at Night (`setLights`). The lid's
+ *   lights lift with it.
  *
  * Every voxel mesh uses the soft-voxel material in local space, built at the
- * House's place in the World (whole ¼ voxels), so seams stay on voxel edges
+ * House's place in the World (whole voxels), so seams stay on voxel edges
  * and travel with a part as it moves. The lid casts shadows (the sun's
  * shadow map is redrawn while it moves); the developer does not.
  */
 import * as THREE from 'three/webgpu';
 import type { UniformNode } from 'three/webgpu';
 import { float, floor, fract, hash, mix, step, uniform, uv, vec2, vec3 } from 'three/tsl';
-import type { World } from '../world';
-import { meshVoxels, triangleCount, VoxelGrid, type ChunkMesh } from './mesher';
+import type { World } from '@/world';
+import { meshVoxels, triangleCount, VoxelGrid } from './mesher';
+import { mergeChunks } from './structureMeshes';
 import { LOOK, oklchToLinear, FIXED_COLOURS } from './palette';
 import { voxelMaterial } from './voxelMaterial';
-import { DETAIL, worldColours } from './worldVoxels';
+import { worldColours } from './worldVoxels';
+import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 import { landmarkOrigin } from './landmarkModels';
-import { DEVELOPER_PARTS, HOUSE_WINDOWS, SCREEN, drawDeveloperPart, drawHouseLid, type DeveloperPart, type HouseDraw } from './houseModel';
-import type { WorldTokens } from '../data/theme';
+import { DEVELOPER_PARTS, SCREEN, drawDeveloperPart, type DeveloperPart, type HouseDraw } from './houseModel';
+import { drawStructure, houseStructure, housePlacement, houseWindowFaces } from './structureModels';
+import type { WorldTokens } from '@/data/theme';
 import { developerPose, roofLift } from './houseMotion';
 
 export interface HouseParts {
@@ -58,34 +63,41 @@ export function buildHouse(world: World): HouseParts {
 
   const origin = landmarkOrigin(house);
   const colours = worldColours(world);
-  const material = voxelMaterial(1 / DETAIL, 'local');
+  const material = voxelMaterial(1 / GROUND_DETAIL, 'local');
+  const lidMaterial = voxelMaterial(1 / STRUCTURE, 'local');
   const geometries: THREE.BufferGeometry[] = [];
   let triangles = 0;
 
-  /** One part's voxels, at the House's place in the World, as a mesh. */
+  /** A grid's voxels as one mesh. */
+  const gridMesh = (name: string, grid: VoxelGrid, meshMaterial: THREE.Material): THREE.Mesh => {
+    const chunks = meshVoxels(grid, {
+      colours: colours.table.colours,
+      aoStrength: LOOK.aoStrength,
+      chunkSize: 128,
+      solidOutside: () => false,
+    });
+    triangles += triangleCount(chunks);
+    const geometry = mergeChunks(chunks);
+    geometries.push(geometry);
+    const mesh = new THREE.Mesh(geometry, meshMaterial);
+    mesh.name = name;
+    group.add(mesh);
+    return mesh;
+  };
+  /** One of the room's ¼-voxel parts, at the House's place in the World, as a mesh. */
   const partMesh = (name: string, paint: (draw: HouseDraw) => void): THREE.Mesh => {
-    const grid = new VoxelGrid(1 / DETAIL);
+    const grid = new VoxelGrid(1 / GROUND_DETAIL);
     paint({
       box: (x0, y0, z0, x1, y1, z1, colour) =>
         grid.box(origin.x + x0, origin.y + y0, origin.z + z0, origin.x + x1, origin.y + y1, origin.z + z1, colour),
       set: (x, y, z, colour) => grid.set(origin.x + x, origin.y + y, origin.z + z, colour),
     });
-    const chunks = meshVoxels(grid, {
-      colours: colours.table.colours,
-      aoStrength: LOOK.aoStrength,
-      chunkSize: 64,
-      solidOutside: () => false,
-    });
-    triangles += triangleCount(chunks);
-    const geometry = mergedGeometry(chunks);
-    geometries.push(geometry);
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.name = name;
-    group.add(mesh);
-    return mesh;
+    return gridMesh(name, grid, material);
   };
 
-  const lid = partMesh('house-lid', (draw) => drawHouseLid(draw, colours));
+  const lidGrid = new VoxelGrid(1 / STRUCTURE);
+  drawStructure(houseStructure(world), housePlacement(house), colours, (x, y, z, colour) => lidGrid.set(x, y, z, colour), 'lid');
+  const lid = gridMesh('house-lid', lidGrid, lidMaterial);
   lid.castShadow = true;
   lid.receiveShadow = true;
 
@@ -97,7 +109,7 @@ export function buildHouse(world: World): HouseParts {
   }
 
   // The screen: a plane on the computer's face, facing +x, a hair in front of it.
-  const q = 1 / DETAIL;
+  const q = 1 / GROUND_DETAIL;
   const screenGeometry = new THREE.PlaneGeometry((SCREEN.z1 - SCREEN.z0) * q, (SCREEN.y1 - SCREEN.y0) * q);
   // Turned to face +x; its u then runs along −z, left to right as the camera sees it.
   screenGeometry.rotateY(Math.PI / 2);
@@ -114,27 +126,20 @@ export function buildHouse(world: World): HouseParts {
   screen.name = 'screen';
   group.add(screen);
 
-  // The lights: one glowing pane a hair in front of each window's lit face.
+  // The lights: a glowing square a hair in front of each open face of window glass,
+  // one mesh for the lid's (its child, so they lift with it) and one for the base's.
   const lightMaterial = new THREE.MeshBasicNodeMaterial();
   const panes: THREE.Mesh[] = [];
-  for (const { part, box, facing } of HOUSE_WINDOWS) {
-    const alongX = facing === '+x';
-    const geometry = new THREE.PlaneGeometry(
-      (alongX ? box.max.z - box.min.z : box.max.x - box.min.x) * q,
-      (box.max.y - box.min.y) * q,
-    );
-    if (alongX) geometry.rotateY(Math.PI / 2);
-    geometry.translate(
-      (origin.x + (alongX ? box.max.x : (box.min.x + box.max.x) / 2)) * q + (alongX ? 0.003 : 0),
-      (origin.y + (box.min.y + box.max.y) / 2) * q,
-      (origin.z + (alongX ? (box.min.z + box.max.z) / 2 : box.max.z)) * q + (alongX ? 0 : 0.003),
-    );
+  const faces = houseWindowFaces(world);
+  for (const part of ['lid', 'base'] as const) {
+    const own = faces.filter((face) => face.part === part);
+    if (own.length === 0) continue;
+    const geometry = windowLights(own);
     geometries.push(geometry);
     const pane = new THREE.Mesh(geometry, lightMaterial);
     pane.name = `house-light-${part}`;
     pane.visible = false;
     panes.push(pane);
-    // The lid's panes are its children, so they lift with it.
     (part === 'lid' ? lid : group).add(pane);
   }
 
@@ -157,6 +162,7 @@ export function buildHouse(world: World): HouseParts {
     dispose: () => {
       for (const g of geometries) g.dispose();
       material.dispose();
+      lidMaterial.dispose();
       screenMaterial.dispose();
       lightMaterial.dispose();
     },
@@ -191,26 +197,27 @@ function codeScreen(time: UniformNode<'float'>) {
 }
 
 
-/** Several chunk meshes as one geometry. */
-function mergedGeometry(chunks: ChunkMesh[]): THREE.BufferGeometry {
-  const quads = chunks.reduce((n, c) => n + c.positions.length, 0);
-  const positions = new Float32Array(quads);
-  const normals = new Float32Array(quads);
-  const colours = new Float32Array(quads);
+/** How far in front of the glass a window's light sits, in world units. */
+const LIGHT_LIFT = 0.003;
+
+/** One square per lit window face (⅛ voxels), a hair in front of the glass. */
+function windowLights(faces: ReturnType<typeof houseWindowFaces>): THREE.BufferGeometry {
+  const e = 1 / STRUCTURE;
+  const positions: number[] = [];
   const indices: number[] = [];
-  let offset = 0;
-  for (const chunk of chunks) {
-    positions.set(chunk.positions, offset);
-    normals.set(chunk.normals, offset);
-    colours.set(chunk.colours, offset);
-    const base = offset / 3;
-    for (const i of chunk.indices) indices.push(base + i);
-    offset += chunk.positions.length;
+  for (const { x, y, z, facing } of faces) {
+    const base = positions.length / 3;
+    if (facing === '+x') {
+      const px = (x + 1) * e + LIGHT_LIFT;
+      positions.push(px, y * e, (z + 1) * e, px, y * e, z * e, px, (y + 1) * e, z * e, px, (y + 1) * e, (z + 1) * e);
+    } else {
+      const pz = (z + 1) * e + LIGHT_LIFT;
+      positions.push(x * e, y * e, pz, (x + 1) * e, y * e, pz, (x + 1) * e, (y + 1) * e, pz, x * e, (y + 1) * e, pz);
+    }
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setIndex(indices);
   geometry.computeBoundingSphere();
   return geometry;

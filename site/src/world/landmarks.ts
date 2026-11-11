@@ -10,8 +10,9 @@ export const MAX_BOATS = 12;
 const BERTH_REACH = 2;
 /** Footprints differing by more than this many voxels in height are never levelled. */
 const MAX_LEVELLING = 2;
-/** The Mailbox stands within this many cells of the House if it can. */
-const MAILBOX_REACH = 4;
+/** The House's plot (cells a side) and the House on it, in the plot's north-west corner. */
+export const HOUSE_PLOT = 4;
+export const HOUSE_CELLS = 3;
 /** Ground points checked for occlusion per cell edge: a ¼-cell grid. */
 const SAMPLES_PER_CELL = 4;
 
@@ -41,10 +42,11 @@ export interface Placement {
  * Place the five Landmarks, each on a footprint of whole cells:
  *
  * - the Station (2×2) on its Isle's high ground, levelled up to the top;
- * - the Garden (at least 3×3, one cell per tree plus paths), then the House
- *   (3×3) on the Garden's Isle;
+ * - the Garden (at least 3×3, one cell per tree plus paths), then the House's
+ *   plot (4×4: the House 3×3 and its front yard) on the Garden's Isle;
  * - the Dock (2×1) on the shoreline, with a 2–3 cell jetty straight out to sea;
- * - the Mailbox (1×1), near the House if it can.
+ * - the Mailbox (1×1) in the House's front yard, in the plot's south-east
+ *   corner (`houseYard`); it shares the plot's ground and has none of its own.
  *
  * Every footprint is land of one Isle, levelled to one height (down to its
  * lowest cell; the Station up to its highest) if its cells differ by at most
@@ -190,6 +192,7 @@ export function placeLandmarks(
       footprint: candidate.footprint,
       y: candidate.y,
       variant: 0,
+      door: null,
       trees,
       jetty: candidate.jetty,
     };
@@ -247,9 +250,11 @@ export function placeLandmarks(
   const trees = layout.trees.map(({ x, z }) => (turned ? { x: origin.x + z, z: origin.z + x } : { x: origin.x + x, z: origin.z + z }));
   settle('garden', home, garden.picked, trees);
 
-  const house = pickInView(levelledDown(home, 3, 3));
+  const house = pickInView(levelledDown(home, HOUSE_PLOT, HOUSE_PLOT));
   if (!house) return null;
-  settle('house', home, house);
+  const placedHouse = settle('house', home, house);
+  // Its door faces the way the Seed says; `generateWorld` turns it if the path cannot reach it.
+  placedHouse.door = rng() < 0.5 ? 'south' : 'east';
 
   // The Dock: a 2×1 footprint on the shore with a jetty straight out to sea,
   // at the water's level if it can.
@@ -309,23 +314,43 @@ export function placeLandmarks(
   const boats = berthsOf(dock.picked);
   settle('dock', dock.owner, dock.picked);
 
-  // The Mailbox: near the House if it can.
-  const houseBox = house.footprint;
-  const nearHouse = (c: Candidate) => {
-    const { x, z } = c.footprint.origin;
-    const dx = Math.max(houseBox.origin.x - x, x - (houseBox.origin.x + houseBox.width - 1), 0);
-    const dz = Math.max(houseBox.origin.z - z, z - (houseBox.origin.z + houseBox.depth - 1), 0);
-    return Math.max(dx, dz) <= MAILBOX_REACH;
-  };
-  const mailboxCandidates = levelledDown(home, 1, 1);
-  const mailbox = pickInView(mailboxCandidates.filter(nearHouse)) ?? pickInView(mailboxCandidates);
-  if (!mailbox) return null;
-  settle('mailbox', home, mailbox);
+  // The Mailbox: in the House's front yard, on the plot's ground (already levelled and in view).
+  placed.push({
+    id: 'mailbox',
+    isle: home.id,
+    footprint: rectangle(houseYard(placedHouse).mailbox, 1, 1),
+    y: house.y,
+    variant: 0,
+    door: null,
+    trees: [],
+    jetty: [],
+  });
 
   // Lowering ground never hides anything, and the Station (the only raise)
   // came first, so every Landmark checked above is still in view.
   terrain.surface = surfaceOf(terrain, isles);
   return { landmarks: placed, boats, terrain };
+}
+
+/**
+ * The House's plot, cell by cell, for a door facing `door` (default: the
+ * House's own): the House's 3×3 at the plot's origin; `door`, the yard
+ * cell in front of the door (the door is in the middle of the front wall);
+ * `approach`, the cell just outside the plot in line with it, where the
+ * path from the Dock ends; and `mailbox`, the plot's south-east corner,
+ * where the Mailbox stands whichever way the door faces. The camera looks
+ * along (−1, −1, −1), so the Mailbox never hides the door; it stands in
+ * front of the House's middle, low enough to leave the room in view.
+ */
+export function houseYard(house: PlacedLandmark, door: Facing = house.door ?? 'south') {
+  const { x, z } = house.footprint.origin;
+  const along = (a: number, b: number): Cell => (door === 'south' ? { x: x + a, z: z + b } : { x: x + b, z: z + a });
+  return {
+    house: { origin: { x, z }, width: HOUSE_CELLS, depth: HOUSE_CELLS },
+    door: along(1, HOUSE_CELLS),
+    approach: along(1, HOUSE_PLOT),
+    mailbox: { x: x + HOUSE_PLOT - 1, z: z + HOUSE_PLOT - 1 },
+  };
 }
 
 /** The Garden's tree rows (local z) for a depth: two rows of trees, then a path row, repeating. */

@@ -4,21 +4,23 @@
  * - `terrain`: 1-unit voxels. Every land column from y = 0 up to its height;
  *   the top voxel takes the surface (or path) colour, buried voxels their
  *   stratum's colour, so cliffs show layered bands.
- * - `detail`: ¼-unit voxels for everything built on the terrain: bridge
- *   decks, stairs, the Landmark models (each filling its footprint) and the
+ * - `detail`: ¼-unit voxels (`GROUND_DETAIL`) for what is built on the
+ *   terrain and not yet a structure: bridge decks, stairs, the code-built
+ *   Landmark models (each filling its footprint), the House's room, the
  *   Clients' moored boats and the buoys.
+ * - `structure`: ⅛-unit voxels (`STRUCTURE`) for placed structures
+ *   (`structureModels.ts`): today the House's base.
  *
- * Both grids index one shared colour list.
+ * The grids index one shared colour list. See `voxelTiers.ts` for the tiers.
  */
-import type { BiomeColourRole, Oklch, PlacedLandmark, World } from '@/world';
+import { houseYard, type BiomeColourRole, type Oklch, type PlacedLandmark, type World } from '@/world';
 import { buildLandmark } from './landmarkModels';
 import { drawBoat } from './vesselModels';
 import { drawBuoy } from './buoyModel';
 import { meshVoxels, VoxelGrid, type ChunkMesh } from './mesher';
 import { FIXED_COLOURS, LOOK, oklchToLinear, shiftLightness, type FixedColour, type Rgb } from './palette';
-
-/** ¼-unit detail voxels per terrain voxel, along each axis. */
-export const DETAIL = 4;
+import { drawStructures } from './structureModels';
+import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 
 /** A colour list that hands out one id per distinct colour. */
 export class ColourTable {
@@ -41,34 +43,37 @@ export class ColourTable {
 export interface WorldColours {
   table: ColourTable;
   biome: (role: BiomeColourRole, dl?: number) => number;
-  fixed: (name: FixedColour) => number;
+  fixed: (name: FixedColour, dl?: number) => number;
 }
 
 export interface WorldVoxels {
   terrain: VoxelGrid;
   detail: VoxelGrid;
+  structure: VoxelGrid;
   colours: Rgb[];
   /** Is the terrain solid at this world point? */
   terrainSolid: (x: number, y: number, z: number) => boolean;
 }
 
-export function worldColours(world: World): WorldColours {
+export function worldColours(world: Pick<World, 'biome'>): WorldColours {
   const table = new ColourTable();
   return {
     table,
     biome: (role, dl = 0) => table.id(shiftLightness(world.biome.colours[role], dl)),
-    fixed: (name) => table.id(FIXED_COLOURS[name]),
+    fixed: (name, dl = 0) => table.id(shiftLightness(FIXED_COLOURS[name], dl)),
   };
 }
 
-/** Terrain chunks are 16 × 16 × 16 terrain voxels; detail chunks cover the same 16-unit cube. */
+/** Terrain chunks are 16 × 16 × 16 terrain voxels; detail and structure chunks cover the same 16-unit cube. */
 const CHUNK_UNITS = 16;
 
 /** A World's voxel grids as chunk meshes: plain typed arrays, safe to post from a Web Worker. */
 export interface MeshedWorld {
   terrain: ChunkMesh[];
   detail: ChunkMesh[];
-  voxelSizes: [number, number];
+  structure: ChunkMesh[];
+  /** Voxel size of the terrain, detail and structure grids, in world units. */
+  voxelSizes: [number, number, number];
 }
 
 /** Mesh a World's voxel grids into chunk meshes (world units). No GPU work. */
@@ -80,20 +85,37 @@ export function meshWorld(world: World): MeshedWorld {
     chunkSize: CHUNK_UNITS,
     solidOutside: (_x, y) => y < 0,
   });
-  const s = 1 / DETAIL;
+  const s = 1 / GROUND_DETAIL;
   const detail = meshVoxels(voxels.detail, {
     colours: voxels.colours,
     aoStrength: LOOK.aoStrength,
-    chunkSize: CHUNK_UNITS * DETAIL,
+    chunkSize: CHUNK_UNITS * GROUND_DETAIL,
     solidOutside: (x, y, z) => voxels.terrainSolid((x + 0.5) * s, (y + 0.5) * s, (z + 0.5) * s),
   });
-  return { terrain, detail, voxelSizes: [voxels.terrain.size, voxels.detail.size] };
+  // Structures stand on the terrain and beside ¼-unit detail: both hide their faces and darken their AO.
+  const e = 1 / STRUCTURE;
+  const ratio = STRUCTURE / GROUND_DETAIL;
+  const structure = meshVoxels(voxels.structure, {
+    colours: voxels.colours,
+    aoStrength: LOOK.aoStrength,
+    chunkSize: CHUNK_UNITS * STRUCTURE,
+    solidOutside: (x, y, z) =>
+      voxels.terrainSolid((x + 0.5) * e, (y + 0.5) * e, (z + 0.5) * e) ||
+      voxels.detail.has(Math.floor(x / ratio), Math.floor(y / ratio), Math.floor(z / ratio)),
+  });
+  return { terrain, detail, structure, voxelSizes: [voxels.terrain.size, voxels.detail.size, voxels.structure.size] };
 }
 
 export function worldToVoxels(world: World): WorldVoxels {
   const { width, depth, heights, isle, surface } = world.terrain;
   const colours = worldColours(world);
   const pathCells = new Set(world.paths.flatMap((p) => p.cells.map((c) => c.z * width + c.x)));
+  // The path runs on through the House's front yard to its door.
+  const house = world.landmarks.find((l) => l.id === 'house');
+  if (house) {
+    const door = houseYard(house).door;
+    pathCells.add(door.z * width + door.x);
+  }
 
   const terrain = new VoxelGrid(1);
   for (let z = 0; z < depth; z++) {
@@ -117,10 +139,13 @@ export function worldToVoxels(world: World): WorldVoxels {
     return y < heights[cz * width + cx]!;
   };
 
-  const detail = new VoxelGrid(1 / DETAIL);
+  const detail = new VoxelGrid(1 / GROUND_DETAIL);
   drawDetail(world, detail, colours);
 
-  return { terrain, detail, colours: colours.table.colours, terrainSolid };
+  const structure = new VoxelGrid(1 / STRUCTURE);
+  drawStructures(world, colours, (x, y, z, colour) => structure.set(x, y, z, colour));
+
+  return { terrain, detail, structure, colours: colours.table.colours, terrainSolid };
 }
 
 /** What `drawDetail` has just drawn: a group of parts, or one Landmark. */
@@ -157,12 +182,12 @@ function addBridges(world: World, grid: VoxelGrid, colours: WorldColours): void 
     if (!first || !last) continue;
     // Planks run across the bridge, so alternate colour along its length.
     const alongX = first.z === last.z;
-    const y = bridge.y * DETAIL - 1;
+    const y = bridge.y * GROUND_DETAIL - 1;
     for (const cell of bridge.cells) {
-      for (let i = 0; i < DETAIL; i++) {
-        for (let k = 0; k < DETAIL; k++) {
-          const x = cell.x * DETAIL + i;
-          const z = cell.z * DETAIL + k;
+      for (let i = 0; i < GROUND_DETAIL; i++) {
+        for (let k = 0; k < GROUND_DETAIL; k++) {
+          const x = cell.x * GROUND_DETAIL + i;
+          const z = cell.z * GROUND_DETAIL + k;
           const along = alongX ? x : z;
           grid.set(x, y, z, along % 2 === 0 ? plank : plankDark);
         }
@@ -175,14 +200,14 @@ function addBridges(world: World, grid: VoxelGrid, colours: WorldColours): void 
 function addStairs(world: World, grid: VoxelGrid, colours: WorldColours): void {
   const colour = colours.biome('path', -0.06);
   for (const stair of world.stairs) {
-    const x0 = stair.cell.x * DETAIL;
-    const z0 = stair.cell.z * DETAIL;
-    const y0 = stair.y * DETAIL;
-    for (let i = 0; i < DETAIL; i++) {
-      for (let k = 0; k < DETAIL; k++) {
+    const x0 = stair.cell.x * GROUND_DETAIL;
+    const z0 = stair.cell.z * GROUND_DETAIL;
+    const y0 = stair.y * GROUND_DETAIL;
+    for (let i = 0; i < GROUND_DETAIL; i++) {
+      for (let k = 0; k < GROUND_DETAIL; k++) {
         // `rise` counts ¼ cells from the low side: 0 at the low edge, 3 at the high edge.
         const rise =
-          stair.facing === 'east' ? i : stair.facing === 'west' ? DETAIL - 1 - i : stair.facing === 'south' ? k : DETAIL - 1 - k;
+          stair.facing === 'east' ? i : stair.facing === 'west' ? GROUND_DETAIL - 1 - i : stair.facing === 'south' ? k : GROUND_DETAIL - 1 - k;
         for (let y = 0; y < rise; y++) grid.set(x0 + i, y0 + y, z0 + k, colour);
       }
     }

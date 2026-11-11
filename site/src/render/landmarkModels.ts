@@ -1,18 +1,23 @@
 /**
- * Landmark models in ¼-unit voxels, one per placed Landmark. The Station's,
- * the House's and the Mailbox's are real models (tickets 09, 11 and 12; the
- * House's lives in `houseModel.ts`); the others are simple placeholders, which real models
- * replace in later tickets by changing only this module.
+ * Code-built Landmark models in ¼-unit voxels, one per placed Landmark. The
+ * Station's and the Mailbox's are real models (tickets 09 and 12); the
+ * Garden's and the Dock's are simple placeholders. Each moves to an ASCII
+ * structure at ⅛ unit (`structureModels.ts`) in a later polish ticket. The
+ * House already has: its structure is drawn by `structureModels.ts` and
+ * `house.ts`, and only its room (`houseModel.ts`) is drawn here.
  *
- * Each model fills its Landmark's footprint. It is drawn into the detail
+ * Each model fills its Landmark's footprint, but for the House's, whose
+ * plot holds the House structure, its front yard and the Mailbox. It is drawn into the detail
  * grid with its origin at the min corner of the footprint's origin cell, on
  * top of the ground: local x runs 0 to `4 × width`, local z 0 to `4 × depth`,
  * and local y = 0 is the first voxel above the ground.
  */
-import type { Cell, PlacedLandmark, PlacedLandmarkId } from '../world';
+import { HOUSE_CELLS, type Cell, type PlacedLandmark, type PlacedLandmarkId } from '@/world';
 import type { VoxelGrid } from './mesher';
-import { DETAIL, type WorldColours } from './worldVoxels';
-import { drawHouseBase, drawHouseLid, drawHouseRoom, type HouseDraw } from './houseModel';
+import type { WorldColours } from './worldVoxels';
+import { GROUND_DETAIL } from './voxelTiers';
+import { drawHouseRoom, type HouseDraw } from './houseModel';
+import { HOUSE_HEIGHT } from './structureModels';
 
 interface Origin {
   x: number;
@@ -76,19 +81,15 @@ const MODELS: Record<PlacedLandmarkId, Model> = {
     box(w - 2, 1, d - 3, w, 4, d - 1, fixed('whitewash'));
     box(w - 2, 4, d - 3, w, 5, d - 1, fixed('metal'));
   },
-  /**
-   * The House's base and its room (`houseModel.ts`). Its lid (roof, dome and
-   * front walls) is not drawn here: it is its own mesh, so it can lift off.
-   */
+  /** The House's room (`houseModel.ts`); the House round it is a structure (`structureModels.ts`). */
   house: (draw, colours) => {
-    drawHouseBase(draw, colours);
     drawHouseRoom(draw, colours);
   },
   /** One tree per Project, each filling its cell, and a flower in every other cell. */
   garden: ({ box, set }, { biome, fixed }, { w, d, trees }) => {
     const treeAt = new Set(trees.map((t) => `${t.x},${t.z}`));
-    for (let z = 0; z < d; z += DETAIL) {
-      for (let x = 0; x < w; x += DETAIL) {
+    for (let z = 0; z < d; z += GROUND_DETAIL) {
+      for (let x = 0; x < w; x += GROUND_DETAIL) {
         if (treeAt.has(`${x},${z}`)) {
           box(x + 1, 0, z + 1, x + 3, 3, z + 3, fixed('trunk'));
           box(x, 3, z, x + 4, 7, z + 4, biome('foliage'));
@@ -106,10 +107,10 @@ const MODELS: Record<PlacedLandmarkId, Model> = {
     box(0, 0, 0, w, 1, d, fixed('plank'));
     for (const c of jetty) {
       // The deck's top is level with the ground, like a bridge's.
-      box(c.x, -1, c.z, c.x + DETAIL, 0, c.z + DETAIL, fixed('plank'));
+      box(c.x, -1, c.z, c.x + GROUND_DETAIL, 0, c.z + GROUND_DETAIL, fixed('plank'));
       for (const [px, pz] of [
         [0, 0],
-        [DETAIL - 1, DETAIL - 1],
+        [GROUND_DETAIL - 1, GROUND_DETAIL - 1],
       ] as const) {
         box(c.x + px, -ground, c.z + pz, c.x + px + 1, -1, c.z + pz + 1, fixed('trunk'));
       }
@@ -139,11 +140,11 @@ const MODELS: Record<PlacedLandmarkId, Model> = {
 
 function shapeOf(landmark: PlacedLandmark): Shape {
   const { origin, width, depth } = landmark.footprint;
-  const local = (c: Cell) => ({ x: (c.x - origin.x) * DETAIL, z: (c.z - origin.z) * DETAIL });
+  const local = (c: Cell) => ({ x: (c.x - origin.x) * GROUND_DETAIL, z: (c.z - origin.z) * GROUND_DETAIL });
   return {
-    w: width * DETAIL,
-    d: depth * DETAIL,
-    ground: landmark.y * DETAIL,
+    w: width * GROUND_DETAIL,
+    d: depth * GROUND_DETAIL,
+    ground: landmark.y * GROUND_DETAIL,
     trees: landmark.trees.map(local),
     jetty: landmark.jetty.map(local),
     variant: landmark.variant,
@@ -153,7 +154,7 @@ function shapeOf(landmark: PlacedLandmark): Shape {
 /** Where a Landmark's model starts in the detail grid: its footprint's min corner, on the ground. */
 export function landmarkOrigin(landmark: PlacedLandmark): Origin {
   const { origin } = landmark.footprint;
-  return { x: origin.x * DETAIL, y: landmark.y * DETAIL, z: origin.z * DETAIL };
+  return { x: origin.x * GROUND_DETAIL, y: landmark.y * GROUND_DETAIL, z: origin.z * GROUND_DETAIL };
 }
 
 export function buildLandmark(landmark: PlacedLandmark, grid: VoxelGrid, colours: WorldColours): void {
@@ -169,9 +170,10 @@ export function buildLandmark(landmark: PlacedLandmark, grid: VoxelGrid, colours
 /**
  * The box a Landmark covers, in world units relative to its model's origin
  * (the min corner of its footprint, on the ground): everything the model
- * draws, and at least the whole footprint and jetty. Used to size the
- * Landmark's hotspot over the canvas, so the hotspot covers the whole
- * footprint.
+ * draws, and at least the whole footprint and jetty; for the House, the
+ * House itself (its 3×3 and its roof), not its yard, where the Mailbox
+ * stands. Used to size the Landmark's hotspot over the canvas (so it covers
+ * the whole footprint), the Guide's spot beside it and its Data Card.
  */
 export interface ModelExtent {
   min: { x: number; y: number; z: number };
@@ -194,18 +196,19 @@ export function landmarkExtent(landmark: PlacedLandmark): ModelExtent {
     set: (x, y, z) => cover(x, y, z, x + 1, y + 1, z + 1),
   };
   const shape = shapeOf(landmark);
-  // The ground the Landmark stands on: its footprint, plus the jetty's deck.
-  cover(0, 0, 0, shape.w, 0, shape.d);
-  for (const c of shape.jetty) cover(c.x, -1, c.z, c.x + DETAIL, 0, c.z + DETAIL);
+  // The ground the Landmark stands on: its footprint (the House's own 3×3), plus the jetty's deck.
+  const ground = landmark.id === 'house' ? HOUSE_CELLS * GROUND_DETAIL : null;
+  cover(0, 0, 0, ground ?? shape.w, 0, ground ?? shape.d);
+  for (const c of shape.jetty) cover(c.x, -1, c.z, c.x + GROUND_DETAIL, 0, c.z + GROUND_DETAIL);
   // Models only pick colours through `biome` and `fixed`; any id will do here.
   const anyColour = () => 0;
   const colours = { biome: anyColour, fixed: anyColour } as Omit<WorldColours, 'table'> as WorldColours;
   MODELS[landmark.id](draw, colours, shape);
-  // The House's lid, shut: it is a mesh of its own, but part of what a visitor clicks.
-  if (landmark.id === 'house') drawHouseLid(draw, colours);
+  // The House's structure, up to its roof (the tallest Variant's), is part of what a visitor clicks.
+  if (ground !== null) cover(0, 0, 0, ground, HOUSE_HEIGHT * GROUND_DETAIL, ground);
   // Posts reaching down to the sea floor are not part of what a visitor clicks.
   min.y = Math.max(min.y, -1);
-  const unit = (v: number) => v / DETAIL;
+  const unit = (v: number) => v / GROUND_DETAIL;
   return {
     min: { x: unit(min.x), y: unit(min.y), z: unit(min.z) },
     max: { x: unit(max.x), y: unit(max.y), z: unit(max.z) },
@@ -220,5 +223,5 @@ export function landmarkExtent(landmark: PlacedLandmark): ModelExtent {
 export function treeExtent(garden: PlacedLandmark, tree: Cell): ModelExtent {
   const x = tree.x - garden.footprint.origin.x;
   const z = tree.z - garden.footprint.origin.z;
-  return { min: { x, y: 0, z }, max: { x: x + 1, y: TREE_HEIGHT / DETAIL, z: z + 1 } };
+  return { min: { x, y: 0, z }, max: { x: x + 1, y: TREE_HEIGHT / GROUND_DETAIL, z: z + 1 } };
 }

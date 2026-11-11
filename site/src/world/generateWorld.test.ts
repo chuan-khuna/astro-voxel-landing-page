@@ -49,7 +49,7 @@ describe('generateWorld', () => {
 
   it('gives each placed Landmark a rectangular footprint: origin, width, depth and the cells it covers', () => {
     const sizes: Record<string, Array<[number, number]>> = {
-      house: [[3, 3]],
+      house: [[4, 4]],
       station: [[2, 2]],
       mailbox: [[1, 1]],
       dock: [[2, 1], [1, 2]],
@@ -88,7 +88,8 @@ describe('generateWorld', () => {
     for (const seed of sampledSeeds) {
       const world = worldFor(seed);
       const { width } = world.terrain;
-      const covered = world.landmarks.flatMap((l) => coveredCells(l).map(key));
+      // The Mailbox stands in the House's front yard, on the House's plot: it has no ground of its own.
+      const covered = world.landmarks.filter((l) => l.id !== 'mailbox').flatMap((l) => coveredCells(l).map(key));
       expect(new Set(covered).size, seed).toBe(covered.length);
       const coveredSet = new Set(covered);
       for (const b of world.bridges) {
@@ -203,9 +204,9 @@ describe('generateWorld', () => {
       expect(views.overview.radius).toBeGreaterThan(0);
       expect(views['house-interior'].radius).toBeGreaterThan(0);
       const house = landmarks.find((l) => l.id === 'house')!;
-      // House Interior is derived from the House's position: the middle of its footprint.
-      const { origin, width, depth } = house.footprint;
-      expect(views['house-interior'].target).toEqual({ x: origin.x + width / 2, y: house.y, z: origin.z + depth / 2 });
+      // House Interior is derived from the House's position: the middle of the House (3×3) at its plot's origin.
+      const { origin } = house.footprint;
+      expect(views['house-interior'].target).toEqual({ x: origin.x + 1.5, y: house.y, z: origin.z + 1.5 });
     }
   });
 
@@ -344,6 +345,31 @@ describe('generateWorld', () => {
     }
   });
 
+  it('stands the House on a 4×4 plot, its door south or east onto the front yard', () => {
+    const doors = new Set<string>();
+    for (const seed of sampledSeeds) {
+      const { landmarks } = worldFor(seed);
+      const house = landmarks.find((l) => l.id === 'house')!;
+      expect(['south', 'east'], seed).toContain(house.door);
+      doors.add(house.door!);
+      for (const l of landmarks) if (l.id !== 'house') expect(l.door, `${seed} ${l.id}`).toBeNull();
+    }
+    expect([...doors].toSorted()).toEqual(['east', 'south']);
+  });
+
+  it('stands the Mailbox in the House\'s front yard, in the plot\'s corner nearest the camera, on the House\'s ground', () => {
+    for (const seed of sampledSeeds) {
+      const { landmarks } = worldFor(seed);
+      const house = landmarks.find((l) => l.id === 'house')!;
+      const mailbox = landmarks.find((l) => l.id === 'mailbox')!;
+      const { origin } = house.footprint;
+      // The south-east corner, whichever way the door faces: never between the camera and the door.
+      expect(mailbox.footprint.cells, seed).toEqual([{ x: origin.x + 3, z: origin.z + 3 }]);
+      expect(mailbox.y, seed).toBe(house.y);
+      expect(mailbox.isle, seed).toBe(house.isle);
+    }
+  });
+
   it('puts the House and the Garden on the same Isle', () => {
     for (const seed of sampledSeeds) {
       const { landmarks } = worldFor(seed);
@@ -380,7 +406,7 @@ describe('generateWorld', () => {
     return world.terrain.isle[i] === -1 ? undefined : world.terrain.heights[i];
   };
 
-  it('lays a walkable path from beside the Dock to beside the House, over land and bridges', () => {
+  it('lays a walkable path from beside the Dock to the House\'s door, over land and bridges', () => {
     for (const seed of sampledSeeds) {
       const world = worldFor(seed);
       const landmark = (id: string) => world.landmarks.find((l) => l.id === id)!;
@@ -395,6 +421,10 @@ describe('generateWorld', () => {
       const { cells } = paths[0]!;
       expect(beside('dock', cells[0]!), seed).toBe(true);
       expect(beside('house', cells.at(-1)!), seed).toBe(true);
+      // It ends just outside the plot, in line with the door in the middle of the House's front wall.
+      const { origin } = landmark('house').footprint;
+      const approach = landmark('house').door === 'south' ? { x: origin.x + 1, z: origin.z + 4 } : { x: origin.x + 4, z: origin.z + 1 };
+      expect(cells.at(-1), seed).toEqual(approach);
       cells.forEach((c, k) => {
         const h = walkHeight(world, c);
         expect(h, `${seed} path cell ${k} is on land or a bridge`).toBeDefined();

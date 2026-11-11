@@ -77,6 +77,16 @@ export const FIXED_COLOURS = {
   sail: oklch(0.94, 0.018, 85),
   // Buoys: a lamp on top, unlit by Day (it glows at Night; see `data/theme.ts`).
   lamp: oklch(0.86, 0.04, 85),
+  // Building materials for the House Variants (structure roles, `structures/roles.ts`).
+  bamboo: oklch(0.78, 0.07, 88),
+  timber: oklch(0.55, 0.06, 55),
+  brick: oklch(0.56, 0.09, 35),
+  stone: oklch(0.5, 0.015, 260),
+  thatch: oklch(0.72, 0.08, 80),
+  shingle: oklch(0.42, 0.04, 220),
+  tile: oklch(0.58, 0.1, 40),
+  slate: oklch(0.36, 0.02, 265),
+  snow: oklch(0.96, 0.01, 230),
 } as const satisfies Record<string, Oklch>;
 
 export type FixedColour = keyof typeof FIXED_COLOURS;

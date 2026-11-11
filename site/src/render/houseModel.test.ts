@@ -3,13 +3,9 @@ import { VoxelGrid } from './mesher';
 import {
   DEVELOPER_PARTS,
   HOUSE_INTERIOR,
-  HOUSE_SIZE,
-  HOUSE_WINDOWS,
   SCREEN,
   developerExtent,
   drawDeveloperPart,
-  drawHouseBase,
-  drawHouseLid,
   drawHouseRoom,
   type HouseDraw,
 } from './houseModel';
@@ -27,52 +23,12 @@ function voxelsOf(paint: (draw: HouseDraw) => void): Voxel[] {
 }
 
 const colours = { fixed: () => 0, biome: () => 0 };
-const base = voxelsOf((draw) => drawHouseBase(draw, colours));
-const lid = voxelsOf((draw) => drawHouseLid(draw, colours));
 const room = voxelsOf((draw) => drawHouseRoom(draw, colours));
 const developer = DEVELOPER_PARTS.flatMap((part) => voxelsOf((draw) => drawDeveloperPart(part, draw, colours)));
 
 const key = (v: Voxel) => `${v.x},${v.y},${v.z}`;
 const { min, max } = HOUSE_INTERIOR;
 const inInterior = (v: Voxel) => v.x >= min.x && v.x < max.x && v.y >= min.y && v.y < max.y && v.z >= min.z && v.z < max.z;
-
-describe('the House model', () => {
-  it('is 3×3 cells: 12×12 quarter voxels', () => {
-    expect(HOUSE_SIZE).toEqual({ w: 12, d: 12 });
-  });
-
-  it('splits into a base that stays and a lid that lifts, which never share a voxel', () => {
-    const baseKeys = new Set(base.map(key));
-    for (const v of lid) expect(baseKeys.has(key(v)), key(v)).toBe(false);
-    expect(base.length).toBeGreaterThan(0);
-    expect(lid.length).toBeGreaterThan(0);
-  });
-
-  it('keeps the interior space empty in the base and the lid, ready for a room', () => {
-    for (const v of [...base, ...lid]) expect(inInterior(v), key(v)).toBe(false);
-  });
-
-  it('closes the room from above with the lid: a lid voxel over every interior column', () => {
-    for (let x = min.x; x < max.x; x++) {
-      for (let z = min.z; z < max.z; z++) {
-        expect(lid.some((v) => v.x === x && v.z === z && v.y >= max.y), `${x},${z}`).toBe(true);
-      }
-    }
-  });
-
-  it('opens the room to the camera with the lid off: the base has no wall on the front (+x and +z) sides', () => {
-    for (const v of base) {
-      if (v.y < min.y) continue; // the plinth and floor
-      expect(v.x < max.x && v.z < max.z, key(v)).toBe(true);
-    }
-  });
-
-  it('stays inside its footprint', () => {
-    for (const v of [...base, ...lid, ...room, ...developer]) {
-      expect(v.x >= 0 && v.x < HOUSE_SIZE.w && v.z >= 0 && v.z < HOUSE_SIZE.d && v.y >= 0, key(v)).toBe(true);
-    }
-  });
-});
 
 describe('the room', () => {
   it('fits the interior space, furniture and developer alike', () => {
@@ -105,53 +61,6 @@ describe('the room', () => {
     for (const axis of ['x', 'y', 'z'] as const) {
       expect(a[axis]).toBeGreaterThanOrEqual(min[axis]);
       expect(b[axis]).toBeLessThanOrEqual(max[axis]);
-    }
-  });
-});
-
-describe('the House’s windows', () => {
-  const glassOnly = { fixed: (name: string) => (name === 'glass' ? 1 : 0), biome: () => 0 };
-  /** Every voxel a part draws in glass. */
-  const glassOf = (paint: (draw: HouseDraw) => void) => {
-    const grid = new VoxelGrid(1);
-    paint({
-      box: (x0, y0, z0, x1, y1, z1, colour) => grid.box(x0, y0, z0, x1, y1, z1, colour),
-      set: (x, y, z, colour) => grid.set(x, y, z, colour),
-    });
-    return new Set([...grid.voxels()].filter((v) => v.colour === 1).map(key));
-  };
-  const glass = {
-    lid: glassOf((draw) => drawHouseLid(draw, glassOnly)),
-    base: glassOf((draw) => drawHouseBase(draw, glassOnly)),
-  };
-  const solid = new Set([...base, ...lid, ...room, ...developer].map(key));
-
-  it('lists every pane of glass in the lid and the base, one window each', () => {
-    for (const part of ['lid', 'base'] as const) {
-      const listed = HOUSE_WINDOWS.filter((w) => w.part === part).flatMap(({ box }) => {
-        const cells: string[] = [];
-        for (let x = box.min.x; x < box.max.x; x++)
-          for (let y = box.min.y; y < box.max.y; y++) for (let z = box.min.z; z < box.max.z; z++) cells.push(key({ x, y, z }));
-        return cells;
-      });
-      expect(new Set(listed), part).toEqual(glass[part]);
-    }
-  });
-
-  it('lights each window on the face the camera sees (+x or +z), with nothing in front of it', () => {
-    for (const { box, facing } of HOUSE_WINDOWS) {
-      expect(['+x', '+z']).toContain(facing);
-      const axis = facing === '+x' ? 'x' : 'z';
-      // One ¼ voxel thick through the wall, so the face is its max side.
-      expect(box.max[axis] - box.min[axis]).toBe(1);
-      for (let x = box.min.x; x < box.max.x; x++) {
-        for (let y = box.min.y; y < box.max.y; y++) {
-          for (let z = box.min.z; z < box.max.z; z++) {
-            const front = { x: axis === 'x' ? x + 1 : x, y, z: axis === 'z' ? z + 1 : z };
-            expect(solid.has(key(front)), key(front)).toBe(false);
-          }
-        }
-      }
     }
   });
 });

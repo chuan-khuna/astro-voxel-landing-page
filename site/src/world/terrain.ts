@@ -5,7 +5,7 @@ import type { Isle, StratumKind, SurfaceKind, Terrain } from './types';
 /** Sea margin, in cells, kept around the land on every side. */
 const SEA_MARGIN = 4;
 /** The safe layout: one round Isle this wide, rising this many steps at most, so every footprint fits. */
-const SAFE_RADIUS = 10;
+const SAFE_RADIUS = 12;
 const SAFE_PEAK = 2;
 /** Smallest Isle, in cells, that a layout may keep. */
 const MIN_ISLE_CELLS = 30;

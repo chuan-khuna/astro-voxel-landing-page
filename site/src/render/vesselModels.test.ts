@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { generateWorld } from '../world';
 import { VoxelGrid } from './mesher';
 import { drawBoat, shipVoxels, SHIP_ORIGIN } from './vesselModels';
-import { DETAIL, worldColours } from './worldVoxels';
+import { worldColours } from './worldVoxels';
+import { GROUND_DETAIL } from './voxelTiers';
 
 const world = generateWorld('harbour', { projects: 6, clients: 12, partners: 3 });
 const colours = worldColours(world);
@@ -17,12 +18,12 @@ const extent = (grid: VoxelGrid) => {
 describe('vessel models', () => {
   it('draws each boat inside its own cell, floating from the sea floor up', () => {
     for (const boat of world.boats) {
-      const grid = new VoxelGrid(1 / DETAIL);
+      const grid = new VoxelGrid(1 / GROUND_DETAIL);
       drawBoat(boat, grid, colours);
       expect(grid.count).toBeGreaterThan(0);
       for (const v of grid.voxels()) {
-        expect(Math.floor(v.x / DETAIL)).toBe(boat.cell.x);
-        expect(Math.floor(v.z / DETAIL)).toBe(boat.cell.z);
+        expect(Math.floor(v.x / GROUND_DETAIL)).toBe(boat.cell.x);
+        expect(Math.floor(v.z / GROUND_DETAIL)).toBe(boat.cell.z);
         expect(v.y).toBeGreaterThanOrEqual(0);
       }
     }
@@ -30,7 +31,7 @@ describe('vessel models', () => {
 
   it('points each boat along its facing: longer that way than across', () => {
     for (const boat of world.boats) {
-      const grid = new VoxelGrid(1 / DETAIL);
+      const grid = new VoxelGrid(1 / GROUND_DETAIL);
       drawBoat(boat, grid, colours);
       const { x, z } = extent(grid);
       if (boat.facing === 'east' || boat.facing === 'west') expect(x).toBeGreaterThan(z);
@@ -39,7 +40,7 @@ describe('vessel models', () => {
   });
 
   it('makes a ship larger than a boat every way: longer, wider and taller', () => {
-    const boat = new VoxelGrid(1 / DETAIL);
+    const boat = new VoxelGrid(1 / GROUND_DETAIL);
     drawBoat({ cell: { x: 0, z: 0 }, facing: 'east' }, boat, colours);
     const ship = extent(shipVoxels(colours));
     const small = extent(boat);

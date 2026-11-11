@@ -16,7 +16,7 @@ self.onmessage = (event: MessageEvent<WorldRequest>) => {
     const world = generateWorld(seed, counts);
     const generateMs = performance.now() - started;
     const meshed = meshWorld(world);
-    for (const chunk of [...meshed.terrain, ...meshed.detail]) {
+    for (const chunk of [...meshed.terrain, ...meshed.detail, ...meshed.structure]) {
       transfer.push(chunk.positions.buffer, chunk.normals.buffer, chunk.colours.buffer, chunk.indices.buffer);
     }
     response = { id, world, meshed, ms: performance.now() - started, generateMs };

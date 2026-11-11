@@ -91,6 +91,7 @@ None of it can be clicked, none of it hides a Landmark for long, and all of it s
 - Roles resolve to the Biome's palette or to the fixed House and brand colours. Structures never hold raw colours, so the same OKLCH, jitter and seam shading applies everywhere.
 - Files are parsed at build time into typed voxel arrays. The browser never parses ASCII.
 - Each structure declares its footprint in 1-unit cells, the face its door is on (if it has one) and its anchor point.
+- The format, colour roles, build-time plugin and Model Gallery are documented in `docs/documents/voxel-structures.md` (ticket 01).
 
 **Rendering**
 - Each placed Landmark is meshed once by the existing greedy mesher.

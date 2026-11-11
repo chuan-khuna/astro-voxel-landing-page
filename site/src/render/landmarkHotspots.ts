@@ -17,7 +17,7 @@ import type { PlacedLandmarkId, World } from '../world';
 import { landmarkExtent, treeExtent } from './landmarkModels';
 import { gardenTrees } from '../lib/gardenTrees';
 import { developerExtent } from './houseModel';
-import { DETAIL } from './worldVoxels';
+import { GROUND_DETAIL } from './voxelTiers';
 
 /** Smallest hotspot side, in CSS px, so a far-away Landmark is still easy to hit. */
 const MIN_SIZE = 28;
@@ -83,7 +83,7 @@ export function createLandmarkHotspots(
           const { min, max } = developerExtent();
           const { origin } = house.footprint;
           const at = (v: { x: number; y: number; z: number }) =>
-            new THREE.Vector3(origin.x + v.x / DETAIL, house.y + v.y / DETAIL, origin.z + v.z / DETAIL);
+            new THREE.Vector3(origin.x + v.x / GROUND_DETAIL, house.y + v.y / GROUND_DETAIL, origin.z + v.z / GROUND_DETAIL);
           placed.push({ link, box: new THREE.Box3(at(min), at(max)), tree: false, interior: true });
           link.hidden = !open;
           continue;

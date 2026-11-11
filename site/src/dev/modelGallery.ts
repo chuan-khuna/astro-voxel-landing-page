@@ -1,0 +1,215 @@
+/**
+ * The Model Gallery's scene: every structure of one kind, Biomes in columns
+ * and Variants in rows as the camera sees them, each on a patch of its
+ * Biome's ground, drawn with the World's renderer, soft-voxel material,
+ * light and Day and Night tokens. Each model is an `InstancedMesh` of one
+ * (`structureMeshes.ts`), its lid (if it has one) a second one that lifts.
+ * Renders on demand. Dev only (`/dev/models`).
+ */
+import * as THREE from 'three/webgpu';
+import { BIOMES } from '@/world/biomes';
+import { BIOME_IDS } from '@/world';
+import { STRUCTURES, type Structure } from '@/structures';
+import { THEME_TOKENS } from '@/data/theme';
+import type { Theme } from '@/lib/theme';
+import { LOOK, oklchToLinear } from '@/render/palette';
+import { structureInstances, type InstancePlacement } from '@/render/structureMeshes';
+import { voxelMaterial } from '@/render/voxelMaterial';
+import { worldColours } from '@/render/worldVoxels';
+import { STRUCTURE } from '@/render/voxelTiers';
+import type { Oklch } from '@/world';
+
+/** Cells between neighbouring models' centres. */
+const SPACING = 6;
+/** How high a lifted lid floats, in world units. */
+const LID_LIFT = 2.5;
+
+const setColour = (target: THREE.Color, colour: Oklch) => {
+  const [r, g, b] = oklchToLinear(colour);
+  target.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+};
+
+export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElement) {
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMappingExposure = LOOK.exposure;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  await renderer.init();
+
+  const scene = new THREE.Scene();
+  const sky = new THREE.Color();
+  scene.background = sky;
+  const hemisphere = new THREE.HemisphereLight();
+  const sun = new THREE.DirectionalLight();
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  scene.add(hemisphere, sun, sun.target);
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
+
+  let turns = 0;
+  let lifted = false;
+  let shown: Array<{ structure: Structure; at: THREE.Vector3; base: ReturnType<typeof structureInstances>; lid?: ReturnType<typeof structureInstances> }> = [];
+  const ground = new THREE.Group();
+  scene.add(ground);
+  const groundMaterial = voxelMaterial(1);
+  let frame = 0;
+  const render = () => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      layoutCamera();
+      renderer.render(scene, camera);
+      placeLabels();
+    });
+  };
+
+  /** The models' middle on the ground, and how far the frame reaches each side of it (world units on screen). */
+  let extent = { cx: 0, cz: 0, halfW: 10, halfH: 10 };
+  const layoutCamera = () => {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w === 0 || h === 0) return;
+    renderer.setSize(w, h, false);
+    const aspect = w / h;
+    const half = Math.max(extent.halfH, extent.halfW / aspect);
+    Object.assign(camera, { left: -half * aspect, right: half * aspect, top: half, bottom: -half });
+    camera.updateProjectionMatrix();
+    const target = new THREE.Vector3(extent.cx, 1.5, extent.cz);
+    const reach = Math.max(extent.halfW, extent.halfH);
+    camera.position.copy(target).add(new THREE.Vector3(1, 1, 1).multiplyScalar(100));
+    camera.lookAt(target);
+    camera.updateMatrixWorld();
+    const sunDirection = new THREE.Vector3().setFromSphericalCoords(
+      1,
+      THREE.MathUtils.degToRad(90 - LOOK.sunElevation),
+      THREE.MathUtils.degToRad(LOOK.sunAzimuth),
+    );
+    sun.position.copy(target).add(sunDirection.multiplyScalar(60));
+    sun.target.position.copy(target);
+    const r = reach * 1.6;
+    Object.assign(sun.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 1, far: 200 });
+    sun.shadow.camera.updateProjectionMatrix();
+  };
+
+  const placeLabels = () => {
+    labels.replaceChildren();
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    for (const { structure, at } of shown) {
+      const p = at.clone().add(new THREE.Vector3(0, -0.2, 0)).project(camera);
+      const label = document.createElement('span');
+      label.textContent = `${structure.biome ?? 'any'} · ${structure.variant}`;
+      label.style.left = `${((p.x + 1) / 2) * w}px`;
+      label.style.top = `${((1 - p.y) / 2) * h + 24}px`;
+      labels.append(label);
+    }
+  };
+
+  const placementOf = (s: Structure, at: THREE.Vector3, lift = 0): InstancePlacement => ({ x: at.x, y: at.y + lift, z: at.z, turns });
+
+  const clear = () => {
+    for (const { base, lid } of shown) {
+      scene.remove(base.mesh);
+      base.dispose();
+      if (lid) {
+        scene.remove(lid.mesh);
+        lid.dispose();
+      }
+    }
+    shown = [];
+    for (const child of [...ground.children]) {
+      ground.remove(child);
+      (child as THREE.Mesh).geometry.dispose();
+    }
+  };
+
+  const tokens = (theme: Theme) => THEME_TOKENS[theme].world;
+  const applyTheme = (theme: Theme) => {
+    const t = tokens(theme);
+    setColour(sky, t.sky);
+    setColour(hemisphere.color, t.skyLight);
+    setColour(hemisphere.groundColor, t.groundLight);
+    hemisphere.intensity = t.skyIntensity;
+    setColour(sun.color, t.sunLight);
+    sun.intensity = t.sunIntensity;
+  };
+  applyTheme('day');
+
+  /** A patch of a Biome's grass under a model, one cell wider each side than its footprint. */
+  const groundPatch = (s: Structure, at: THREE.Vector3) => {
+    const colours = worldColours({ biome: BIOMES[s.biome ?? 'tropical'] });
+    const w = s.footprint.width + 2;
+    const d = s.footprint.depth + 2;
+    const geometry = new THREE.BoxGeometry(w, 1, d);
+    const [r, g, b] = colours.table.colours[colours.biome('grass')]!;
+    const colour = new Float32Array(geometry.attributes.position!.count * 3);
+    for (let i = 0; i < colour.length; i += 3) colour.set([r, g, b], i);
+    geometry.setAttribute('color', new THREE.BufferAttribute(colour, 3));
+    geometry.translate(at.x, at.y - 0.5, at.z);
+    const mesh = new THREE.Mesh(geometry, groundMaterial);
+    mesh.receiveShadow = true;
+    ground.add(mesh);
+  };
+
+  return {
+    backend: ((renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'WebGPU' : 'WebGL 2') as string,
+    /** Show every structure of a kind; returns how many. */
+    show(kind: string): number {
+      clear();
+      const list = STRUCTURES.filter((s) => s.kind === kind);
+      const columns = BIOME_IDS.map((biome) => list.filter((s) => s.biome === biome));
+      columns.push(list.filter((s) => s.biome === null));
+      const used = columns.filter((column) => column.length > 0);
+      used.forEach((column, c) => {
+        column.forEach((s, r) => {
+          // Columns run across the screen (+x −z), rows down it (+x +z).
+          const at = new THREE.Vector3((r + c) * SPACING, 0, (r - c) * SPACING);
+          const colours = worldColours({ biome: BIOMES[s.biome ?? 'tropical'] });
+          const hasLid = s.palette.some((p) => p.part === 'lid');
+          const base = structureInstances(s, colours, [placementOf(s, at)], hasLid ? { part: 'base' } : {});
+          scene.add(base.mesh);
+          const lid = hasLid ? structureInstances(s, colours, [placementOf(s, at, lifted ? LID_LIFT : 0)], { part: 'lid' }) : undefined;
+          if (lid) scene.add(lid.mesh);
+          groundPatch(s, at);
+          shown.push({ structure: s, at, base, lid });
+        });
+      });
+      // Fit the frame: on screen, right is (x − z)/√2 and down is (x + z)/√6 for points on the ground.
+      const across = shown.map(({ at }) => (at.x - at.z) / Math.SQRT2);
+      const down = shown.map(({ at }) => (at.x + at.z) / Math.sqrt(6));
+      const span = (values: number[]) => (values.length ? Math.max(...values) - Math.min(...values) : 0);
+      extent = {
+        cx: shown.reduce((sum, { at }) => sum + at.x, 0) / Math.max(1, shown.length),
+        cz: shown.reduce((sum, { at }) => sum + at.z, 0) / Math.max(1, shown.length),
+        halfW: span(across) / 2 + 4,
+        halfH: span(down) / 2 + 4.5,
+      };
+      sun.shadow.needsUpdate = true;
+      render();
+      return shown.length;
+    },
+    /** Turn every model a quarter turn. */
+    turn() {
+      turns = (turns + 1) % 4;
+      for (const { structure, at, base, lid } of shown) {
+        base.setPlacements([placementOf(structure, at)]);
+        lid?.setPlacements([placementOf(structure, at, lifted ? LID_LIFT : 0)]);
+      }
+      render();
+    },
+    /** Lift the lids off (the House's roof and front walls), or put them back. */
+    liftLids(on: boolean) {
+      lifted = on;
+      for (const { structure, at, lid } of shown) lid?.setPlacements([placementOf(structure, at, lifted ? LID_LIFT : 0)]);
+      render();
+    },
+    setTheme(theme: Theme) {
+      applyTheme(theme);
+      render();
+    },
+    /** Voxel size of the models, for reference. */
+    voxel: 1 / STRUCTURE,
+  };
+}

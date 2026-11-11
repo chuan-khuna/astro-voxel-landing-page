@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { generateWorld, type PlacedLandmark } from '../world';
 import { VoxelGrid } from './mesher';
 import { buildLandmark, landmarkExtent, treeExtent } from './landmarkModels';
-import { DETAIL, worldColours } from './worldVoxels';
+import { worldColours } from './worldVoxels';
+import { GROUND_DETAIL } from './voxelTiers';
 
 const counts = { projects: 6, clients: 0, partners: 0 };
 const worlds = ['lighthouse', '694157692', 'harbour', '7', '42'].map((seed) => generateWorld(seed, counts));
 
 /** Every ¼ voxel a Landmark's model draws, in world grid coordinates. */
 const voxelsOf = (landmark: PlacedLandmark, world = worlds[0]!) => {
-  const grid = new VoxelGrid(1 / DETAIL);
+  const grid = new VoxelGrid(1 / GROUND_DETAIL);
   buildLandmark(landmark, grid, worldColours(world));
   const cells: Array<{ x: number; y: number; z: number }> = [];
   for (const { x, y, z } of grid.voxels()) cells.push({ x, y, z });
@@ -19,13 +20,26 @@ const voxelsOf = (landmark: PlacedLandmark, world = worlds[0]!) => {
 describe('Landmark models', () => {
   it('fill their footprint: the model reaches every footprint cell, and the jetty', () => {
     for (const world of worlds) {
-      for (const l of world.landmarks) {
+      // The House's plot holds its structure, its yard and the Mailbox (`structureModels.test.ts`).
+      for (const l of world.landmarks.filter((l) => l.id !== 'house')) {
         const voxels = voxelsOf(l, world);
-        const reached = new Set(voxels.map((v) => `${Math.floor(v.x / DETAIL)},${Math.floor(v.z / DETAIL)}`));
+        const reached = new Set(voxels.map((v) => `${Math.floor(v.x / GROUND_DETAIL)},${Math.floor(v.z / GROUND_DETAIL)}`));
         for (const c of [...l.footprint.cells, ...l.jetty]) expect(reached.has(`${c.x},${c.z}`), `${world.seed} ${l.id} ${c.x},${c.z}`).toBe(true);
         // ...and nothing outside it.
         const inside = new Set([...l.footprint.cells, ...l.jetty].map((c) => `${c.x},${c.z}`));
         for (const key of reached) expect(inside.has(key), `${world.seed} ${l.id} ${key}`).toBe(true);
+      }
+    }
+  });
+
+  it('draw only the room inside the House, within the House\'s 3×3', () => {
+    for (const world of worlds) {
+      const house = world.landmarks.find((l) => l.id === 'house')!;
+      const voxels = voxelsOf(house, world);
+      expect(voxels.length).toBeGreaterThan(0);
+      for (const v of voxels) {
+        expect(Math.floor(v.x / GROUND_DETAIL) - house.footprint.origin.x, world.seed).toBeLessThan(3);
+        expect(Math.floor(v.z / GROUND_DETAIL) - house.footprint.origin.z, world.seed).toBeLessThan(3);
       }
     }
   });
@@ -36,8 +50,8 @@ describe('Landmark models', () => {
       const voxels = voxelsOf(garden, world);
       for (const t of garden.trees) {
         // A canopy layer covers all 4×4 ¼ voxels of the tree's cell.
-        const layer = voxels.filter((v) => Math.floor(v.x / DETAIL) === t.x && Math.floor(v.z / DETAIL) === t.z && v.y === garden.y * DETAIL + 4);
-        expect(layer, `${world.seed} tree ${t.x},${t.z}`).toHaveLength(DETAIL * DETAIL);
+        const layer = voxels.filter((v) => Math.floor(v.x / GROUND_DETAIL) === t.x && Math.floor(v.z / GROUND_DETAIL) === t.z && v.y === garden.y * GROUND_DETAIL + 4);
+        expect(layer, `${world.seed} tree ${t.x},${t.z}`).toHaveLength(GROUND_DETAIL * GROUND_DETAIL);
       }
     }
   });
@@ -46,7 +60,7 @@ describe('Landmark models', () => {
 describe('landmarkExtent', () => {
   it('covers the whole footprint (and the jetty) on the ground, and the model\'s height', () => {
     for (const world of worlds) {
-      for (const l of world.landmarks) {
+      for (const l of world.landmarks.filter((l) => l.id !== 'house')) {
         const { min, max } = landmarkExtent(l);
         const { origin } = l.footprint;
         for (const c of [...l.footprint.cells, ...l.jetty]) {
@@ -57,6 +71,12 @@ describe('landmarkExtent', () => {
         }
         expect(max.y, `${world.seed} ${l.id}`).toBeGreaterThan(0);
       }
+      // The House's box is the House: its 3×3, not its yard, up to its roof (3.5–4 units).
+      const house = landmarkExtent(world.landmarks.find((l) => l.id === 'house')!);
+      expect(house.min, world.seed).toEqual({ x: 0, y: 0, z: 0 });
+      expect([house.max.x, house.max.z], world.seed).toEqual([3, 3]);
+      expect(house.max.y, world.seed).toBeGreaterThanOrEqual(3.5);
+      expect(house.max.y, world.seed).toBeLessThanOrEqual(4);
     }
   });
 
@@ -78,15 +98,15 @@ describe('the Mailbox', () => {
   it('raises a red flag on the side the camera sees (+x), up to its top', () => {
     const world = worlds[0]!;
     const mailbox = world.landmarks.find((l) => l.id === 'mailbox')!;
-    const grid = new VoxelGrid(1 / DETAIL);
+    const grid = new VoxelGrid(1 / GROUND_DETAIL);
     const colours = worldColours(world);
     buildLandmark(mailbox, grid, colours);
     const red = colours.fixed('flagRed');
     const flag = [...grid.voxels()].filter((v) => v.colour === red);
     expect(flag.length).toBeGreaterThan(0);
-    const { x, y } = { x: mailbox.footprint.origin.x * DETAIL, y: mailbox.y * DETAIL };
-    for (const v of flag) expect(v.x - x).toBe(DETAIL - 1);
-    expect(Math.max(...flag.map((v) => v.y - y))).toBe(2 * DETAIL - 1);
+    const { x, y } = { x: mailbox.footprint.origin.x * GROUND_DETAIL, y: mailbox.y * GROUND_DETAIL };
+    for (const v of flag) expect(v.x - x).toBe(GROUND_DETAIL - 1);
+    expect(Math.max(...flag.map((v) => v.y - y))).toBe(2 * GROUND_DETAIL - 1);
   });
 });
 
@@ -111,8 +131,8 @@ describe('treeExtent', () => {
     const voxels = voxelsOf(garden, world);
     for (const t of garden.trees) {
       const { max } = treeExtent(garden, t);
-      const own = voxels.filter((v) => Math.floor(v.x / DETAIL) === t.x && Math.floor(v.z / DETAIL) === t.z);
-      for (const v of own) expect(v.y + 1).toBeLessThanOrEqual(garden.y * DETAIL + max.y * DETAIL);
+      const own = voxels.filter((v) => Math.floor(v.x / GROUND_DETAIL) === t.x && Math.floor(v.z / GROUND_DETAIL) === t.z);
+      for (const v of own) expect(v.y + 1).toBeLessThanOrEqual(garden.y * GROUND_DETAIL + max.y * GROUND_DETAIL);
     }
   });
 });

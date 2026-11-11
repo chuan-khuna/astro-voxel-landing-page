@@ -1,21 +1,22 @@
 /**
- * The House (3×3 cells, so 12×12 ¼ voxels) and its room, in three parts:
+ * The House's room, in ¼ voxels (`GROUND_DETAIL`), until the House Interior
+ * is redrawn at 1/16 unit in a scene of its own (polish ticket 04).
  *
- * - **base**: the plinth, the floor and the two back walls (low x and low z).
- *   It stays put, so it is drawn into the World's detail grid.
- * - **lid**: the roof, the dome and the two front walls (high x and high z,
- *   the faces the isometric camera sees, with the door and windows). It is
- *   its own mesh and lifts off, which leaves the room open to the camera
- *   like a doll's house.
- * - **room**: what stands in `HOUSE_INTERIOR`, the space the base and lid
- *   leave empty: a desk, a computer, a chair and the developer's seated
- *   body. The developer's head and hands are moving parts
- *   (`DEVELOPER_PARTS`), each its own small mesh.
+ * The House itself is a structure (`structures/house/`, ⅛ unit), in two
+ * parts: its **base** (plinth, floor and the two back walls) in the World's
+ * structure grid, and its **lid** (the roof and the two front walls, the
+ * faces the camera sees) a mesh of its own that lifts off, leaving the room
+ * open to the camera like a doll's house (`house.ts`). Every House Variant
+ * keeps an interior box that holds `HOUSE_INTERIOR`.
+ *
+ * The **room** stands in `HOUSE_INTERIOR`: a desk, a computer, a chair and
+ * the developer's seated body. The developer's head and hands are moving
+ * parts (`DEVELOPER_PARTS`), each its own small mesh.
  *
  * All coordinates are the House's local ¼ voxels: the origin is the min
- * corner of its footprint, local y = 0 the first voxel above the ground.
- * Pure (no three.js). Every House Variant to come (ADR 0004) keeps this
- * split: a liftable lid and the same interior space.
+ * corner of its plot (where the House stands), local y = 0 the first voxel
+ * above the ground. The room never turns with the House's door. Pure (no
+ * three.js).
  */
 import type { BiomeColourRole } from '../world';
 import type { FixedColour } from './palette';
@@ -44,10 +45,7 @@ export interface VoxelBox {
   max: Point;
 }
 
-/** The House's footprint in ¼ voxels. */
-export const HOUSE_SIZE = { w: 12, d: 12 } as const;
-
-/** The room's space, inside the walls and under the roof. */
+/** The room's space, inside the walls and under the roof. Its floor is the House's floor, ¼ unit up. */
 export const HOUSE_INTERIOR: VoxelBox = { min: { x: 2, y: 1, z: 2 }, max: { x: 10, y: 9, z: 10 } };
 
 /** How high the lid lifts when the House opens, in world units: clear of the room as the camera sees it. */
@@ -59,75 +57,6 @@ export const ROOF_LIFT = 6;
  * z0–z1. It is drawn as its own glowing plane that scrolls code.
  */
 export const SCREEN = { x: 3, y0: 6.1, y1: 8.85, z0: 2.15, z1: 5.85 } as const;
-
-const { w, d } = HOUSE_SIZE;
-const { min: inner, max: outer } = HOUSE_INTERIOR;
-/** Walls stand one ¼ voxel in from the plinth's edge, one ¼ voxel thick. */
-const WALL_LO = inner.x - 1;
-const WALL_HI = outer.x;
-const ROOF_Y = outer.y;
-
-/**
- * The House's windows: a pane of glass one ¼ voxel thick in a wall, each
- * in the lid (the front walls, seen from outside) or the base (the back
- * walls, seen from inside with the lid off). Each is lit at Night on the
- * face the camera sees (`facing`: +x or +z), so the House's lights show
- * from outside when it is shut and inside when it is open.
- */
-export interface HouseWindow {
-  part: 'lid' | 'base';
-  box: VoxelBox;
-  facing: '+x' | '+z';
-}
-
-const pane = (
-  part: HouseWindow['part'],
-  facing: HouseWindow['facing'],
-  [x0, y0, z0, x1, y1, z1]: [number, number, number, number, number, number],
-): HouseWindow => ({ part, facing, box: { min: { x: x0, y: y0, z: z0 }, max: { x: x1, y: y1, z: z1 } } });
-
-export const HOUSE_WINDOWS: readonly HouseWindow[] = [
-  // One in each back wall, seen from inside.
-  pane('base', '+x', [WALL_LO, 5, 6, WALL_LO + 1, 7, 8]),
-  pane('base', '+z', [6, 5, WALL_LO, 8, 7, WALL_LO + 1]),
-  // Two in the front wall facing +x, one in the wall facing +z (beside the door).
-  pane('lid', '+x', [WALL_HI, 5, 2, WALL_HI + 1, 7, 4]),
-  pane('lid', '+x', [WALL_HI, 5, d - 4, WALL_HI + 1, 7, d - 2]),
-  pane('lid', '+z', [2, 5, WALL_HI, 4, 7, WALL_HI + 1]),
-];
-
-/** Draw one part's windows in glass. */
-function drawWindows(part: HouseWindow['part'], box: HouseDraw['box'], glass: number): void {
-  for (const { box: b } of HOUSE_WINDOWS.filter((w) => w.part === part)) box(b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z, glass);
-}
-
-/** Plinth, floor (with a rug under the chair) and the two back walls (low x, low z). */
-export function drawHouseBase({ box, set }: HouseDraw, { fixed }: HouseColours): void {
-  box(0, 0, 0, w, 1, d, fixed('plinth'));
-  box(inner.x, 0, inner.z, outer.x, 1, outer.z, fixed('floorWood'));
-  box(5, 0, 5, 9, 1, 9, fixed('rug'));
-  // The back walls, corner to corner; the two outer corners belong to the lid.
-  box(WALL_LO, 1, WALL_LO, WALL_LO + 1, ROOF_Y, WALL_HI, fixed('whitewash'));
-  box(WALL_LO + 1, 1, WALL_LO, WALL_HI, ROOF_Y, WALL_LO + 1, fixed('whitewash'));
-  drawWindows('base', box, fixed('glass'));
-  set(WALL_LO, 7, 8, fixed('bougainvillea'));
-}
-
-/** Roof, dome and the two front walls (high x, high z) with the door and windows. */
-export function drawHouseLid({ box, set }: HouseDraw, { fixed }: HouseColours): void {
-  box(WALL_HI, 1, WALL_LO, WALL_HI + 1, ROOF_Y, WALL_HI + 1, fixed('whitewash'));
-  box(WALL_LO, 1, WALL_HI, WALL_HI, ROOF_Y, WALL_HI + 1, fixed('whitewash'));
-  box(0, ROOF_Y, 0, w, ROOF_Y + 1, d, fixed('roofWhite'));
-  const mid = Math.floor(w / 2);
-  box(mid - 1, 1, WALL_HI, mid + 1, 6, WALL_HI + 1, fixed('blueDoor'));
-  drawWindows('lid', box, fixed('glass'));
-  box(mid - 2, ROOF_Y + 1, Math.floor(d / 2) - 2, mid + 2, ROOF_Y + 3, Math.floor(d / 2) + 2, fixed('blueTrim'));
-  box(mid - 1, ROOF_Y + 3, Math.floor(d / 2) - 1, mid + 1, ROOF_Y + 4, Math.floor(d / 2) + 1, fixed('blueTrim'));
-  // Bougainvillea climbing the front corner.
-  set(WALL_LO, 6, WALL_HI, fixed('bougainLight'));
-  set(WALL_LO, 7, WALL_HI, fixed('bougainvillea'));
-  set(WALL_LO, 8, WALL_HI, fixed('bougainvillea'));
-}
 
 /**
  * The room: a desk along the back-left wall with a computer facing into the

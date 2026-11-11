@@ -26,7 +26,7 @@ docs and skills at the repo root.
 ```sh
 cd site
 bun install
-bun run dev      # dev server
+bun run dev      # dev server; the Model Gallery is at /dev/models
 bun run check    # astro check
 bun run test     # vitest run
 bun run build    # static build into site/dist, then the World still and OG image (needs Playwright's Chromium, below)
@@ -63,6 +63,8 @@ build` skips the capture the same way.
 | `src/content/pages/` | `home.mdx` (the home hook, the Guide's lines and the Overview's Tour lines in its front matter) and one intro per section, found by its `landmark`, each with that Landmark's Tour lines (`tour`): `services.mdx` (station), `about.mdx` (house), `team.mdx` (house-interior), `garden.mdx`, `dock.mdx`, `contact.mdx` (mailbox). |
 | `src/world/` | The World generator. See `world-generator.md`. |
 | `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`), camera rig (pan, zoom and flights), Landmark focus and hotspots. See `rendering-and-shading.md`. |
+| `src/structures/` | The predefined voxel structures as ASCII files (`house/<biome>-<variant>.structure`), their parser, colour roles, registry and the Vite plugin that parses them at build time. See `voxel-structures.md`. |
+| `src/integrations/modelGallery.ts`, `src/dev/` | The Model Gallery at `/dev/models`, injected only by `astro dev` (never built): every structure in a Biome × Variant grid. See `voxel-structures.md`. |
 | `src/lib/guideLines.ts` | The Guide's moods (`GUIDE_MOODS`) and lines: `fillLine` (`{seed}` and `{name}`), `pickLine` (one by chance, never the last one again) and `readingMs` (how long a bubble stays up). Tested in `guideLines.test.ts`. See "The Guide". |
 | `src/lib/tour.ts` | The Tour's logic: `tourSteps` (a step per Landmark in Story Order, with its lines; throws when one has none), `tourAfter` (start, next, previous, exit) and `tourStage` (where the camera goes, whether the House is open, which Landmark the Guide floats beside). Tested in `tour.test.ts`. See "The Tour". |
 | `src/lib/theme.ts` | Which theme shows: `ThemeChoice` (`auto`, `day`, `night`), `parseThemeChoice` (a stored value; Auto for anything else), `resolveTheme(choice, prefersDark)`, `nextThemeChoice` (Auto → Day → Night → Auto) and `themeBootScript`, the inline `<head>` script. Tested in `theme.test.ts` (the boot script runs against a fake page). |

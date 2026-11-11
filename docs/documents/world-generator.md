@@ -73,7 +73,7 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `bridges` | Straight bridges over the sea: `from` and `to` Isle ids, the sea `cells` spanned (in order from `from`), and the deck height `y`, which equals the land height at both ends. |
 | `paths` | Walkable paths between Landmarks. For now one: Dock to House, as 4-connected cells over land and bridges. |
 | `stairs` | One per single-step height change along a path: the lower `cell`, its height `y`, and the `facing` the stairs climb towards. |
-| `landmarks` | The five placed Landmarks: id, Isle, `footprint` (`origin` cell, `width` along x, `depth` along z, and every `cells` entry it covers), ground height `y` (the whole footprint is at this height), `variant` (always 0 for now), `trees` (Garden only: one cell per tree, in Project order) and `jetty` (Dock only: its sea cells, from the shore outwards). |
+| `landmarks` | The five placed Landmarks: id, Isle, `footprint` (`origin` cell, `width` along x, `depth` along z, and every `cells` entry it covers), ground height `y` (the whole footprint is at this height), `variant` (always 0 for now), `door` (House only, else null: `south` or `east`, the way its door faces; see "House plot"), `trees` (Garden only: one cell per tree, in Project order) and `jetty` (Dock only: its sea cells, from the shore outwards). |
 | `boats` | One per Client, up to 12 (`MAX_BOATS`), in Client order: the berth `cell` (a sea cell beside the jetty or off its tip; it may lie past the grid's edge, in the open sea) and the `facing` its bow points, out to sea along the jetty. |
 | `ships` | One per Partner, in Partner order: `cells`, a closed loop of sea cells (each an 8-neighbour of the one before, the last of the first) sailed in order, and `phase` (0–1), how far round it the ship starts. Cells may lie past the grid's edge. |
 | `buoys` | Up to 4 (`MAX_BUOYS`) sea cells, each with a buoy (its lamp glows at Night; see `rendering-and-shading.md`). Inside the grid, clear of the ships, boats, jetty and bridges. |
@@ -86,7 +86,7 @@ Dock and Mailbox. The other two are views derived from the layout:
 
 - **Overview** frames the World's bounds (the union of every Isle's footprint
   and the Dock's jetty), with a small margin.
-- **House Interior** looks at the middle of the House's footprint from close up.
+- **House Interior** looks at the middle of the House (its 3×3, not its yard) from close up.
 
 ## How a World is generated
 
@@ -110,13 +110,14 @@ Dock and Mailbox. The other two are views derived from the layout:
    land cells of equal height, with open sea on both sides.
 6. **Landmarks.** Each placed Landmark stands on a footprint of whole cells
    (see "Landmark footprints" below): the Station (2×2) on its Isle's high
-   ground; the Garden, then the House (3×3) on the Garden's Isle; the Dock
+   ground; the Garden, then the House's 4×4 plot on the Garden's Isle; the Dock
    (2×1 either way) on the shore with a jetty, preferring height 1; the
-   Mailbox (1×1) within 4 cells of the House if it can. The Dock's jetty
-   must have a berth for every boat (see "Boats" below).
+   Mailbox in the House's front yard. The Dock's jetty must have a berth for
+   every boat (see "Boats" below).
 7. **Path and stairs.** The cheapest route from a cell beside the Dock's
-   footprint to a cell beside the House's (each at most one voxel above or
-   below the Landmark) over land and bridges, never stepping more than one
+   footprint to the cell just outside the House's plot in line with its
+   door (each at most one voxel above or below the Landmark; see "House
+   plot") over land and bridges, never stepping more than one
    voxel up or down (two or more is a cliff) and never through a footprint;
    climbing costs extra, so paths prefer level ground. Every single-step
    change on the path gets stairs on its lower cell.
@@ -137,10 +138,10 @@ footprints that keep every rule:
 | Landmark | Footprint |
 |---|---|
 | Station | 2 × 2, containing a cell at its Isle's top height |
-| House | 3 × 3 |
+| House | 4 × 4: the House's plot (see "House plot") |
 | Garden | at least 3 × 3, sized to its trees (below); either orientation |
 | Dock | 2 × 1 or 1 × 2 on land, plus a jetty of 2–3 sea cells running straight out from one of its cells |
-| Mailbox | 1 × 1 |
+| Mailbox | 1 × 1, a cell of the House's plot (not placed on its own) |
 
 - **Land of one Isle, at one height.** Every cell is land of the Isle. If
   the cells differ by at most 2 voxels, the generator levels the terrain
@@ -171,6 +172,26 @@ footprints that keep every rule:
   has room for a path, as square as it can be (sides differ by at most 2).
   Tree `k` fills the rows in order, so it keeps its place: 0–6 trees give
   3 × 3, 24 trees give 6 × 5.
+
+### House plot
+
+The House stands on a 4 × 4 plot (`HOUSE_PLOT`): the House itself fills
+its north-west 3 × 3 (`HOUSE_CELLS`), and the other seven cells, along its
+south and east sides (the two the camera sees), are its front yard.
+`houseYard(house, door?)` names the cells:
+
+- **The door** faces `south` or `east`: the Seed picks one, and if the
+  path from the Dock cannot reach it, `generateWorld` turns it the other
+  way (and retries the layout if neither works). The door is in the middle
+  of the House's front wall, so `door` is the yard cell in front of it
+  (column 1 of the plot) and `approach` the cell just outside the plot in
+  line with it, where the path from the Dock ends. The renderer paints the
+  `door` cell as path too, so the path runs on to the door.
+- **The Mailbox** stands in the yard's south-east corner (`mailbox`,
+  whichever way the door faces), on the plot's ground: a `PlacedLandmark`
+  with that one cell as its footprint and the House's height, so it keeps
+  its own hotspot and Data Card but has no ground of its own. The camera
+  looks along −(1, 1, 1), so the corner never hides the door.
 
 ### Boats
 
@@ -240,8 +261,8 @@ the buoys lead the way to the Dock. Every one of 200 sampled Worlds gets 4.
 If a rule fails (two Isles touch, an Isle is under 30 cells, an Isle cannot
 be bridged, a Landmark has no valid footprint, or there is no path), the
 layout is redone from a Seed derived from the given one (`<seed>#retry<n>`).
-After 8 noise layouts comes the safe layout: one round Isle of radius 10
-with no noise and at most 2 terrace steps, flat enough that every footprint,
+After 8 noise layouts comes the safe layout: one round Isle of radius 12
+(10 before the House's plot grew to 4 × 4) with no noise and at most 2 terrace steps, flat enough that every footprint,
 even a 24-tree Garden, fits in view (checked over 2,000 runs per Biome). So
 retry always ends, in at most 9 attempts, and the same input always gives
 the same World.
@@ -265,7 +286,7 @@ the Biome.
 ## Not yet built
 
 Later tickets: decoration, Data Card anchors, Landmark variants beyond 0
-(the House Interior's room is drawn by the renderer; see
+(the House's Variant per Biome and its room are drawn by the renderer; see
 `rendering-and-shading.md`, "The House and its room"), and boat and ship kinds (ASCII structures, ADR
 0004). The site passes the sizes of the `projects`, `clients` and
 `partners` collections; it pairs tree `k` with the `k`-th Project by id
@@ -279,10 +300,10 @@ Seeds, never snapshots:
 
 - determinism (every sampled Seed), different Seeds differ, no `Math.random`;
 - each placed Landmark exactly once; both derived views, House Interior at
-  the middle of the House's footprint; every covered cell inside the Overview;
+  the middle of the House's 3×3; every covered cell inside the Overview;
 - footprints: rectangles of the right size, on flat land of the named Isle
-  at the Landmark's height, never overlapping each other, a bridge, a bridge
-  end or the path; out of the sea except the Dock's 2–3 cell straight jetty;
+  at the Landmark's height, never overlapping each other (but the Mailbox,
+  which stands on the House's plot), a bridge, a bridge end or the path; out of the sea except the Dock's 2–3 cell straight jetty;
   the Garden holds one cell per tree (capped at 24) plus room for paths and
   grows with the trees; no ground point of any footprint or jetty (¼-cell
   grid) is hidden from the isometric camera by terrain or a bridge (an
@@ -294,7 +315,10 @@ Seeds, never snapshots:
   the Isles it names;
 - House and Garden share an Isle, the Dock's footprint has sea beside it,
   the Station is at its Isle's top height;
-- one walkable path from beside the Dock to beside the House; stairs exactly at its single-step changes,
+- the House's plot is 4 × 4 with its door south or east (both seen), every
+  other Landmark's `door` null; the Mailbox in the plot's south-east
+  corner at the House's height;
+- one walkable path from beside the Dock to the cell in line with the House's door; stairs exactly at its single-step changes,
   climbing the right way;
 - a stratum for every buried voxel height, in at least two bands when tall;
 - Biome in the set, every Biome seen, every Biome colour chroma ≤ 0.10, the

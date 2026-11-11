@@ -1,17 +1,20 @@
 /**
  * Voxels in a World by kind, for the render stats overlay. Pure (no
- * three.js): it redraws the World's detail grid the way `worldToVoxels`
- * does and tallies each part as it lands, so a voxel two parts share counts
- * once (for the part drawn first), plus the voxels of the meshes that move
- * on their own (the ships, the House's lid, the developer's head and hands).
+ * three.js): it redraws the World's detail and structure grids the way
+ * `worldToVoxels` does and tallies each part as it lands, so a voxel two
+ * parts share counts once (for the part drawn first), plus the voxels of the
+ * meshes that move on their own (the ships, the House's lid, the
+ * developer's head and hands).
  *
  * Run once per World shown, never per frame.
  */
 import type { World } from '@/world';
 import { VoxelGrid } from './mesher';
-import { DETAIL, drawDetail, worldColours } from './worldVoxels';
+import { drawDetail, worldColours } from './worldVoxels';
+import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 import { landmarkOrigin, treeExtent } from './landmarkModels';
-import { DEVELOPER_PARTS, HOUSE_INTERIOR, drawDeveloperPart, drawHouseLid, type HouseDraw } from './houseModel';
+import { DEVELOPER_PARTS, drawDeveloperPart, type HouseDraw } from './houseModel';
+import { drawStructure, drawStructures, housePlacement, houseStructure } from './structureModels';
 import { shipVoxels } from './vesselModels';
 
 /** The kinds counted, in the order the overlay lists them. */
@@ -19,18 +22,19 @@ export const VOXEL_KINDS = ['terrain', 'landmarks', 'trees', 'houseRoom', 'boats
 export type VoxelKind = (typeof VOXEL_KINDS)[number];
 
 /**
- * - `terrain`: 1-unit voxels; every other kind is ¼-unit voxels.
- * - `landmarks`: the Landmark models, the House's base and lid included,
- *   less the Garden's trees and the House's room.
+ * - `terrain`: 1-unit voxels; the House's structure is ⅛-unit voxels; every
+ *   other kind is ¼-unit voxels.
+ * - `landmarks`: the Landmark models, the House's structure (base and lid)
+ *   included, less the Garden's trees and the House's room.
  * - `trees`: the Garden's trees, one per Project.
- * - `houseRoom`: everything inside the House's room (`HOUSE_INTERIOR`),
- *   the developer's moving head and hands included.
+ * - `houseRoom`: the House's room (`houseModel.ts`), the developer's
+ *   moving head and hands included.
  * - `ships`: every Partner's ship.
  */
 export type VoxelCounts = Record<VoxelKind, number> & {
   /** Every kind together. */
   total: number;
-  /** Voxels in the World's two meshed grids (terrain and detail): all but the separately meshed moving parts. */
+  /** Voxels in the World's three meshed grids (terrain, detail and structure): all but the separately meshed moving parts. */
   inGrids: number;
 };
 
@@ -41,7 +45,7 @@ export function countVoxels(world: World): VoxelCounts {
   for (let i = 0; i < heights.length; i++) if (isle[i] !== -1) counts.terrain += heights[i]!;
 
   const colours = worldColours(world);
-  const detail = new VoxelGrid(1 / DETAIL);
+  const detail = new VoxelGrid(1 / GROUND_DETAIL);
   /** Voxels of the detail grid in a box of ¼ voxels (half-open). */
   const inBox = (min: { x: number; y: number; z: number }, max: { x: number; y: number; z: number }) => {
     let n = 0;
@@ -67,25 +71,32 @@ export function countVoxels(world: World): VoxelCounts {
     if (landmark.id === 'garden') {
       for (const tree of landmark.trees) {
         const box = treeExtent(landmark, tree);
-        inside += inBox(at(box.min, DETAIL), at(box.max, DETAIL));
+        inside += inBox(at(box.min, GROUND_DETAIL), at(box.max, GROUND_DETAIL));
       }
       counts.trees += inside;
     } else if (landmark.id === 'house') {
-      inside = inBox(at(HOUSE_INTERIOR.min, 1), at(HOUSE_INTERIOR.max, 1));
+      // All the House draws in the detail grid is its room.
+      inside = added;
       counts.houseRoom += inside;
     }
     counts.landmarks += added - inside;
   });
-  const inGrids = counts.terrain + detail.count;
+  const structure = new VoxelGrid(1 / STRUCTURE);
+  drawStructures(world, colours, (x, y, z, colour) => structure.set(x, y, z, colour));
+  counts.landmarks += structure.count;
+  const inGrids = counts.terrain + detail.count + structure.count;
 
   // The moving parts, each its own mesh.
   const partCount = (paint: (draw: HouseDraw) => void) => {
-    const grid = new VoxelGrid(1 / DETAIL);
+    const grid = new VoxelGrid(1 / GROUND_DETAIL);
     paint({ box: (...args) => grid.box(...args), set: (...args) => grid.set(...args) });
     return grid.count;
   };
-  if (world.landmarks.some((l) => l.id === 'house')) {
-    counts.landmarks += partCount((draw) => drawHouseLid(draw, colours));
+  const house = world.landmarks.find((l) => l.id === 'house');
+  if (house) {
+    const lid = new VoxelGrid(1 / STRUCTURE);
+    drawStructure(houseStructure(world), housePlacement(house), colours, (x, y, z, colour) => lid.set(x, y, z, colour), 'lid');
+    counts.landmarks += lid.count;
     for (const part of DEVELOPER_PARTS) counts.houseRoom += partCount((draw) => drawDeveloperPart(part, draw, colours));
   }
   if (world.ships.length > 0) counts.ships = shipVoxels(colours).count * world.ships.length;
