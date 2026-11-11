@@ -8,7 +8,7 @@
 
 Spec: `.scratch/voxel-world-landing/spec.md`
 
-- [ ] The Astro project exists in its own subfolder with pnpm, strict TypeScript and static output
+- [ ] The Astro project exists in its own subfolder with bun (7-day minimum release age), strict TypeScript and static output
 - [ ] The site data module holds the mock company name, tagline, default Seed and the Landmark list (id, route, label, Story Order); nothing of these is hardcoded elsewhere
 - [ ] The World generator is pure (no three.js, no DOM, no `Math.random`) and returns one flat Isle with the five placed Landmarks and the two derived views (Overview, House Interior)
 - [ ] The home page renders that World with `WebGPURenderer` and an isometric orthographic camera; Landmarks are simple placeholder blocks

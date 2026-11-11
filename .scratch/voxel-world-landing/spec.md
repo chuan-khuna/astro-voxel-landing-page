@@ -157,7 +157,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 
 ### Stack
 
-- Astro 7.4 with `@astrojs/mdx` 8.1 and three.js r187, on Node ≥ 22, using pnpm.
+- Astro 7.4 with `@astrojs/mdx` 8.1 and three.js r187, on Node ≥ 22, using bun (see `CLAUDE.md` Tools).
 - TypeScript is strict, with Zod 4 via `astro/zod`.
 - Output is static and not tied to a host.
 - The site lives in its own subfolder of this repo, separate from the docs and skills at the root.
