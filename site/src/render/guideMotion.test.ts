@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateWorld, PLACED_LANDMARK_IDS, type ContentCounts, type Vec3, type World } from '@/world';
 import { landmarkExtent } from './landmarkModels';
-import { blinking, GUIDE_REACH, guideSpot, hoverPose, voxelFlights, flightPoint } from './guideMotion';
+import { blinking, GUIDE_REACH, guideSpot, hoverPose, travelPoint, voxelFlights, flightPoint } from './guideMotion';
 
 const counts: ContentCounts = { projects: 9, clients: 12, partners: 3 };
 const worlds = ['lighthouse', '7', '42', 'harbour', '123456', '694157692', 'tide', '99'].map((seed) => generateWorld(seed, counts));
@@ -128,5 +128,37 @@ describe('blinking', () => {
     }
     expect(blinks).toBeGreaterThanOrEqual(5);
     expect(closed / 3000).toBeLessThan(0.08);
+  });
+});
+
+describe('travelPoint', () => {
+  const from = { x: 0, y: 2, z: 0 };
+  const to = { x: 12, y: 3, z: -8 };
+
+  it('starts at the old spot and ends at the new one', () => {
+    expect(travelPoint(from, to, 0)).toEqual(from);
+    expect(travelPoint(from, to, 1)).toEqual(to);
+  });
+
+  it('rises over the straight line on the way, higher than both ends', () => {
+    const mid = travelPoint(from, to, 0.5);
+    expect(mid.y).toBeGreaterThan(to.y + 0.5);
+    expect(mid.x).toBeCloseTo(6, 5);
+    expect(mid.z).toBeCloseTo(-4, 5);
+  });
+
+  it('eases: slow to leave and slow to arrive, always getting closer', () => {
+    expect(travelPoint(from, to, 0.1).x).toBeLessThan(1.2);
+    expect(travelPoint(from, to, 0.9).x).toBeGreaterThan(10.8);
+    let last = -Infinity;
+    for (let t = 0; t <= 1; t += 0.05) {
+      const { x } = travelPoint(from, to, t);
+      expect(x).toBeGreaterThanOrEqual(last);
+      last = x;
+    }
+  });
+
+  it('stays put when the spots are the same', () => {
+    expect(travelPoint(from, from, 0.5)).toEqual(from);
   });
 });

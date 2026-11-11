@@ -37,17 +37,18 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 |---|---|
 | `src/data/site.ts` | The site data module: company identity, brand colour and fonts (`brand.fonts.body` Jersey 20, `brand.fonts.heading` Jersey 15, each with a fallback stack), SEO defaults, default Seed, brand Biome (the Biome the default Seed always gets), the Guide's name (`guide.name`, Lumen), the Landmark list (id, route, label, Story Order) and the Data Card metrics (`dataCards`, keyed to a placed Landmark id). `landmarksInStoryOrder` is the sorted list. |
 | `src/data/theme.ts` | The Day and Night theme tokens (`THEME_TOKENS`): one set of OKLCH values for the page (`ui`: ink, paper, surface, brand ink and its hover, text on brand, shadow) and for the World (`world`: sky, sun or moon light, sky and ground light, water darkening, the House's window light and the buoys' lamp light, and `lightsOn`). `themeCss()` writes the `ui` tokens as CSS custom properties; `seaColour` is a Biome's water in a theme; `contrastRatio` is the WCAG ratio. Tested in `theme.test.ts` (every text pair AA in both themes). |
-| `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id, an optional meta `description` and the optional Guide lines `guide`, schema `guideSchema`) `projects` (MDX, schema `projectSchema`), `services` (MDX, schema `serviceSchema`), `clients` (YAML, schema `clientSchema`), `partners` (YAML, schema `partnerSchema`) and `team` (MDX, schema `teamMemberSchema`). |
-| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema`, `serviceSchema`, `clientSchema`, `partnerSchema`, `teamMemberSchema` and `guideSchema` (see "Projects", "Services", "Clients and Partners", "Team" and "The Guide" below). Tested in `contentSchemas.test.ts`. |
+| `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id, an optional meta `description`, the optional Guide lines `guide`, schema `guideSchema`, and the optional Tour lines `tour`, schema `tourLinesSchema`) `projects` (MDX, schema `projectSchema`), `services` (MDX, schema `serviceSchema`), `clients` (YAML, schema `clientSchema`), `partners` (YAML, schema `partnerSchema`) and `team` (MDX, schema `teamMemberSchema`). |
+| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema`, `serviceSchema`, `clientSchema`, `partnerSchema`, `teamMemberSchema`, `guideSchema` and `tourLinesSchema` (see "Projects", "Services", "Clients and Partners", "Team" "The Guide" and "The Tour" below). Tested in `contentSchemas.test.ts`. |
 | `src/content/projects/` | One MDX file per Project; the file name is its id and URL slug, the body its case study. Six mock Projects. |
 | `src/content/services/` | One MDX file per Service; the body says more about it. Four mock Services. |
 | `src/content/clients/` | One YAML file per Client; the file name is its id. Six mock Clients, the organisations the mock Projects were for. |
 | `src/content/partners/` | One YAML file per Partner; the file name is its id. Three fictional Partners. |
 | `src/content/team/` | One MDX file per Team Member; the body is a short bio. Four mock Team Members. |
-| `src/content/pages/` | `home.mdx` (the home hook, and the Guide's lines in its front matter) and one intro per section, found by its `landmark`: `services.mdx` (station), `about.mdx` (house), `team.mdx` (house-interior), `garden.mdx`, `dock.mdx`, `contact.mdx` (mailbox). |
+| `src/content/pages/` | `home.mdx` (the home hook, the Guide's lines and the Overview's Tour lines in its front matter) and one intro per section, found by its `landmark`, each with that Landmark's Tour lines (`tour`): `services.mdx` (station), `about.mdx` (house), `team.mdx` (house-interior), `garden.mdx`, `dock.mdx`, `contact.mdx` (mailbox). |
 | `src/world/` | The World generator. See `world-generator.md`. |
 | `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`), camera rig (pan, zoom and flights), Landmark focus and hotspots. See `rendering-and-shading.md`. |
 | `src/lib/guideLines.ts` | The Guide's moods (`GUIDE_MOODS`) and lines: `fillLine` (`{seed}` and `{name}`), `pickLine` (one by chance, never the last one again) and `readingMs` (how long a bubble stays up). Tested in `guideLines.test.ts`. See "The Guide". |
+| `src/lib/tour.ts` | The Tour's logic: `tourSteps` (a step per Landmark in Story Order, with its lines; throws when one has none), `tourAfter` (start, next, previous, exit) and `tourStage` (where the camera goes, whether the House is open, which Landmark the Guide floats beside). Tested in `tour.test.ts`. See "The Tour". |
 | `src/lib/theme.ts` | Which theme shows: `ThemeChoice` (`auto`, `day`, `night`), `parseThemeChoice` (a stored value; Auto for anything else), `resolveTheme(choice, prefersDark)`, `nextThemeChoice` (Auto → Day → Night → Auto) and `themeBootScript`, the inline `<head>` script. Tested in `theme.test.ts` (the boot script runs against a fake page). |
 | `src/lib/renderStats.ts` | The render stats overlay's rules: `statsAvailable(dev, url)` (in `astro dev`, or with `?stats`), `parseStatsOn` (the stored on or off) and `withStats` (keep `?stats` on a route link). Tested in `renderStats.test.ts`. See "Render stats". |
 | `src/lib/seedUrl.ts` | The Seed in the URL: `seedFromUrl`, `rollSeed` (numeric) and `withSeed` (keep the Seed on a route link). Tested in `seedUrl.test.ts`. |
@@ -64,7 +65,7 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/components/TeamList.astro` | Team's list of every Team Member in `order`: avatar or initials, name, role and bio. |
 | `src/components/ContactList.astro` | Contact's details (`contactDetails`) as a definition list in an `<address>`. |
 | `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), Astro's `<ClientRouter />`, the self-hosted Jersey fonts, the theme's boot script and colour tokens (`themeBootScript`, `themeCss()`, both inline in `<head>`), the card and font tokens, and the inline script that turns on the full-screen layout (`data-world="live"`). |
-| `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's tree links, the Data Cards and the Guide's button and speech bubble, and the HUD floating over it (company name, theme toggle, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice button), and the client script that runs the World across routes. |
+| `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's tree links, the Data Cards and the Guide's button and speech bubble, and the HUD floating over it (company name, theme toggle, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice and Tour buttons, the Tour's card), and the client script that runs the World and the Tour across routes. |
 | `src/pages/index.astro` | The home page: the World and the home hook. |
 | `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project, the Dock's every Client and Partner, Team's every Team Member, and Contact the company's contact details; About links on to Team. |
 | `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. |
@@ -264,7 +265,7 @@ route on every `astro:after-swap`:
   bounds and zoom runs from the Overview in to a close-up. The frame has
   `touch-action: none`, so gestures on the World never scroll or zoom the
   page, and the wheel over the World zooms instead of scrolling. Pan or
-  zoom input stops a flight.
+  zoom input stops a flight, and ends the Tour (see "The Tour").
 - Each page renders one hotspot link per placed Landmark inside the frame
   (`a.hotspot[data-hotspot]`, with `data-seed-link`), hidden until the World
   is shown. The World keeps each over its Landmark's model. Hover or keyboard
@@ -455,12 +456,12 @@ the Guide's name.
 | `greeting` | In order, one bubble after another, once the Guide has assembled on a first visit. |
 | `welcomeBack` | One of them, on a later visit (`localStorage` `guide-greeted`; a private window always gets the greeting). |
 | `reform` | One of them, once it has re-formed after a new World is rolled (or Back and Forward between Worlds). |
-| `idle` | One of them when the Guide is clicked, never the same twice running. |
+| `idle` | One of them once the Guide is back by the Station after the Tour is finished or exited, never the same twice running. |
 
 Each bubble stays up for its reading time (3 to 10 s, `readingMs`); a new
-line replaces the one showing, and dissolving puts the bubble away. Tour
-lines per Landmark come with the Tour (ticket 15), on each section's
-`pages` entry.
+line replaces the one showing, and dissolving puts the bubble away. The
+Tour's lines are on each Landmark's `pages` entry (see "The Tour"); the
+Guide holds the last one up until the visitor moves on.
 
 **On the page** (`WorldPage.astro`), inside the World's frame, so the
 Guide is absent without JS or a GPU:
@@ -468,7 +469,7 @@ Guide is absent without JS or a GPU:
 - `button#guide`, "Talk to Lumen, the Guide", laid over the Guide while it
   is formed. It comes before the Landmark hotspots in the frame, so where
   they overlap the hotspot is on top: the Guide never takes a Landmark's
-  click. A click says an `idle` line (the Tour will start from it, ticket 15).
+  click. A click starts the Tour; on the Tour it says the step's lines again.
 - `p#guide-bubble`, the speech bubble: the Guide's name and the line, a
   polite live region (`role="status"`), so lines are read out. It never
   takes the pointer. It sits over, under, right or left of the Guide,
@@ -478,6 +479,67 @@ Guide is absent without JS or a GPU:
   theme tokens; it fades in 160 ms (no fade under reduced motion).
 - `script#guide-lines`: the lines and the name as JSON for the script.
 - `data-guide` on the frame says `gone`, `forming`, `formed` or `dissolving`, for checks.
+
+## The Tour
+
+The Tour (`GLOSSARY.md`) is an optional guided walk: the Guide flies ahead
+to every Landmark in Story Order and the camera follows, while the Guide
+tells the story of raw data becoming insight and insight becoming value.
+Nothing plays by itself: each step waits for the visitor.
+
+**Its lines** are content: `tour` in the front matter of each Landmark's
+`pages` entry (`tourLinesSchema`: at least one `{ say, mood }`, like the
+Guide's other lines, with `{seed}` and `{name}`); `home.mdx`'s are the
+Overview's. `tourSteps` (`src/lib/tour.ts`) builds a step per Landmark of
+the Landmark list in Story Order, and the build fails if one has no lines.
+
+**Starting.** The **Take the Tour** button (`#tour-start`, after the dice)
+or a click on the idle Guide (`#guide`) starts it at the first step. The
+page does not change: the Tour is not a route.
+
+**A step** (`playStep` in `WorldPage.astro`, `tourStage`):
+
+- The Tour's card says "Stop n of 7", the Landmark's label (the card's
+  heading), and links to its section ("Open Services"; none for the
+  Overview).
+- The Guide flies to its spot beside the Landmark (`guide.flyTo`, 750 ms)
+  while the camera flies there (900 ms), so it arrives first; then it says
+  the step's lines, the last held up until the visitor moves on. For the
+  Overview it stays by the Station; for About and Team it floats beside the
+  House.
+- About shows the House shut from outside; Team lifts its lid and looks
+  into the room. The camera comes no closer than 1.3 × the close-up of the
+  Landmark the Guide floats beside, so the Guide stays in view inside the
+  House too.
+- Under reduced motion the camera, the Guide and the lid cut.
+
+**Controls.** Previous (inactive, `aria-disabled`, at the first step),
+Next (**Finish** at the last), and Exit (an × icon button, "Exit the
+Tour"). From the keyboard, the right and left arrows are next and
+previous and Escape exits, while the Tour runs and no menu popover is
+open. Clicking the Guide on the Tour says the step again. Starting moves
+focus to the card's heading; finishing or exiting moves it back to the
+Tour button.
+
+**Ending.**
+
+| How | What happens |
+|---|---|
+| Finish or Exit (button, Escape) | The camera flies back to where it was before the Tour, the House follows the route again, and the Guide flies back to the Station and says an `idle` line. |
+| Free exploration (a drag, pinch or wheel on the World, or tabbing to a Landmark off screen; `onExplore`) | The camera stays with the visitor; the House follows the route; the Guide flies home. |
+| Any navigation (a hotspot, the menu, the card's "Open" link, the dice, Back or Forward; `astro:before-preparation`) | The route moves the camera as usual. A section opened from the Overview closes back to where the Tour began. |
+
+The Tour never touches the URL or the history, so routes and Back and
+Forward stay as they were.
+
+**On the page.** `section#tour` (persisted, `data-covers-world`) is the
+card; it is `hidden` when the Tour is not running. While it runs,
+`<html data-touring>` hides the intro or the section's panel, and the card
+takes its place: at the bottom right on desktop, a bottom sheet on
+phones. The camera frames each Landmark in the part the cards leave free,
+and the Guide's bubble keeps clear of the card. `script#tour-steps` holds
+the steps as JSON. Without JS or a GPU there is no Tour (its button lies in
+the World's controls, which are hidden).
 
 ## Rendering
 

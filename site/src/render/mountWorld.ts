@@ -27,18 +27,22 @@
  *   re-forms there on every `show` (a cut under reduced motion or on a
  *   hidden page). Frames render while it assembles or dissolves, and while
  *   it idles (bobbing and blinking) if motion is allowed and the page
- *   visible. `guide.say(lines)` talks in its speech bubble.
+ *   visible. `guide.say(lines)` talks in its speech bubble; on the Tour
+ *   `guide.flyTo(guideSpot(id), ms)` sends it ahead to each Landmark,
+ *   rendering frames while it flies.
  * - `setTheme(theme)` switches Day and Night (`data/theme.ts`): the sky,
  *   the lights' colours and strengths, the water's colour, and at Night the
  *   House's windows and the buoys' lamps glow. Nothing moves, so the shadow
  *   map is kept; one frame is rendered.
  * - DPR is capped at 1.5 on touch devices and 2 elsewhere.
+ * - `ui.onExplore` hears the visitor pan, zoom or tab to a Landmark off
+ *   screen: free exploration, which stops the Tour.
  * - `onFrame(listener)` hears about every frame that renders anyway (its
  *   time, triangles and draw calls), for the render stats overlay; it never
  *   asks for a frame. `backend` says WebGPU or WebGL 2.
  */
 import * as THREE from 'three/webgpu';
-import type { LandmarkId, World } from '@/world';
+import type { LandmarkId, PlacedLandmarkId, Vec3, World } from '@/world';
 import { LOOK, oklchToLinear } from './palette';
 import { THEME_TOKENS } from '@/data/theme';
 import type { Theme } from '@/lib/theme';
@@ -106,6 +110,8 @@ export interface WorldView {
    * once it has; `guide.say(lines)` talks in its speech bubble.
    */
   readonly guide: GuideView;
+  /** Where the Guide floats beside a placed Landmark of the World on show (`guideSpot`), for `guide.flyTo`. */
+  guideSpot(id: PlacedLandmarkId): Vec3;
   /**
    * Hear about each frame after it renders (the render stats overlay).
    * Never causes a frame: only frames that render anyway are reported.
@@ -138,6 +144,8 @@ export interface WorldFrame {
   theme?: Theme;
   /** The Guide's button and speech bubble over the canvas, the cards its bubble keeps clear of and the Landmarks it keeps off (client px). */
   guide?: { button?: HTMLElement | null; bubble?: HTMLElement | null; covers?: () => Rect[]; landmarks?: () => Rect[] };
+  /** The visitor explores on their own: pans or zooms the World, or tabs to a Landmark off screen (the Tour stops for it). */
+  onExplore?: () => void;
 }
 
 /** Closest zoom: about this many world units from the centre to the edge of the frame. */
@@ -258,8 +266,11 @@ export async function mountWorld(
   const wake = () => requestRender();
   stillness.addEventListener('change', wake);
   document.addEventListener('visibilitychange', wake);
-  const rig = createCameraRig({ element: ui.frame, camera, onChange: requestRender });
-  const hotspots = createLandmarkHotspots(ui.frame, ui.hotspots, (target) => rig.jumpTo({ target, zoom: rig.state.zoom }));
+  const rig = createCameraRig({ element: ui.frame, camera, onChange: requestRender, onInput: () => ui.onExplore?.() });
+  const hotspots = createLandmarkHotspots(ui.frame, ui.hotspots, (target) => {
+    rig.jumpTo({ target, zoom: rig.state.zoom });
+    ui.onExplore?.();
+  });
   const cards = createDataCards(ui.frame, ui.cards ?? []);
   // The Guide lives for the whole visit; each World only moves it (`show`).
   const guide = createGuide({ frame: ui.frame, ...ui.guide, onChange: requestRender });
@@ -374,6 +385,7 @@ export async function mountWorld(
       requestRender();
     },
     guide,
+    guideSpot: (id) => guideSpot(current, id),
     setTheme: (next) => {
       if (next === theme) return;
       theme = next;

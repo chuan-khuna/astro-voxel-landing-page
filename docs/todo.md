@@ -21,6 +21,7 @@ Things the agents went ahead on without waiting for the user, while the user was
 - [ ] **Stats card text is 14px (20)**, below the site's 16px minimum, as a dev-only tool.
 - [ ] **The Guide (14)** is named **Lumen** (`site.guide.name`), and all its lines were written by the agent (`guide` in `pages/home.mdx`). It has six screen moods and lives beside the Station. It renders every frame while idle, stopping under reduced motion or on a hidden tab. Its model is ¼ unit; ADR 0006 moves structures to ⅛ later.
 - [ ] **Guide spots (14).** About 1 in 1500 Landmark spots has no clear place for the Guide (a Mailbox tucked in front of its House), and the Guide then takes the preferred spot anyway.
+- [ ] **The Tour (15)** is step-by-step: it never plays by itself (the glossary avoids "autoplay"), so there is no Pause button; it waits at each step for Next. It never changes the URL; while it runs, the intro or section panel is hidden and the Tour's card takes its place. All Tour lines (`tour` in each `pages` entry) were written by the agent. A click on the idle Guide now starts the Tour, so `idle` lines are said when the Guide gets back to the Station after the Tour instead. The camera stays at most 1.3 × the House's close-up inside the House on the Tour, so the Guide stays in view. Test seams picked: `lib/tour.ts` and `travelPoint`.
 
 ## Known issues not yet fixed
 

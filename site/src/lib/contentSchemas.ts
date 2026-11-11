@@ -97,8 +97,9 @@ const guideLineSchema = z.object({
  * The Guide's lines, in the `pages` collection's front matter (`guide`, on
  * the home page): `greeting` is said in order on a first visit,
  * `welcomeBack` (one of them) on a later one, `reform` (one) when a new
- * World is rolled, and `idle` (one) when the Guide is clicked. A line may
- * use `{seed}` and `{name}` (the Guide's name, from the site data module).
+ * World is rolled, and `idle` (one) when it is back at the Station after
+ * the Tour. A line may use `{seed}` and `{name}` (the Guide's name, from the
+ * site data module).
  */
 export const guideSchema = z.object({
   greeting: z.array(guideLineSchema).default([]),
@@ -108,3 +109,10 @@ export const guideSchema = z.object({
 });
 
 export type GuideLines = z.infer<typeof guideSchema>;
+
+/**
+ * What the Guide says at a Landmark on the Tour (`tour` in that Landmark's
+ * `pages` entry; the home page's is the Overview's): at least one line,
+ * said in order, the last staying up until the visitor moves on.
+ */
+export const tourLinesSchema = z.array(guideLineSchema).min(1);

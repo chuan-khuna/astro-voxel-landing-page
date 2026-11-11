@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clientSchema, guideSchema, partnerSchema, projectSchema, serviceSchema, teamMemberSchema } from './contentSchemas';
+import { clientSchema, guideSchema, partnerSchema, projectSchema, serviceSchema, teamMemberSchema, tourLinesSchema } from './contentSchemas';
 
 const valid = {
   title: 'Tide tables that forecast themselves',
@@ -116,5 +116,20 @@ describe('guideSchema', () => {
   it('rejects an empty line or an unknown mood', () => {
     expect(guideSchema.safeParse({ idle: [{ say: '' }] }).success).toBe(false);
     expect(guideSchema.safeParse({ idle: [{ say: 'Hm.', mood: 'furious' }] }).success).toBe(false);
+  });
+});
+
+describe('tourLinesSchema', () => {
+  it('accepts a Landmark’s Tour lines, each with a mood that defaults to neutral', () => {
+    expect(tourLinesSchema.parse([{ say: 'Data comes in here.' }, { say: 'And leaves tidier.', mood: 'smug' }])).toEqual([
+      { say: 'Data comes in here.', mood: 'neutral' },
+      { say: 'And leaves tidier.', mood: 'smug' },
+    ]);
+  });
+
+  it('rejects no lines at all, an empty line or an unknown mood', () => {
+    expect(tourLinesSchema.safeParse([]).success).toBe(false);
+    expect(tourLinesSchema.safeParse([{ say: '' }]).success).toBe(false);
+    expect(tourLinesSchema.safeParse([{ say: 'Hm.', mood: 'furious' }]).success).toBe(false);
   });
 });

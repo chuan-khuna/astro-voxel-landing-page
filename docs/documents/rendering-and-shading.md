@@ -29,7 +29,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `vesselModels.ts` | `drawBoat(boat, grid, colours)`: a Client's boat in its berth, drawn into the detail grid; `shipVoxels(colours)`: the Partner ship's own small grid, centred on `SHIP_ORIGIN`, bow towards +x. | no |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
 | `guideModel.ts` | The Guide's model: `guideVoxels(colours)` (a 6×6×6 ¼-unit cube centred on its origin, side fins, an antenna, the bezel on +x), `GUIDE_SCREEN` (the screen's rectangle) and `GUIDE_FACES` (a 12 × 10 pixel-eye face per mood, and a blink). | no |
-| `guideMotion.ts` | `guideSpot(world, id)` (where the Guide floats beside a placed Landmark), `voxelFlights` and `flightPoint` (the assembly), `hoverPose(seconds)` (the bob) and `blinking(seconds)`. | no |
+| `guideMotion.ts` | `guideSpot(world, id)` (where the Guide floats beside a placed Landmark), `voxelFlights` and `flightPoint` (the assembly), `travelPoint` (flying between spots on the Tour), `hoverPose(seconds)` (the bob) and `blinking(seconds)`. | no |
 | `speechBubble.ts` | `placeBubble(guide, bubble, frame, covers, landmarks?)`: where the speech bubble goes on screen, or nowhere. | no |
 | `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`, `stateShowing` (the state that shows a point at a screen offset), `screenOffsetOf` (where a point is seen; its inverse) and `flightState` (one moment of an eased flight). | no |
 | `dataCardMath.ts` | Data Card maths: `nearestDataCard` (which card shows), `dataCardAnchors` (where a card stands or hangs), `dataCardTransform` and `placeDataCard` (the CSS `matrix3d`). | no |
@@ -43,7 +43,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
 | `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
-| `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it. | yes |
+| `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it (`onInput` hears that input). | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
 | `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, the Garden's tree links over their trees and, while the House is open, the developer's link over the developer. | yes |
 
@@ -295,7 +295,7 @@ in front of or behind one. The point is then pushed along the line of sight
 towards the camera, which keeps it on the same screen spot, until its
 bottom is clear of the ground in the 3×3 cells under it. The Station's
 spot was clear in all of 300 Seeds tested; for the other Landmarks (which
-the Tour will use) 1 in 1500 found nothing clear (a Mailbox tucked in
+the Tour uses) 1 in 1500 found nothing clear (a Mailbox tucked in
 front of its House) and takes the preferred spot anyway.
 
 **Assembling and re-forming** (`guide.ts`, `guideMotion.ts`). On mount
@@ -314,6 +314,17 @@ Under reduced motion or on a hidden page it is simply there, formed.
 0.1 units every 2.6 s, turns ±0.08 rad every 7 s about its face-on pose
 (turned −45° so the screen faces the camera) and blinks for 0.15 s every
 4.2 s. Under reduced motion it keeps still and does not blink.
+
+**Flying on the Tour.** `guide.flyTo(spot, ms)` sends the formed Guide to
+another spot (`guideSpot` of the step's Landmark, from
+`WorldView.guideSpot(id)`): `travelPoint(from, to, t)` eases in and out
+(cubic) along the straight line and rises over it on a sine arc, 0.6 units
+plus 0.15 per unit of distance, at most 3. It bobs on top of that and
+keeps rendering frames while it flies (`moving`). With `ms` 0 it cuts.
+If it is not formed yet it forms at the new spot instead. The promise
+resolves when it lands, or when a later flight or a new World (`formAt`)
+takes over. `say(lines, { hold: true })` keeps the last line up until the
+next `say` or `hush`, so a Tour step's line waits for the visitor.
 
 **Over the canvas.** Each frame `place(camera)` projects its middle: the
 button is laid over it (0.8 of its reach each way), and the speech bubble
@@ -356,7 +367,7 @@ along x) on sea cells within 2 cells of land. Both are opaque
 input, the Landmark hotspot links inside it, the Data Cards, the theme of the first frame and the Guide's
 button, speech bubble and the boxes its bubble avoids (default: the canvas's
 parent, no hotspots, no cards, Day, no Guide button or bubble). `guide` is the Guide's
-`{ formed, say(lines), hush() }` (see "The Guide"). `setViewCentre(at)` says where the visitor
+`{ formed, say(lines, { hold? }), hush(), flyTo(spot, ms) }` (see "The Guide"), and `guideSpot(id)` is its spot beside a placed Landmark of the World on show. `ui.onExplore` hears the visitor pan or zoom (`cameraRig`'s `onInput`) or tab to a Landmark off screen: free exploration, which ends the Tour. `setViewCentre(at)` says where the visitor
 looks (CSS px from the frame's centre: the middle of the part the floating
 cards leave free, from `freeCentre`), which picks the Data Card shown and
 is where the pan bounds apply (`CameraLimits.at`, below). `setInterior(open, ms)`
@@ -398,8 +409,8 @@ camera to a Landmark (see "Landmark focus and flights").
   developer and the screen (`house.work`). Elapsed time is shared: at most
   0.1 s a frame for ships and the developer alike. Under reduced motion
   the open House renders once and goes idle, the developer in their pose of
-  the moment. The Guide keeps frames coming while it assembles or
-  dissolves, and while it idles (bobbing and blinking) with the page
+  the moment. The Guide keeps frames coming while it assembles,
+  dissolves or flies on the Tour, and while it idles (bobbing and blinking) with the page
   visible and motion allowed; idling is why, like the ships, an idle World
   with motion allowed renders every frame (ADR 0005). Under reduced motion
   it re-forms by a cut and keeps still. Each frame first updates the camera's matrices, re-places the hotspots
@@ -463,7 +474,7 @@ on the isometric axis above the target.
   ground seen at `limits.at` (where the visitor looks; default the screen
   centre) inside the bounds and the zoom inside its limits. Screen offsets
   are in frame units: world units at zoom 1, from the screen centre, y up.
-- **`cameraRig.ts`**: `createCameraRig({ element, camera, onChange })` owns
+- **`cameraRig.ts`**: `createCameraRig({ element, camera, onChange, onInput? })` owns
   the state and listens on the frame element (so a drag that starts on a
   hotspot still pans):
   - Mouse: drag pans. A press must move 4 px before it becomes a drag, so a

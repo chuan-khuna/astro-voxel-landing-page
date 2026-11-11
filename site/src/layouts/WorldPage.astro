@@ -18,8 +18,16 @@
  * greets the visitor once the World has mounted and it has assembled
  * (`greeting` on a first visit, one `welcomeBack` line after), says a
  * `reform` line whenever a new World is rolled, and an `idle` line when
- * clicked. Its lines come from the `pages` collection (`guide` on the home
- * page), its name from the site data module.
+ * back by the Station after the Tour. Its lines come from the `pages`
+ * collection (`guide` on the home page), its name from the site data module.
+ *
+ * The Tour (`lib/tour.ts`): the Tour button or a click on the idle Guide
+ * starts it. At each Landmark in Story Order the Guide flies ahead, the
+ * camera follows and the Guide says that Landmark's `tour` lines; the
+ * Tour's card (persisted, in place of the intro or panel) has next,
+ * previous and exit, and the arrow keys and Escape work too. Free
+ * exploration (pan, zoom) or any navigation ends it; it never changes the
+ * URL.
  *
  * In `astro dev`, or with `?stats` in the URL, the script also loads the
  * render stats overlay (`render/statsOverlay.ts`): a toggle after the dice
@@ -35,6 +43,7 @@ import { MAX_TREES, PLACED_LANDMARK_IDS } from '@/world';
 import type { ContentCounts, LandmarkId } from '@/world';
 import { treeOrder } from '@/lib/gardenTrees';
 import type { GuideLines } from '@/lib/contentSchemas';
+import { tourSteps } from '@/lib/tour';
 
 interface Props {
   title?: string;
@@ -67,6 +76,11 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
 const home = await getEntry('pages', 'home');
 const guideLines: GuideLines = home?.data.guide ?? { greeting: [], welcomeBack: [], reform: [], idle: [] };
 const guideName = site.guide.name;
+// The Tour: a step per Landmark in Story Order, with the Guide's lines from each Landmark's `pages` entry (`tour`).
+const tour = tourSteps(
+  landmarksInStoryOrder,
+  (await getCollection('pages')).map((page) => ({ landmark: page.data.landmark, tour: page.data.tour })),
+);
 ---
 
 <Base title={title} description={description}>
@@ -183,8 +197,46 @@ const guideName = site.guide.name;
           </svg>
           Roll a new World
         </button>
+        <button type="button" class="tour-start" id="tour-start" aria-controls="tour">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+            <path d="M4 20 9 4l6 12 3-6 2 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+          Take the Tour
+        </button>
         <p class="world-status" id="world-status" aria-live="polite"></p>
       </div>
+      <section
+        class="tour"
+        id="tour"
+        data-covers-world
+        aria-labelledby="tour-title"
+        hidden
+        transition:persist="tour">
+        <p class="tour-count" data-tour-count></p>
+        <h2 class="tour-title" id="tour-title" tabindex="-1" data-tour-title></h2>
+        <a class="tour-open" href="/" data-tour-open></a>
+        <div class="tour-controls">
+          <button type="button" class="tour-step" data-tour="previous">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+            Previous
+          </button>
+          <button type="button" class="tour-step tour-next" data-tour="next">
+            <span data-tour-next-label>Next</span>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </button>
+          <button type="button" class="tour-exit" data-tour="exit" aria-label="Exit the Tour" title="Exit the Tour">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+            </svg>
+          </button>
+        </div>
+        <p class="tour-keys">Arrow keys step through; Esc exits.</p>
+        <script type="application/json" id="tour-steps" set:html={JSON.stringify(tour)} />
+      </section>
     </main>
   </div>
 </Base>
@@ -203,9 +255,16 @@ const guideName = site.guide.name;
   import type { Theme } from '@/lib/theme';
   import { fillLine, pickLine, type GuideLine } from '@/lib/guideLines';
   import type { GuideLines } from '@/lib/contentSchemas';
+  import { tourAfter, tourStage, type TourAction, type TourState, type TourStep } from '@/lib/tour';
 
   /** How long a camera flight to a Landmark takes; a cut under reduced motion. */
   const FLIGHT_MS = 900;
+  /** How long the Guide takes to fly to the next Landmark on the Tour: less than the camera, so it gets there first. */
+  const GUIDE_FLIGHT_MS = 750;
+  /** On the Tour the camera comes no closer than this times the close-up of the Landmark the Guide floats beside. */
+  const TOUR_ZOOM = 1.3;
+  /** The keys that step through the Tour. */
+  const TOUR_KEYS: Partial<Record<string, Exclude<TourAction, 'start'>>> = { ArrowRight: 'next', ArrowLeft: 'previous', Escape: 'exit' };
   /** How long the House's lid takes to lift or come down; a cut under reduced motion. */
   const ROOF_MS = 800;
 
@@ -223,8 +282,18 @@ const guideName = site.guide.name;
     const guideButton = frame.querySelector<HTMLElement>('#guide');
     const guideBubble = frame.querySelector<HTMLElement>('#guide-bubble');
     const guide = JSON.parse(frame.querySelector('#guide-lines')?.textContent ?? '{}') as { name: string; lines: GuideLines };
-    /** The Guide's last idle line, so a click never gets the same one twice running. */
+    /** The Guide's last idle line, so it never says the same one twice running. */
     let lastIdle: GuideLine | undefined;
+    // The Tour's card and button are persisted too.
+    const tourCard = document.querySelector<HTMLElement>('#tour');
+    const tourButton = document.querySelector<HTMLButtonElement>('#tour-start');
+    const steps = JSON.parse(document.querySelector('#tour-steps')?.textContent ?? '[]') as TourStep[];
+    /** Where the Tour is (`null`: not running). */
+    let tour: TourState = null;
+    /** Bumped by every Tour step and ending, so a step that is overtaken says nothing. */
+    let tourToken = 0;
+    /** The camera before the Tour began: exiting returns there. */
+    let beforeTour: CameraState | null = null;
     const defaultSeed = canvas.dataset.defaultSeed ?? '';
     const counts = JSON.parse(canvas.dataset.counts ?? '{}') as ContentCounts;
     const source = createWorldSource();
@@ -270,6 +339,8 @@ const guideName = site.guide.name;
     /** Once the Guide has assembled: the full greeting on a first visit, one welcome-back line after. */
     const greet = (view: WorldView) =>
       view.guide.formed.then(() => {
+        // The Tour may have begun first: the Guide is busy.
+        if (tour) return;
         const { greeting, welcomeBack } = guide.lines;
         const back = greeted() ? pickLine(welcomeBack, undefined, Math.random()) : undefined;
         view.guide.say((back ? [back] : greeting).map(fill));
@@ -280,11 +351,15 @@ const guideName = site.guide.name;
         }
       });
 
-    /** Keep the Seed on links to other routes (e.g. `/garden?seed=1234`), and `?stats` when stats are on. */
+    /** A route with the Seed on show (e.g. `/garden?seed=1234`), and `?stats` when stats are on. */
+    const linkTo = (route: string) => {
+      const href = withSeed(route, linkSeed, defaultSeed, location.href);
+      return stats && new URL(location.href).searchParams.has(STATS_PARAM) ? withStats(href, location.href) : href;
+    };
+    /** Keep the Seed on links to other routes, and `?stats` when stats are on. */
     const keepSeedOnLinks = () => {
       for (const link of document.querySelectorAll<HTMLAnchorElement>('a[data-seed-link]')) {
-        const href = withSeed(link.getAttribute('href') ?? '/', linkSeed, defaultSeed, location.href);
-        link.setAttribute('href', stats && new URL(location.href).searchParams.has(STATS_PARAM) ? withStats(href, location.href) : href);
+        link.setAttribute('href', linkTo(link.getAttribute('href') ?? '/'));
       }
     };
 
@@ -332,10 +407,104 @@ const guideName = site.guide.name;
         else if (fresh || shownLandmark !== 'overview') void view.focus('overview', { at, ms });
         worldState = null;
       } else {
-        if (shownLandmark === 'overview') worldState = view.camera.state;
+        // Kept if a Tour left one (where the camera was before it): closing returns there.
+        if (shownLandmark === 'overview') worldState ??= view.camera.state;
         void view.focus(focus, { at, ms });
       }
       shownLandmark = id;
+    };
+
+    /**
+     * Show the Tour's step: the card says where we are, the Guide flies
+     * ahead to the Landmark as the camera follows (the House opens for its
+     * Interior), and once there it says the step's lines, the last staying
+     * up until the visitor moves on.
+     */
+    const playStep = async (view: WorldView) => {
+      if (!tour || !tourCard) return;
+      const token = ++tourToken;
+      const step = steps[tour.step]!;
+      const last = tour.step === steps.length - 1;
+      tourCard.querySelector('[data-tour-count]')!.textContent = `Stop ${tour.step + 1} of ${steps.length}`;
+      tourCard.querySelector('[data-tour-title]')!.textContent = step.label;
+      const open = tourCard.querySelector<HTMLAnchorElement>('[data-tour-open]')!;
+      open.hidden = step.route === '/';
+      open.textContent = `Open ${step.label}`;
+      open.href = linkTo(step.route);
+      tourCard.querySelector('[data-tour="previous"]')!.setAttribute('aria-disabled', String(tour.step === 0));
+      tourCard.querySelector('[data-tour-next-label]')!.textContent = last ? 'Finish' : 'Next';
+      const stage = tourStage(step.landmark);
+      const ms = flightMs();
+      const at = freeCentre();
+      view.setViewCentre(at);
+      view.setInterior(stage.interior, ms > 0 ? ROOF_MS : 0);
+      view.guide.hush();
+      const guideThere = view.guide.flyTo(view.guideSpot(stage.guideAt), ms > 0 ? GUIDE_FLIGHT_MS : 0);
+      // No closer than the Guide's Landmark's own close-up, so the Guide beside it stays in view (inside the House, too).
+      const shot = view.focusState(stage.focus, at);
+      void view.camera.flyTo({ ...shot, zoom: Math.min(shot.zoom, view.focusState(stage.guideAt, at).zoom * TOUR_ZOOM) }, ms);
+      await guideThere;
+      if (token === tourToken) view.guide.say(step.lines.map(fill), { hold: true });
+    };
+
+    /** Start the Tour at its first step: the intro or panel makes way for the Tour's card. */
+    const startTour = async () => {
+      if (!mounting || !tourCard || steps.length === 0) return;
+      const view = await mounting;
+      if (!tour) beforeTour = view.camera.state;
+      tour = tourAfter(tour, 'start', steps.length);
+      document.documentElement.dataset.touring = '';
+      tourCard.hidden = false;
+      tourButton?.setAttribute('aria-expanded', 'true');
+      tourCard.querySelector<HTMLElement>('[data-tour-title]')?.focus({ preventScroll: true });
+      await playStep(view);
+    };
+
+    /**
+     * End the Tour. `exit` (or `finish`, after the last step): the camera
+     * returns to where it was and the Guide flies back to the Station and
+     * says an idle line. `explore` (the visitor pans or zooms) leaves the
+     * camera to them; `navigate` (a link, Back or Forward, a new Seed)
+     * leaves it to the route. Either way the House follows the route again
+     * and the intro or panel comes back.
+     */
+    const endTour = (how: 'exit' | 'finish' | 'explore' | 'navigate') => {
+      if (!tour || !tourCard) return;
+      tour = null;
+      const token = ++tourToken;
+      const hadFocus = tourCard.contains(document.activeElement);
+      tourCard.hidden = true;
+      delete document.documentElement.dataset.touring;
+      tourButton?.setAttribute('aria-expanded', 'false');
+      void mounting?.then((view) => {
+        const ms = flightMs();
+        view.guide.hush();
+        const home = view.guide.flyTo(view.guideSpot('station'), ms > 0 ? GUIDE_FLIGHT_MS : 0);
+        if (how === 'navigate') {
+          // The route moves the camera; a section opened from the Overview closes back to where the Tour began.
+          if (shownLandmark === 'overview') worldState = beforeTour;
+          return;
+        }
+        view.setViewCentre(freeCentre());
+        view.setInterior(routeView(routeLandmark()).interior, ms > 0 ? ROOF_MS : 0);
+        if (how === 'explore') return;
+        if (beforeTour) void view.camera.flyTo(beforeTour, ms);
+        void home.then(() => {
+          lastIdle = pickLine(guide.lines.idle, lastIdle, Math.random());
+          if (token === tourToken && lastIdle) view.guide.say([fill(lastIdle)]);
+        });
+      });
+      if (hadFocus && how !== 'navigate') tourButton?.focus({ preventScroll: true });
+    };
+
+    /** Next, previous or exit, from the card's buttons or the keyboard. */
+    const stepTour = (action: Exclude<TourAction, 'start'>) => {
+      if (!tour) return;
+      const after = tourAfter(tour, action, steps.length);
+      if (!after) return endTour(action === 'next' ? 'finish' : 'exit');
+      if (after.step === tour.step) return;
+      tour = after;
+      void mounting?.then(playStep);
     };
 
     const showSeed = async (seed: string) => {
@@ -353,6 +522,8 @@ const guideName = site.guide.name;
             cards,
             theme: currentTheme(),
             guide: { button: guideButton, bubble: guideBubble, covers, landmarks },
+            // Free exploration stops the Tour.
+            onExplore: () => endTour('explore'),
           });
           view = await mounting;
           mounted = true;
@@ -365,7 +536,7 @@ const guideName = site.guide.name;
           view.show(world, meshed);
           // The Guide re-forms with the new World; then it remarks on it (unless another World is already on its way).
           void view.guide.formed.then(() => {
-            const line = request === latest && pickLine(guide.lines.reform, undefined, Math.random());
+            const line = request === latest && !tour && pickLine(guide.lines.reform, undefined, Math.random());
             if (line) view.guide.say([fill(line)]);
           });
         }
@@ -406,16 +577,38 @@ const guideName = site.guide.name;
       void navigate(url.href);
     });
 
-    // Clicking the Guide: it says something.
+    // The Tour button, and clicking the idle Guide, start the Tour; on the Tour, clicking the Guide says the step again.
+    tourButton?.addEventListener('click', () => void startTour());
     guideButton?.addEventListener('click', () => {
-      lastIdle = pickLine(guide.lines.idle, lastIdle, Math.random());
-      const line = lastIdle;
-      if (line) void mounting?.then((view) => view.guide.say([fill(line)]));
+      if (!tour) return void startTour();
+      const lines = steps[tour.step]!.lines.map(fill);
+      void mounting?.then((view) => view.guide.say(lines, { hold: true }));
     });
+    tourCard?.addEventListener('click', (event) => {
+      const control = (event.target as Element).closest<HTMLElement>('[data-tour], [data-tour-open]');
+      if (!control) return;
+      // Opening the step's section ends the Tour; the route takes the camera there.
+      if (control.matches('[data-tour-open]')) return endTour('navigate');
+      if (control.getAttribute('aria-disabled') === 'true') return;
+      stepTour(control.dataset.tour as Exclude<TourAction, 'start'>);
+    });
+    // Any navigation (a link, Back or Forward, a new Seed) ends the Tour.
+    document.addEventListener('astro:before-preparation', () => endTour('navigate'));
 
-    // Escape closes an open section, like its close button; an open menu popover takes it first.
     document.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      // On the Tour: the arrow keys step through it and Escape exits (unless a menu popover is open or a field has focus).
+      if (tour) {
+        if (document.querySelector(':popover-open') || (event.target as Element).closest('input, textarea, select, [contenteditable]')) return;
+        const action = TOUR_KEYS[event.key];
+        if (action) {
+          event.preventDefault();
+          stepTour(action);
+        }
+        return;
+      }
+      // Escape closes an open section, like its close button; an open menu popover takes it first.
+      if (event.key !== 'Escape') return;
       if (document.querySelector(':popover-open')) return;
       document.querySelector<HTMLAnchorElement>('[data-panel-close]')?.click();
     });
@@ -546,6 +739,87 @@ const guideName = site.guide.name;
     margin: 0;
     font-variant-numeric: tabular-nums;
   }
+  .tour-start,
+  .tour-step,
+  .tour-exit {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem 0.4rem;
+    border: 2px solid var(--brand-ink);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--brand-ink);
+    cursor: pointer;
+  }
+  .tour-start:hover,
+  .tour-step:hover,
+  .tour-exit:hover {
+    background: color-mix(in oklab, var(--brand) 14%, transparent);
+  }
+  .tour-start:focus-visible,
+  .tour-step:focus-visible,
+  .tour-exit:focus-visible,
+  .tour-open:focus-visible,
+  .tour-title:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+  /* The Tour's card: where it is, what to open, and next, previous and exit. */
+  .tour {
+    box-sizing: border-box;
+    width: min(100%, 22rem);
+    padding: 0.7rem 0.9rem 0.8rem;
+    border-radius: var(--card-radius);
+    background: var(--card);
+    box-shadow: var(--card-shadow);
+    color: var(--ink);
+  }
+  .tour[hidden] {
+    display: none;
+  }
+  .tour-count {
+    margin: 0;
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .tour-title {
+    margin: 0 0 0.2rem;
+    color: var(--brand-ink);
+    font: 1.875rem / 1.1 var(--font-heading);
+  }
+  .tour-open {
+    color: var(--brand-ink);
+  }
+  .tour-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+  }
+  .tour-next {
+    border-color: transparent;
+    background: var(--brand-ink);
+    color: var(--on-brand);
+  }
+  .tour-next:hover {
+    background: var(--brand-ink-hover);
+  }
+  .tour-step[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .tour-step[aria-disabled='true']:hover {
+    background: transparent;
+  }
+  .tour-exit {
+    margin-left: auto;
+    padding-inline: 0.5rem;
+  }
+  .tour-keys {
+    margin: 0.5rem 0 0;
+    font-size: 1rem;
+  }
 
   /*
    * The full-screen World: the canvas fills the viewport, edge to edge, and
@@ -605,6 +879,16 @@ const guideName = site.guide.name;
     align-self: end;
     justify-self: start;
   }
+  /* On the Tour, its card takes the place of the intro or the panel (desktop: bottom right). */
+  :global(:root[data-world]) .tour {
+    grid-area: 2 / 2;
+    align-self: end;
+    justify-self: end;
+  }
+  :global(:root[data-world][data-touring]) .intro,
+  :global(:root[data-world][data-touring]) .hud-main > :global([data-panel]) {
+    display: none;
+  }
   :global(:root[data-world]) .world {
     position: fixed;
     inset: 0;
@@ -642,6 +926,15 @@ const guideName = site.guide.name;
     }
     :global(:root[data-world]) .intro {
       max-height: 40dvh;
+    }
+    :global(:root[data-world]) .tour {
+      grid-area: 3 / 1;
+      justify-self: stretch;
+      width: auto;
+    }
+    /* Phones have no arrow keys to speak of. */
+    .tour-keys {
+      display: none;
     }
   }
   .world[data-dragging] {

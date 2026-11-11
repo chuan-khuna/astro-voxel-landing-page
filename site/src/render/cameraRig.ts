@@ -11,6 +11,7 @@
  * - `flyTo` tweens the camera to a state (`flightState`, one `jumpTo` per
  *   animation frame); any pan or zoom input stops a flight where it is. A
  *   cut is one `jumpTo`.
+ * - `onInput` hears the visitor pan or zoom (the Tour stops for it).
  */
 import * as THREE from 'three/webgpu';
 import { clampState, flightState, panBy, zoomAt, type CameraLimits, type CameraState } from './cameraMath';
@@ -46,9 +47,11 @@ interface Options {
   camera: THREE.OrthographicCamera;
   /** Called after every camera change; it should request one frame. */
   onChange: () => void;
+  /** Called when the visitor pans or zooms (a drag, a pinch or the wheel), not for flights or cuts. */
+  onInput?: () => void;
 }
 
-export function createCameraRig({ element, camera, onChange }: Options): CameraRig {
+export function createCameraRig({ element, camera, onChange, onInput }: Options): CameraRig {
   let limits: CameraLimits = { minX: 0, maxX: 0, minZ: 0, maxZ: 0, minZoom: 1, maxZoom: 1 };
   let state: CameraState = { target: { x: 0, z: 0 }, zoom: 1 };
   let distance = 100;
@@ -171,6 +174,7 @@ export function createCameraRig({ element, camera, onChange }: Options): CameraR
       next = zoomAt(next, toFrame(after.x, after.y), spread(after) / spreadBefore, limits);
     }
     apply(next);
+    onInput?.();
   };
 
   const onPointerEnd = (event: PointerEvent) => {
@@ -199,6 +203,7 @@ export function createCameraRig({ element, camera, onChange }: Options): CameraR
     const rate = event.ctrlKey ? 0.01 : 0.0015;
     const factor = Math.exp(-event.deltaY * lines * rate);
     apply(zoomAt(state, toFrame(event.clientX, event.clientY), factor, limits));
+    onInput?.();
   };
 
   // Native link and image drags would steal a drag that starts on a Landmark hotspot.

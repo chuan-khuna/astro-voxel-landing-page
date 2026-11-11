@@ -4,13 +4,13 @@
 
 **Blocked by:** 07, 14
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Spec: `.scratch/voxel-world-landing/spec.md`
 
-- [ ] A Tour button and clicking the idle Guide both start the Tour
-- [ ] The Tour visits all seven Landmarks in Story Order from the Landmark list
-- [ ] Next, previous and exit controls work at every step
-- [ ] The Guide flies ahead and speaks each step's line from the `pages` collection
-- [ ] `astro check` and `astro build` pass
-- [ ] Documents under `docs/documents/` and its INDEX are updated for anything this ticket adds or changes
+- [x] A Tour button and clicking the idle Guide both start the Tour
+- [x] The Tour visits all seven Landmarks in Story Order from the Landmark list
+- [x] Next, previous and exit controls work at every step
+- [x] The Guide flies ahead and speaks each step's line from the `pages` collection
+- [x] `astro check` and `astro build` pass
+- [x] Documents under `docs/documents/` and its INDEX are updated for anything this ticket adds or changes

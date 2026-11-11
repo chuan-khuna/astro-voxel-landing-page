@@ -8,6 +8,7 @@
  *   send it to any other.
  * - `voxelFlights` / `flightPoint`: the voxels flying in to assemble the
  *   Guide (and, played backwards, flying off as it dissolves).
+ * - `travelPoint`: the Guide flying from one spot to the next on the Tour.
  * - `hoverPose(seconds)`: the idle bob; `blinking(seconds)`: when it blinks.
  */
 import type { PlacedLandmarkId, Vec3, World } from '@/world';
@@ -202,4 +203,24 @@ const BLINK_EVERY = 4.2;
 export function blinking(seconds: number): boolean {
   const t = ((seconds % BLINK_EVERY) + BLINK_EVERY) % BLINK_EVERY;
   return t >= BLINK_EVERY - BLINK;
+}
+
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
+
+/**
+ * Where the Guide is `t` of the way (0 to 1) through flying from one spot
+ * to another (the Tour sends it ahead to each Landmark): eased at both
+ * ends, and rising over the straight line on the way, more for a longer trip.
+ */
+export function travelPoint(from: Vec3, to: Vec3, t: number): Vec3 {
+  if (t <= 0) return { ...from };
+  if (t >= 1) return { ...to };
+  const e = easeInOut(t);
+  const distance = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
+  const lift = distance > 0 ? Math.min(3, 0.6 + distance * 0.15) : 0;
+  return {
+    x: from.x + (to.x - from.x) * e,
+    y: from.y + (to.y - from.y) * e + Math.sin(Math.PI * e) * lift,
+    z: from.z + (to.z - from.z) * e,
+  };
 }

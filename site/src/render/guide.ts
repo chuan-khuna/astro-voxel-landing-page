@@ -13,6 +13,8 @@
  * - Assembling: one small cube per voxel (an instanced mesh) flies in on
  *   its arc (`voxelFlights`); once all have landed the body takes over.
  *   Dissolving plays the same flights backwards.
+ * - On the Tour it flies ahead to each Landmark (`flyTo`, along
+ *   `travelPoint`), and holds its last line up (`say(lines, { hold })`).
  * - The speech bubble (`say`) is HTML, placed beside the Guide on screen
  *   (`placeBubble`) and never under a card floating over the World; it is
  *   a polite live region, so its lines are read out. The button over the
@@ -29,7 +31,7 @@ import { FIXED_COLOURS, LOOK, oklchToLinear } from './palette';
 import { voxelMaterial } from './voxelMaterial';
 import { ColourTable } from './worldVoxels';
 import { GUIDE_BODY, GUIDE_FACES, GUIDE_SCREEN, guideVoxels } from './guideModel';
-import { blinking, flightPoint, GUIDE_REACH, hoverPose, voxelFlights } from './guideMotion';
+import { blinking, flightPoint, GUIDE_REACH, hoverPose, travelPoint, voxelFlights } from './guideMotion';
 import { placeBubble } from './speechBubble';
 import type { Rect } from './freeArea';
 
@@ -46,10 +48,21 @@ const FACE_LIT = { l: 0.88, c: 0.09, h: 205 };
 export interface GuideView {
   /** Resolves once the Guide has (re-)formed, now or after its assembly. */
   readonly formed: Promise<void>;
-  /** Say these lines, one bubble after another, each for its reading time. Stops anything it was saying. */
-  say(lines: readonly GuideLine[]): void;
+  /**
+   * Say these lines, one bubble after another, each for its reading time.
+   * Stops anything it was saying. With `hold`, the last line stays up until
+   * the next `say` or `hush` (the Tour waits for the visitor).
+   */
+  say(lines: readonly GuideLine[], options?: { hold?: boolean }): void;
   /** Stop talking and put the bubble away. */
   hush(): void;
+  /**
+   * Fly to `spot` over `ms` (0 cuts), arcing up on the way (`travelPoint`),
+   * and stay there: the Tour sends it ahead to each Landmark. If it is not
+   * formed yet, it forms there instead. Resolves when it arrives, or when a
+   * later flight or a new World takes over.
+   */
+  flyTo(spot: Vec3, ms: number): Promise<void>;
 }
 
 export interface Guide extends GuideView {
@@ -177,6 +190,15 @@ export function createGuide({ frame, button, bubble, covers = () => [], landmark
   let shownFace = '';
   let resolveFormed: () => void = () => {};
   let formed: Promise<void> = new Promise((resolve) => (resolveFormed = resolve));
+  /** A flight to another spot (the Tour), while formed: from, to, how far along (ms) and who waits for it. */
+  let travel: { from: Vec3; to: Vec3; ms: number; elapsed: number; done: () => void } | null = null;
+  const endTravel = () => {
+    const done = travel?.done;
+    travel = null;
+    done?.();
+  };
+  /** Where it floats now, before its bob: on its way, or at home. */
+  const base = (): Vec3 => (travel ? travelPoint(travel.from, travel.to, travel.elapsed / travel.ms) : home);
 
   const showFace = (face: keyof typeof GUIDE_FACES) => {
     if (face === shownFace) return;
@@ -207,7 +229,8 @@ export function createGuide({ frame, button, bubble, covers = () => [], landmark
     cubes.visible = phase === 'forming' || phase === 'dissolving';
     root.visible = phase !== 'gone';
     if (button) button.hidden = !assembled;
-    root.position.set(home.x, home.y, home.z);
+    const at = base();
+    root.position.set(at.x, at.y, at.z);
     // For checks: gone, forming, formed or dissolving.
     frame.dataset.guide = phase;
   };
@@ -228,14 +251,16 @@ export function createGuide({ frame, button, bubble, covers = () => [], landmark
     bubble?.removeAttribute('data-shown');
     onChange();
   };
-  const speak = (lines: readonly GuideLine[], i: number) => {
+  const speak = (lines: readonly GuideLine[], i: number, hold: boolean) => {
     const line = lines[i];
     if (!line) return hush();
     mood = line.mood;
     if (sayText) sayText.textContent = line.say;
     bubble?.setAttribute('data-shown', '');
     onChange();
-    timer = window.setTimeout(() => speak(lines, i + 1), readingMs(line.say));
+    // A held last line stays up until the next `say` or `hush`.
+    if (hold && i === lines.length - 1) return;
+    timer = window.setTimeout(() => speak(lines, i + 1, hold), readingMs(line.say));
   };
 
   const projected = new THREE.Vector3();
@@ -246,12 +271,34 @@ export function createGuide({ frame, button, bubble, covers = () => [], landmark
     get formed() {
       return formed;
     },
-    say: (lines) => {
+    say: (lines, options) => {
       clearTimeout(timer);
-      speak(lines, 0);
+      speak(lines, 0, options?.hold ?? false);
     },
     hush,
+    flyTo(spot, ms) {
+      endTravel();
+      if (phase !== 'formed') {
+        // Not formed yet (assembling, or re-forming for a new World): form there instead.
+        if (phase === 'dissolving') next = spot;
+        else home = spot;
+        show();
+        return formed;
+      }
+      const from = root.position.clone();
+      home = spot;
+      if (ms <= 0) {
+        show();
+        onChange();
+        return Promise.resolve();
+      }
+      return new Promise<void>((resolve) => {
+        travel = { from: { x: from.x, y: from.y, z: from.z }, to: spot, ms, elapsed: 0, done: resolve };
+        onChange();
+      });
+    },
     formAt(spot, animate) {
+      endTravel();
       if (phase === 'formed' && !animate) {
         home = spot;
         show();
@@ -278,7 +325,7 @@ export function createGuide({ frame, button, bubble, covers = () => [], landmark
       placeCubes(progress);
       show();
     },
-    moving: (idle) => phase === 'forming' || phase === 'dissolving' || (idle && phase === 'formed'),
+    moving: (idle) => phase === 'forming' || phase === 'dissolving' || travel !== null || (idle && phase === 'formed'),
     step(dt, idle) {
       if (phase === 'forming') {
         progress = Math.min(1, progress + dt / FORM_MS);
@@ -294,9 +341,15 @@ export function createGuide({ frame, button, bubble, covers = () => [], landmark
         placeCubes(progress);
         show();
       }
+      if (travel) {
+        travel.elapsed = Math.min(travel.ms, travel.elapsed + dt);
+        const at = base();
+        root.position.set(at.x, at.y, at.z);
+        if (travel.elapsed >= travel.ms) endTravel();
+      }
       if (idle && phase === 'formed') idleSeconds += dt / 1000;
       const pose = idle && phase === 'formed' ? hoverPose(idleSeconds) : { y: 0, yaw: 0 };
-      root.position.y = home.y + pose.y;
+      root.position.y = base().y + pose.y;
       body.rotation.y = -Math.PI / 4 + pose.yaw;
       showFace(idle && phase === 'formed' && blinking(idleSeconds) ? 'blink' : mood);
       return phase === 'forming' || phase === 'dissolving';
@@ -330,6 +383,7 @@ export function createGuide({ frame, button, bubble, covers = () => [], landmark
     },
     dispose() {
       clearTimeout(timer);
+      endTravel();
       geometry.dispose();
       material.dispose();
       screenGeometry.dispose();
