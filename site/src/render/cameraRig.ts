@@ -8,11 +8,12 @@
  * - Every change calls `onChange` once; the caller renders on demand. Nothing
  *   runs between input events, so an idle World renders no frames.
  *
- * The state model (`jumpTo` with a `CameraState`) is what a camera flight
- * drives frame by frame; a flight is a tween of states, a cut is one `jumpTo`.
+ * - `flyTo` tweens the camera to a state (`flightState`, one `jumpTo` per
+ *   animation frame); any pan or zoom input stops a flight where it is. A
+ *   cut is one `jumpTo`.
  */
 import * as THREE from 'three/webgpu';
-import { clampState, panBy, zoomAt, type CameraLimits, type CameraState } from './cameraMath';
+import { clampState, flightState, panBy, zoomAt, type CameraLimits, type CameraState } from './cameraMath';
 
 /** Direction from the target to the camera: true isometric (azimuth 45°, elevation ≈35.26°). */
 export const ISO_DIRECTION = new THREE.Vector3(1, 1, 1).normalize();
@@ -24,8 +25,12 @@ export interface CameraRig {
   readonly state: CameraState;
   /** New bounds and zoom limits (a new World) and a cut to `state`. */
   reset(limits: CameraLimits, state: CameraState, distance: number): void;
-  /** Cut to a state, clamped to the limits. */
+  /** The limits the state is clamped to (the World's bounds and zoom range). */
+  readonly limits: CameraLimits;
+  /** Cut to a state, clamped to the limits. Stops a flight. */
   jumpTo(state: CameraState): void;
+  /** Fly to a state over `ms` milliseconds (a cut when `ms` is 0). Resolves when it lands or is stopped. */
+  flyTo(state: CameraState, ms: number): Promise<void>;
   dispose(): void;
 }
 
@@ -41,6 +46,35 @@ export function createCameraRig({ element, camera, onChange }: Options): CameraR
   let limits: CameraLimits = { minX: 0, maxX: 0, minZ: 0, maxZ: 0, minZoom: 1, maxZoom: 1 };
   let state: CameraState = { target: { x: 0, z: 0 }, zoom: 1 };
   let distance = 100;
+
+  /** The flight in progress: its animation frame and how to end it. */
+  let flight: { frame: number; done: () => void } | null = null;
+  const stopFlight = () => {
+    if (!flight) return;
+    cancelAnimationFrame(flight.frame);
+    flight.done();
+    flight = null;
+  };
+
+  const flyTo = (to: CameraState, ms: number): Promise<void> => {
+    stopFlight();
+    const from = state;
+    const end = clampState(to, limits);
+    if (ms <= 0) {
+      apply(end);
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const started = performance.now();
+      const step = (now: number) => {
+        const t = Math.min(1, (now - started) / ms);
+        apply(flightState(from, end, t));
+        if (t < 1 && flight) flight.frame = requestAnimationFrame(step);
+        else stopFlight();
+      };
+      flight = { frame: requestAnimationFrame(step), done: resolve };
+    });
+  };
 
   const apply = (next: CameraState) => {
     state = clampState(next, limits);
@@ -86,6 +120,7 @@ export function createCameraRig({ element, camera, onChange }: Options): CameraR
 
   const onPointerDown = (event: PointerEvent) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    stopFlight();
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.size === 1) {
       pressStart = { x: event.clientX, y: event.clientY };
@@ -152,6 +187,7 @@ export function createCameraRig({ element, camera, onChange }: Options): CameraR
 
   const onWheel = (event: WheelEvent) => {
     event.preventDefault();
+    stopFlight();
     const lines = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element.clientHeight : 1;
     // A trackpad pinch arrives as ctrl+wheel with small deltas: zoom faster per unit.
     const rate = event.ctrlKey ? 0.01 : 0.0015;
@@ -174,13 +210,22 @@ export function createCameraRig({ element, camera, onChange }: Options): CameraR
     get state() {
       return state;
     },
+    get limits() {
+      return limits;
+    },
     reset(nextLimits, nextState, nextDistance) {
+      stopFlight();
       limits = nextLimits;
       distance = nextDistance;
       apply(nextState);
     },
-    jumpTo: apply,
+    jumpTo(next) {
+      stopFlight();
+      apply(next);
+    },
+    flyTo,
     dispose() {
+      stopFlight();
       element.removeEventListener('pointerdown', onPointerDown);
       element.removeEventListener('pointermove', onPointerMove);
       element.removeEventListener('pointerup', onPointerEnd);

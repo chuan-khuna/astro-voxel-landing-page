@@ -175,6 +175,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - The World and its state survive route changes, using Astro's client router with a persisted canvas element.
 - Loading a route directly places the camera at its Landmark.
 - **Risk and fallback.** Persisting a WebGPU canvas across routes is unproven on Astro 7, so the routing work starts by proving it. If it fails, the panel fetches the page's content itself; URLs and static pages stay the same.
+- **Proved (ticket 07).** On Astro 7.4 the World frame and its controls carry `transition:persist`; the same canvas, WebGPU renderer, meshes and camera survive clicks, Back, Forward and Seed rolls, so the fallback was not needed. The section routes are one `[...section].astro` page driven by the Landmark list, each with its intro copy from the `pages` collection. Closing a section flies the camera back to where it was before the first section opened (the Overview if the visit began on a section page).
 
 ### Modules
 

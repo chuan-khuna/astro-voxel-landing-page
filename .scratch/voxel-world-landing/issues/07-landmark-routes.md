@@ -4,16 +4,16 @@
 
 **Blocked by:** 06
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Spec: `.scratch/voxel-world-landing/spec.md`
 
-- [ ] The work starts by proving the canvas persists across routes on Astro 7; if it cannot, the panel fetches the page content itself, with the same URLs and static pages
-- [ ] Static routes exist for `/services`, `/about`, `/about/team`, `/garden`, `/dock` and `/contact`, each with intro copy from the `pages` collection
-- [ ] Clicking a Landmark flies the camera to it and opens its page as a side panel on desktop and a bottom sheet on mobile
-- [ ] The World keeps its Seed, meshes and camera across route changes; a rolled Seed follows in the URL
-- [ ] Opening a route directly places the camera at its Landmark with the page open
-- [ ] Browser back and forward move between pages and the World
-- [ ] Each page is full static HTML, readable without JS
-- [ ] `astro check` and `astro build` pass
-- [ ] Documents under `docs/documents/` and its INDEX are updated for anything this ticket adds or changes
+- [x] The work starts by proving the canvas persists across routes on Astro 7; if it cannot, the panel fetches the page content itself, with the same URLs and static pages
+- [x] Static routes exist for `/services`, `/about`, `/about/team`, `/garden`, `/dock` and `/contact`, each with intro copy from the `pages` collection
+- [x] Clicking a Landmark flies the camera to it and opens its page as a side panel on desktop and a bottom sheet on mobile
+- [x] The World keeps its Seed, meshes and camera across route changes; a rolled Seed follows in the URL
+- [x] Opening a route directly places the camera at its Landmark with the page open
+- [x] Browser back and forward move between pages and the World
+- [x] Each page is full static HTML, readable without JS
+- [x] `astro check` and `astro build` pass
+- [x] Documents under `docs/documents/` and its INDEX are updated for anything this ticket adds or changes

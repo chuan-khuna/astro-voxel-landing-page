@@ -1,0 +1,113 @@
+---
+/**
+ * A section page's panel over the World: a side panel on desktop, a bottom
+ * sheet on narrow screens. It is plain static HTML, so the section reads in
+ * full without JS. The close link goes back to the World (`/`, keeping the
+ * Seed); Escape does the same when JS runs.
+ */
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+
+<aside class="panel" data-panel tabindex="-1" aria-labelledby="panel-title">
+  <div class="panel-head">
+    <h1 id="panel-title">{title}</h1>
+    <a class="panel-close" href="/" data-seed-link data-panel-close aria-label={`Close ${title} and return to the World`} title="Close">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+        <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+      </svg>
+    </a>
+  </div>
+  <div class="panel-body">
+    <slot />
+  </div>
+</aside>
+
+<style>
+  .panel {
+    box-sizing: border-box;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1rem 1.25rem 1.25rem;
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: 0 6px 24px oklch(0.2 0.02 250 / 0.18);
+    scrollbar-width: thin;
+    animation: panel-in 220ms ease-out;
+  }
+  .panel:focus {
+    outline: none;
+  }
+  .panel:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: -2px;
+  }
+  .panel-head {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .panel-head h1 {
+    margin: 0.25rem 0 0.5rem;
+    font-size: 1.5rem;
+  }
+  .panel-close {
+    display: inline-flex;
+    flex: none;
+    padding: 0.35rem;
+    border-radius: 4px;
+    color: var(--ink);
+  }
+  .panel-close:hover,
+  .panel-close:focus-visible {
+    background: var(--brand);
+    color: var(--on-brand);
+  }
+  .panel-body :global(p) {
+    line-height: 1.55;
+  }
+
+  /* Desktop: a side panel over the right of the World. */
+  @media (min-width: 48rem) {
+    .panel {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      bottom: 0.75rem;
+      width: min(24rem, 42%);
+      border-radius: 6px;
+      --panel-from: translateX(1.5rem);
+    }
+  }
+  /* Narrow screens: a bottom sheet. */
+  @media (max-width: 47.99rem) {
+    .panel {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10;
+      max-height: 55dvh;
+      border-radius: 6px 6px 0 0;
+      --panel-from: translateY(1.5rem);
+    }
+    /* Leave room below the page so the sheet never hides the end of it. */
+    :global(body:has(.panel)) {
+      padding-bottom: 55dvh;
+    }
+  }
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      transform: var(--panel-from, none);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .panel {
+      animation: none;
+    }
+  }
+</style>

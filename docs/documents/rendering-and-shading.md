@@ -18,7 +18,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid and the ¼-unit detail grid with a shared colour list. `meshWorld(world)`: both grids meshed. | no |
 | `landmarkModels.ts` | The ¼-unit Landmark models (placeholders for now), each filling its footprint, and `landmarkExtent(landmark)`: the box a Landmark covers, measured from what its model draws and never smaller than its footprint. | no |
-| `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`. | no |
+| `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`, `stateShowing` (the state that shows a point at a screen offset) and `flightState` (one moment of an eased flight). | no |
+| `landmarkFocus.ts` | `landmarkFocus(world, id)`: the point to look at and the zoom for each of the seven Landmarks. | no |
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
 | `voxelMaterial.ts` | `voxelMaterial(voxelSize)`: the TSL node material. | yes |
@@ -150,10 +151,11 @@ along x) on sea cells within 2 cells of land. Both are opaque
 ## Scene runtime
 
 `mountWorld(canvas, world, meshed?, ui?)` returns a `WorldView`
-`{ show(world, meshed?), camera, dispose() }`. `ui` is
+`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), dispose() }`. `ui` is
 `{ frame, hotspots }`: the element round the canvas that takes pan and zoom
 input, and the Landmark hotspot links inside it (default: the canvas's
-parent, no hotspots). `camera` is the camera rig (below).
+parent, no hotspots). `camera` is the camera rig (below); `focus` flies the
+camera to a Landmark (see "Landmark focus and flights").
 
 - **Renderer:** `WebGPURenderer` (`three/webgpu`), falling back to WebGL 2 by
   itself. Neutral tone mapping, PCF shadows.
@@ -185,8 +187,8 @@ parent, no hotspots). `camera` is the camera rig (below).
 - The canvas gets `data-seed` (the Seed actually used, after the default
   fallback), `data-triangles` (voxel triangle count), `data-backend`
   (`webgpu` or `webgl2`), `data-frames` (frames rendered so far) and
-  `data-camera` (target x, target z, zoom) for checks in a browser. The home
-  page adds `data-generate-ms`.
+  `data-camera` (target x, target z, zoom) for checks in a browser. The page
+  adds `data-generate-ms`.
 
 ## Camera and interaction
 
@@ -218,15 +220,14 @@ on the isometric axis above the target.
     zooms the page for a gesture that starts on the World, and
     `data-dragging` while dragging (grab and grabbing cursors).
   - `reset(limits, state, distance)` sets new bounds and cuts; `jumpTo(state)`
-    cuts to a clamped state. A camera flight (ticket 07) will tween
-    `CameraState`s and `jumpTo` each frame; under reduced motion it is one
-    `jumpTo`.
+    cuts to a clamped state; `flyTo(state, ms)` flies there (below);
+    `limits` are the current bounds and zoom range.
 - **Limits:** pan bounds are the union of the Isles' footprints (the same
   box the Overview is fitted to), so the view centre is always over the
   World's land box. Zoom runs from 1 (the Overview, the farthest out) to
   `max(2, radius / 3)`, about 3 world units from the centre to the frame
   edge.
-- **Landmark hotspots** (`landmarkHotspots.ts`): the home page renders one
+- **Landmark hotspots** (`landmarkHotspots.ts`): every page renders one
   link per placed Landmark (`a.hotspot[data-hotspot]`, route and label from
   the Landmark list) inside the frame, hidden until the World is shown. On
   every frame each link is sized to the screen rectangle of its Landmark's
@@ -238,6 +239,35 @@ on the isometric axis above the target.
   cuts to centre on it. The frame uses `overflow: clip`, so focusing a
   hotspot never scrolls the frame. This is not GPU picking; single trees and
   other pickable things (later tickets) may need real picking.
+
+### Landmark focus and flights
+
+- **`landmarkFocus(world, id)`** (pure, tested in `landmarkFocus.test.ts`)
+  gives each Landmark a point and a zoom:
+  - Overview: the Overview view's target at zoom 1, the World's first framing.
+  - A placed Landmark: the middle of its footprint, on top of its ground
+    (`y`), with its footprint plus 5 world units of ground round it in
+    frame: zoom = Overview radius / (half the footprint's longer side + 5),
+    never below 1.
+  - House Interior: the World's House Interior view (the middle of the
+    House), at Overview radius / view radius, so closer than the House. The
+    roof lift and the room come in a later ticket.
+- **`stateShowing(point, zoom, at, limits)`** is the camera state that shows a
+  World point at a screen offset (frame units from the centre). A raised
+  point is seen where the view ray through it meets the ground, so the
+  target is the point moved `y` back along the isometric axis, then shifted
+  by the offset. Tested against a real three.js camera.
+- **`view.focus(id, { at, ms })`** combines the two: `at` is where on the
+  frame (CSS px from its centre) the Landmark should land. The page passes
+  the middle of the part of the frame the section panel leaves free, so the
+  Landmark is never under the panel.
+- **Flights:** `rig.flyTo(state, ms)` tweens with `flightState(from, to, t)`:
+  cubic ease in and out, the target in a straight line and the zoom on a
+  log scale (zooming in and out feel equally fast); one `jumpTo` per
+  animation frame, so frames render only during the flight. Any pointer
+  press or wheel stops a flight where it is; `jumpTo`, `reset` and a new
+  `flyTo` stop it too. With `ms` 0 it is a cut. The page flies for 900 ms,
+  and cuts under `prefers-reduced-motion: reduce`.
 
 ## Budget
 
@@ -251,7 +281,7 @@ below that today (counts for the voxel meshes; the sea adds a few hundred):
 | `3` | 3 | 3,422 | 1,336 | 4,758 |
 | `13` | 4 | 2,100 | 1,872 | 3,972 |
 
-Counts are with no Projects (the home page passes zero for now). Highest
+Counts are with no Projects (the pages pass zero for now). Highest
 over Seeds `0`–`299`: 5,370; with 24 trees in the Garden, 7,432. Meshing takes about 15–25 ms per World.
 `mesher.test.ts` checks the budget on 40 sampled Seeds, including 4-Isle
 ones. Real tree models, boats, ships and decoration (later tickets) will add most of the
@@ -259,6 +289,6 @@ remaining triangles.
 
 ## Not yet built
 
-Day/Night lighting, camera flights to Landmarks, picking of trees (Landmarks
+Day/Night lighting, picking of trees (Landmarks
 use hotspots), animation (water, trees, ships), the reduced-decoration tier,
 real Landmark models, and the Guide's dissolve and re-form on a new Seed.

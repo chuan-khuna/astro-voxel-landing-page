@@ -1,5 +1,9 @@
 ---
 import { landmarksInStoryOrder } from '../data/site';
+import { landmarkForPath } from '../lib/landmarkRoutes';
+
+// The section this page belongs to is marked as the current page.
+const current = landmarkForPath(Astro.url.pathname);
 ---
 
 <nav class="landmark-menu" aria-label="Landmarks">
@@ -7,7 +11,11 @@ import { landmarksInStoryOrder } from '../data/site';
     {
       landmarksInStoryOrder.map((landmark) => (
         <li>
-          <a href={landmark.route} data-landmark={landmark.id} data-seed-link>
+          <a
+            href={landmark.route}
+            data-landmark={landmark.id}
+            data-seed-link
+            aria-current={landmark.id === current ? 'page' : undefined}>
             {landmark.label}
           </a>
         </li>
@@ -32,6 +40,10 @@ import { landmarksInStoryOrder } from '../data/site';
     background: var(--surface);
     color: var(--ink);
     text-decoration: none;
+  }
+  .landmark-menu a[aria-current='page'] {
+    outline: 2px solid var(--brand);
+    outline-offset: -2px;
   }
   .landmark-menu a:hover,
   .landmark-menu a:focus-visible {

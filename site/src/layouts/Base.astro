@@ -1,4 +1,5 @@
 ---
+import { ClientRouter } from 'astro:transitions';
 import { site } from '../data/site';
 
 interface Props {
@@ -9,13 +10,16 @@ const { title = site.seo.title, description = site.seo.description } = Astro.pro
 ---
 
 <!doctype html>
-<html lang="en">
+<!-- No page cross-fade: the World stays put and only the panel changes. -->
+<html lang="en" transition:animate="none">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="icon" href="data:," />
+    <!-- The client router keeps the World canvas (transition:persist) across routes. -->
+    <ClientRouter />
   </head>
   <body style={`--brand: ${site.brand.colour}; --font: ${site.brand.font};`}>
     <slot />

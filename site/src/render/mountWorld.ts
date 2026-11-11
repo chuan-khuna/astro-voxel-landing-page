@@ -10,14 +10,18 @@
  *   writes `canvas.dataset.camera` (target x, z and zoom), for checks.
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
  *   Landmark hotspots (`landmarkHotspots.ts`) follow the camera.
+ * - `focus(landmark)` flies (or cuts) the camera to a Landmark
+ *   (`landmarkFocus.ts`), optionally off centre to leave room for a panel.
  * - `show(world)` swaps in another World (a new Seed) and disposes the old one.
  * - DPR is capped at 1.5 on touch devices and 2 elsewhere.
  */
 import * as THREE from 'three/webgpu';
-import type { World } from '../world';
+import type { LandmarkId, World } from '../world';
 import { FIXED_COLOURS, LOOK, oklchToLinear, type FixedColour } from './palette';
 import { createCameraRig, type CameraRig } from './cameraRig';
 import { createLandmarkHotspots } from './landmarkHotspots';
+import { landmarkFocus } from './landmarkFocus';
+import { stateShowing, type CameraState } from './cameraMath';
 import { buildWorldObjects, type WorldObjects } from './worldMeshes';
 import type { MeshedWorld } from './worldVoxels';
 
@@ -41,9 +45,23 @@ export interface WorldView {
    * Pass `meshed` when the World was meshed in the Web Worker.
    */
   show(world: World, meshed?: MeshedWorld): void;
-  /** The camera rig: its state, and cuts to other states. */
+  /** The camera rig: its state, cuts and flights to other states. */
   readonly camera: CameraRig;
+  /** The camera state that shows a Landmark of the World on show; see `focus`. */
+  focusState(id: LandmarkId, at?: ScreenOffset): CameraState;
+  /**
+   * Fly the camera to a Landmark over `ms` (0 cuts). `at` is where on the
+   * frame the Landmark should end up, in CSS px from the frame's centre
+   * (y down): the middle of the part a panel leaves free. Resolves on landing.
+   */
+  focus(id: LandmarkId, options: { at?: ScreenOffset; ms: number }): Promise<void>;
   dispose(): void;
+}
+
+/** CSS px from the centre of the World's frame, x right and y down. */
+export interface ScreenOffset {
+  x: number;
+  y: number;
 }
 
 export interface WorldFrame {
@@ -133,7 +151,9 @@ export async function mountWorld(
   };
 
   let objects: WorldObjects | null = null;
+  let current = world;
   const show = (next: World, nextMeshed?: MeshedWorld) => {
+    current = next;
     // Free the old World's GPU buffers and materials before building the new one.
     if (objects) {
       scene.remove(objects.group);
@@ -175,9 +195,18 @@ export async function mountWorld(
   resize();
   canvas.dataset.backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl2';
 
+  const focusState = (id: LandmarkId, at: ScreenOffset = { x: 0, y: 0 }) => {
+    const { point, zoom } = landmarkFocus(current, id);
+    // CSS px to frame units (world units at zoom 1), y up.
+    const k = (camera.top - camera.bottom) / Math.max(1, ui.frame.clientHeight);
+    return stateShowing(point, zoom, { x: at.x * k, y: -at.y * k }, rig.limits);
+  };
+
   return {
     show,
     camera: rig,
+    focusState,
+    focus: (id, { at, ms }) => rig.flyTo(focusState(id, at), ms),
     dispose: () => {
       cancelAnimationFrame(frame);
       rig.dispose();

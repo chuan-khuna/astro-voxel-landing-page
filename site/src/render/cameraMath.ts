@@ -71,3 +71,39 @@ export function zoomAt(state: CameraState, focus: { x: number; y: number }, fact
   return clampState({ target: { x: state.target.x + toFocus.x * shift, z: state.target.z + toFocus.z * shift }, zoom }, limits);
 }
 
+
+/** A point in the World: x east, y up, z south. */
+export interface WorldPoint {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * The state that shows `point` at `at` (frame units from the screen centre,
+ * y up) at `zoom`, clamped to the limits. A raised point is seen where the
+ * view ray through it meets the ground, `y` back along the isometric axis.
+ */
+export function stateShowing(point: WorldPoint, zoom: number, at: { x: number; y: number }, limits: CameraLimits): CameraState {
+  const z = clamp(zoom, limits.minZoom, limits.maxZoom);
+  const offset = screenToGround(at.x, at.y);
+  return clampState({ target: { x: point.x - point.y - offset.x / z, z: point.z - point.y - offset.z / z }, zoom: z }, limits);
+}
+
+/** Cubic ease in and out: slow at both ends, symmetric about the middle. */
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+
+/**
+ * The camera `t` (0–1) of the way through a flight from `from` to `to`,
+ * eased in and out. The target moves in a straight line; the zoom changes
+ * on a log scale, so zooming in and out feel equally fast.
+ */
+export function flightState(from: CameraState, to: CameraState, t: number): CameraState {
+  if (t <= 0) return from;
+  if (t >= 1) return to;
+  const k = easeInOut(t);
+  return {
+    target: { x: from.target.x + (to.target.x - from.target.x) * k, z: from.target.z + (to.target.z - from.target.z) * k },
+    zoom: Math.exp(Math.log(from.zoom) + (Math.log(to.zoom) - Math.log(from.zoom)) * k),
+  };
+}

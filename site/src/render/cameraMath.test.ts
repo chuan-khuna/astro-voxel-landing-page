@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { clampState, panBy, zoomAt, type CameraLimits, type CameraState } from './cameraMath';
+import { clampState, flightState, panBy, stateShowing, zoomAt, type CameraLimits, type CameraState } from './cameraMath';
 
 const limits: CameraLimits = { minX: 0, maxX: 40, minZ: 0, maxZ: 30, minZoom: 1, maxZoom: 6 };
 const start: CameraState = { target: { x: 20, z: 15 }, zoom: 2 };
@@ -67,5 +67,65 @@ describe('zoomAt', () => {
 describe('clampState', () => {
   it('leaves a state inside the limits unchanged', () => {
     expect(clampState(start, limits)).toEqual(start);
+  });
+});
+
+/** A 3D point on screen, in frame units from the centre (y up). */
+function pointOnScreen(state: CameraState, x: number, y: number, z: number) {
+  const p = new THREE.Vector3(x, y, z).project(cameraFor(state));
+  return { x: p.x * HALF, y: p.y * HALF };
+}
+
+describe('stateShowing', () => {
+  it('puts a raised point at the screen centre', () => {
+    const state = stateShowing({ x: 18, y: 3, z: 12 }, 2.5, { x: 0, y: 0 }, limits);
+    expect(state.zoom).toBe(2.5);
+    const seen = pointOnScreen(state, 18, 3, 12);
+    expect(seen.x).toBeCloseTo(0, 6);
+    expect(seen.y).toBeCloseTo(0, 6);
+  });
+
+  it('puts the point at a given screen offset, e.g. the middle of the part a panel leaves free', () => {
+    const at = { x: -2.5, y: 1 };
+    const state = stateShowing({ x: 22, y: 2, z: 16 }, 3, at, limits);
+    const seen = pointOnScreen(state, 22, 2, 16);
+    expect(seen.x).toBeCloseTo(at.x, 6);
+    expect(seen.y).toBeCloseTo(at.y, 6);
+  });
+
+  it('stays inside the limits', () => {
+    const state = stateShowing({ x: 100, y: 0, z: -50 }, 50, { x: 0, y: 0 }, limits);
+    expect(state).toEqual(clampState(state, limits));
+    expect(state.zoom).toBe(limits.maxZoom);
+  });
+});
+
+describe('flightState', () => {
+  const from: CameraState = { target: { x: 4, z: 6 }, zoom: 1 };
+  const to: CameraState = { target: { x: 24, z: 2 }, zoom: 4 };
+
+  it('starts where the camera was and ends at the destination', () => {
+    expect(flightState(from, to, 0)).toEqual(from);
+    expect(flightState(from, to, 1)).toEqual(to);
+  });
+
+  it('is halfway at half time, with the zoom halfway on a log scale', () => {
+    const mid = flightState(from, to, 0.5);
+    expect(mid.target.x).toBeCloseTo(14, 6);
+    expect(mid.target.z).toBeCloseTo(4, 6);
+    expect(mid.zoom).toBeCloseTo(2, 6);
+  });
+
+  it('eases in and out: slow at both ends, never overshooting', () => {
+    let last = from.target.x;
+    for (let i = 1; i <= 20; i++) {
+      const x = flightState(from, to, i / 20).target.x;
+      expect(x).toBeGreaterThanOrEqual(last);
+      expect(x).toBeLessThanOrEqual(to.target.x);
+      last = x;
+    }
+    const firstStep = flightState(from, to, 0.05).target.x - from.target.x;
+    const middleStep = flightState(from, to, 0.525).target.x - flightState(from, to, 0.475).target.x;
+    expect(firstStep).toBeLessThan(middleStep / 4);
   });
 });
