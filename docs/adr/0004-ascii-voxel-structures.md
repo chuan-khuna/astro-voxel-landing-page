@@ -8,7 +8,7 @@ We chose this because agents draw the models. An agent can write, read, test and
 
 - Around 40+ structures (Landmark styles × Biomes × Variants, plants, boats, ships, Decoration) are text files the user reviews through a dev-only Model Gallery (`/dev/models`), not by opening the files.
 - Structure files can be tested as data: they parse, use known roles, fill their footprint, and have the doors and interior space their Landmark needs.
-- Detail stays at ¼ unit. A House is 12×12 voxels.
+- Detail stays at ¼ unit. A House is 12×12 voxels. ADR 0005 allows ⅛-unit cubes for Ambient Life particles only. They have no structure file.
 - For three.js the source format makes no difference. Repeated structures are drawn with one `InstancedMesh` each, and placed Landmarks are greedy-meshed once.
 
 ## Considered Options

@@ -32,6 +32,10 @@ _Avoid_: skin, model type
 Scenery that stands for nothing and cannot be clicked: small trees, grass, flower clumps, and minor buildings such as sheds, fences, lamps or windmills. Each Biome has its own set, and the Seed decides where it goes. Decoration never stands in a Landmark's place, inside the Garden, or in front of a Landmark, and is never taller than the Landmarks near it.
 _Avoid_: props, scatter, filler
 
+**Ambient Life**:
+Everything in the World that moves without standing for anything: animals, birds, fish, butterflies, fireflies, falling leaves, clouds, wind in the plants and waves on the shore. Each Biome has its own creatures, and Day or Night decides which are out. Like Decoration it cannot be clicked, and it never hides a Landmark for long. It stands still under reduced motion.
+_Avoid_: critters, wildlife, effects
+
 **Story Order**:
 The fixed sequence in which the visitor is guided through the Landmarks; it never depends on the Seed.
 

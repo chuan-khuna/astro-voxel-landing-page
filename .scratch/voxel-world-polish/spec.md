@@ -5,9 +5,9 @@ Status: ready-for-agent
 Starts after every ticket in `.scratch/voxel-world-landing/` is resolved. It builds on that feature's World generator, renderer and routes.
 
 Sources:
-- Discussion record: `docs/records/2026-11-11-voxel-world-polish.md`
-- Glossary: `GLOSSARY.md` (Pinned Project, Landmark Variant, Decoration, and the updated Biome, Client and Partner)
-- ADRs: `docs/adr/0004-ascii-voxel-structures.md`, plus 0001–0003
+- Discussion records: `docs/records/2026-11-11-voxel-world-polish.md`, `docs/records/2026-11-11-voxel-world-ambient-life.md`
+- Glossary: `GLOSSARY.md` (Pinned Project, Landmark Variant, Decoration, Ambient Life, and the updated Biome, Client and Partner)
+- ADRs: `docs/adr/0004-ascii-voxel-structures.md`, `docs/adr/0005-continuous-render-for-ambient-life.md`, plus 0001–0003
 - Base spec: `.scratch/voxel-world-landing/spec.md`
 
 ## Problem Statement
@@ -47,6 +47,14 @@ Rolling a new Seed changes the terrain and the colours, but not the character of
 
 **House Interior.** Each Biome has its own furnished room. Every House Variant in that Biome has a liftable roof and fits that room.
 
+**Ambient Life.** The World moves on its own while it is visible:
+- wind sways the plants and blows leaves
+- each Biome has its own animals and particles (butterflies, fireflies, snow, ash), and Day or Night decides which are out
+- clouds drift over the sea and their shadows cross the Isles
+- fish swim in the shallows and waves break on the shore
+
+None of it can be clicked, none of it hides a Landmark for long, and all of it stands still under reduced motion (ADR 0005).
+
 ## User Stories
 
 1. As a visitor, I want each Biome's buildings to have their own style, so that rolling a new Seed feels like visiting a new place.
@@ -64,6 +72,12 @@ Rolling a new Seed changes the terrain and the colours, but not the character of
 13. As a site owner, I want to pin Projects in content, so that I choose what the Garden highlights.
 14. As a site owner, I want to review every model in one gallery before it ships, so that the look stays under my control.
 15. As a mobile visitor, I want fewer Decoration pieces, so that the World stays smooth, but never missing Landmarks.
+16. As a visitor, I want animals, birds, fish and insects moving about, so that the World feels alive.
+17. As a visitor, I want wind in the trees, falling leaves, drifting clouds and waves on the shore, so that the miniature never looks frozen.
+18. As a visitor at Night, I want fireflies, bats and faintly glowing surf, so that Night has its own life.
+19. As a visitor, I want moving things never to block a click or hide a Landmark, so that finding sections stays easy.
+20. As a visitor who prefers reduced motion, I want all Ambient Life to stand still, so that the World does not move without me.
+21. As a visitor on a slow device, I want the motion to scale itself down, so that panning and camera flights stay smooth.
 
 ## Implementation Decisions
 
@@ -145,6 +159,28 @@ Rolling a new Seed changes the terrain and the colours, but not the character of
 - Models can be rotated, and the page can switch between Day and Night.
 - Agents attach gallery screenshots whenever they add or change models.
 
+**Ambient Life (ADR 0005)**
+- *Render loop.* While the World is visible (tab shown, canvas on screen), it renders continuously. Phones cap at 30 fps. It goes back to render on demand under reduced motion, when hidden or off screen, and at the still tier.
+- *Tiers.* There are three tiers: full, reduced and still. Desktop starts at full and phones at reduced. Frames slower than the target for several seconds drop one tier, which never climbs back during that visit. Camera flights and drags never stutter because of Ambient Life.
+- *One clock and one wind.* Every motion reads a shared time uniform and a shared wind uniform. The wind has one direction for the whole World, decided by the Seed, and blows in gusts that roll across the Isles. Freezing the clock freezes everything, for reduced motion, the still tier, the Model Gallery and build-time stills.
+- *Not clickable.* Ambient Life is never a hotspot or a raycast target. Pointers reach Landmarks and Garden plants through it.
+- *Scale.* Shaped creatures (deer, squirrels, birds, fish) are ¼-unit ASCII structures drawn with `InstancedMesh`. Particles (butterflies, fireflies, leaves, snow, ash, foam) are single-colour ⅛-unit cubes moved in the shader, with no structure file.
+- *Sets.* Each Biome has its own creatures, and Day or Night decides which are out:
+
+  | Biome | Day | Night |
+  |---|---|---|
+  | tropical | bright butterflies, seabirds | fireflies |
+  | northern | deer, drifting snow | fireflies |
+  | autumn | red falling leaves, squirrels | fireflies, bats |
+  | volcanic | drifting ash | bats |
+
+  Wind, shore waves, clouds and fish appear in every Biome. Fish species follow the Biome. Agents may adjust the sets in review, but every Biome keeps something for Day and for Night.
+- *Wind sway.* Only instanced plants sway: Garden trees and flowers, and Decoration's small trees, grass and flower clumps. Only the canopy moves, by at most ½ voxel, so tree hotspots still line up. Landmarks stay still. Boats and ships rock on the swell.
+- *Clouds.* Clouds are slightly translucent 1-unit voxel masses drifting high with the wind, only over the sea round the Isles. Soft cloud shadows cross the whole World. Clouds fade out as the camera zooms in on a Landmark. At Night they darken and cast no shadow.
+- *Sea.* Shore foam (⅛-unit) runs in towards the coast, breaks along the edge and draws back. It is computed in the shader from the same distance-from-coast data as the water colour. Schools of 3–5 fish swim in the shallows, seen through the translucent water. Now and then one leaps and splashes. At Night the foam dims, and a faint bioluminescent glow shows where waves break.
+- *Land animals.* `generateWorld` gives each land animal a rest point and a short route from the Seed. Routes never cross a footprint, a bridge or the Garden, and never stand between the camera and a Landmark, using the Decoration occlusion check. At runtime an animal walks its route, then rests, grazes or turns its head. Each Isle has at most 2–3 animals.
+- *Birds* circle above the Isles, higher than every Landmark, and never fly through the camera's view of a Landmark.
+
 ## Testing Decisions
 
 - World behaviour is still tested through `generateWorld` only.
@@ -160,12 +196,20 @@ Rolling a new Seed changes the terrain and the colours, but not the character of
   - each fills its declared footprint
   - each House Variant has a liftable roof and the Biome's interior space
 - **Boat kinds:** the same id gives the same kind in every World.
+- **Ambient Life:**
+  - Spawn points, routes and wind direction are deterministic from the Seed.
+  - Animal routes never cross a footprint, bridge or the Garden, and never occlude a Landmark, over hundreds of Seeds.
+  - At most 3 animals per Isle.
+  - Creature sets come from the World's Biome.
+  - The tier controller is tested as pure logic: slow frames drop a tier, it never climbs back, and reduced motion means still.
 - **No snapshots:** voxel grids are not snapshot-tested.
 - **Real page:** every ticket is checked in a browser on several Seeds at desktop and phone sizes, with no console errors.
 
 ## Out of Scope
 
-- Finer than ¼-unit detail.
+- Finer than ¼-unit detail, except ⅛-unit Ambient Life particles (ADR 0005).
+- Clickable or interactive Ambient Life.
+- Weather or a Seed- or clock-driven time of day (as in the base spec).
 - MagicaVoxel `.vox` files (ADR 0004).
 - Interior rooms per House Variant; there is one per Biome.
 - New Biomes.
