@@ -7,17 +7,20 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 - Code: `site/src/render/`
 - Decision: `docs/adr/0002-webgpu-renderer-with-tsl.md`
 - Tests: `site/src/render/mesher.test.ts`, `cameraMath.test.ts`,
-  `landmarkModels.test.ts` and `dataCardMath.test.ts` (a few behavioural checks; the World generator
+  `landmarkModels.test.ts`, `houseModel.test.ts`, `houseMotion.test.ts` and
+  `dataCardMath.test.ts` (a few behavioural checks; the World generator
   stays the main test seam)
 
 ## Code layout
 
 | File | What it does | three.js? |
 |---|---|---|
-| `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, placeholder parts, boat and ship hulls and sail, sky, lights) as OKLCH, `oklchToLinear`. | no |
+| `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, its room and developer, placeholder parts, boat and ship hulls and sail, sky, lights) as OKLCH, `oklchToLinear`. | no |
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid and the ¼-unit detail grid with a shared colour list. `meshWorld(world)`: both grids meshed. | no |
-| `landmarkModels.ts` | The ¼-unit Landmark models (the Station's is its real model; the rest are placeholders), each filling its footprint, and `landmarkExtent(landmark)`: the box a Landmark covers, measured from what its model draws and never smaller than its footprint. | no |
+| `landmarkModels.ts` | The ¼-unit Landmark models (the Station's and the House's are real models; the rest are placeholders), each filling its footprint, and `landmarkExtent(landmark)`: the box a Landmark covers, measured from what its model draws and never smaller than its footprint. | no |
+| `houseModel.ts` | The House in parts: `drawHouseBase` (stays), `drawHouseLid` (lifts), `drawHouseRoom` (desk, computer, chair, plant, the developer's seated body) in `HOUSE_INTERIOR`, the developer's moving parts (`DEVELOPER_PARTS`, `drawDeveloperPart`), the `SCREEN` rectangle and `developerExtent` (the developer's box, for their link). | no |
+| `houseMotion.ts` | `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame) and `developerPose(seconds)` (typing and reading). | no |
 | `vesselModels.ts` | `drawBoat(boat, grid, colours)`: a Client's boat in its berth, drawn into the detail grid; `shipVoxels(colours)`: the Partner ship's own small grid, centred on `SHIP_ORIGIN`, bow towards +x. | no |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
 | `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`, `stateShowing` (the state that shows a point at a screen offset), `screenOffsetOf` (where a point is seen; its inverse) and `flightState` (one moment of an eased flight). | no |
@@ -26,16 +29,18 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
 | `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?)`: the TSL node material, in world space or (for ships) the mesh's own space. | yes |
+| `house.ts` | `buildHouse(world)`: the lid and the developer's head and hands as meshes, and the screen's code shader; `setOpening` lifts the lid, `work(seconds)` animates the room. | yes |
 | `ships.ts` | `buildFleet(world)`: one mesh per Partner ship, sharing one geometry, and `sail(seconds)` to move them along their loops. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea and the ships, as a `THREE.Group`. | yes |
-| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, swapping Worlds. | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, the ships and the House's moving parts, as a `THREE.Group`. | yes |
+| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, opening the House, swapping Worlds. | yes |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it. | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
-| `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, and the Garden's tree links over their trees. | yes |
+| `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, the Garden's tree links over their trees and, while the House is open, the developer's link over the developer. | yes |
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
-meshing run in the Web Worker. Only geometry upload, materials, the sea and
-the ship mesh (one small grid) are built on the main thread.
+meshing run in the Web Worker. Only geometry upload, materials, the sea,
+the ship mesh and the House's lid and developer parts (small grids) are
+built on the main thread.
 
 ## Voxel grids
 
@@ -45,7 +50,7 @@ spans world `[x·size, (x+1)·size)`):
 | Grid | Voxel size | Contents |
 |---|---|---|
 | terrain | 1 unit | Every land column from y = 0 to its height. The top voxel takes the surface colour (sand, grass, peak) or the path colour; buried voxels take their stratum's colour. |
-| detail | ¼ unit (`DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Landmark models, each filling its footprint, and the Clients' moored boats. |
+| detail | ¼ unit (`DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Landmark models, each filling its footprint (the House's base and room, not its lid), and the Clients' moored boats. |
 
 Colours: each grid voxel holds a colour id into one shared list
 (`ColourTable`). Biome colours come from `world.biome`; the House, sky and
@@ -60,12 +65,12 @@ with its origin at the min corner of the Landmark's footprint (see
 above the ground. Each model gets its footprint's size in ¼ voxels
 (`4 × width` by `4 × depth`), its ground height, and, in local ¼ voxels, the
 Garden's tree cells and the Dock's jetty cells, and fills that footprint.
-The Station has its real model (ticket 09); the others are simple placeholders:
+The Station and the House have their real models (tickets 09 and 11); the others are simple placeholders:
 
 | Landmark | Model |
 |---|---|
 | Station (2×2) | the data station: a concrete pad; a metal control hut with a blue door and windows on the two faces the camera sees, a flat roof and a dish on it; a thin lattice mast at the back corner topped by an accent light (17 ¼ voxels up); two server cabinets with accent status lights and a data tank in the front yard. Tall parts stand at the back, so nothing hides the door. |
-| House (3×3) | a whitewashed block on a plinth, blue door, windows, flat roof and blue dome |
+| House (3×3) | its base and room (`houseModel.ts`; see "The House and its room"). Its lid is a mesh of its own, but `landmarkExtent` counts it, shut, so the hotspot covers the whole House. |
 | Garden | one tree per tree cell, each filling its cell (trunk, 4×4 canopy); a flower in every other cell |
 | Dock (2×1) | a plank platform on the land cells; a plank deck level with the ground over each jetty cell, on posts down to the sea floor |
 | Mailbox (1×1) | a post with a blue box the width of the cell |
@@ -174,6 +179,54 @@ follow its Client's id, never the Seed.
   least twice a boat's length, wider and more than twice its height,
   centred on its origin.
 
+## The House and its room
+
+The House (ticket 11) is a code-built model in three parts, so its roof can
+lift off and show a room inside, like a doll's house. All in the House's
+local ¼ voxels (`houseModel.ts`, pure; 12×12 on its 3×3 footprint):
+
+| Part | What | Drawn |
+|---|---|---|
+| base | the plinth, a wooden floor with a rug, and the two back walls (low x and low z), each with a window, one with a bougainvillea flower | into the detail grid (static) |
+| lid | the roof slab, the blue dome, and the two front walls (high x and high z: the faces the isometric camera sees) with the door, the windows and bougainvillea on the corner | its own mesh, which lifts |
+| room | in `HOUSE_INTERIOR` (x and z 2–10, y 1–9: 8×8×8 ¼ voxels, inside the walls and under the roof): a desk along the back-left wall, a computer on it facing into the room (+x), a mug, a chair, a plant, and the developer's seated body (trousers, shirt, arms on the desk) facing the computer, so the camera looks over their shoulder at the screen | into the detail grid (static) |
+| developer | head (with hair) and two hands (`DEVELOPER_PARTS`) | one small mesh each, which move |
+| screen | `SCREEN`: a rectangle on the computer's face | a plane with a TSL shader |
+
+The base and lid never share a voxel and leave the interior space empty; the
+lid covers every interior column from above; with the lid off the base has
+no wall on the front sides, so the camera sees in; the room and developer
+fit the interior space; the screen sits on the computer's face with nothing
+in front of it. `houseModel.test.ts` checks all of these. House Variants and
+one room per Biome (the polish feature, ADR 0004) keep the same split and
+interior space.
+
+- **Meshes** (`house.ts`). The lid and the developer's parts are meshed on
+  the main thread at the House's place in the World (whole ¼ voxels) and use
+  `voxelMaterial(0.25, 'local')`, so their seams line up with the base's
+  and travel with them. The lid casts and receives shadows; the developer
+  only receives them. The screen is a `MeshBasicNodeMaterial` plane a hair
+  in front of the computer: a 14 × 7 pixel grid with a gap round each
+  pixel, lines indented and as long as a hash of the line number says, in
+  one of three muted colours (teal, pink, white), with gaps between words
+  and the odd blank line. A `uniform` time scrolls it up 2.5 lines a
+  second.
+- **Lifting** (`houseMotion.ts`). The House's opening runs from 0 (shut)
+  to 1 (open); `openingStep` moves it toward open or shut at a rate that
+  takes the given time end to end (a cut at 0). `roofLift(opening)` lifts
+  the lid by up to `ROOF_LIFT` = 6 units, eased in and out: high enough
+  that, in the House Interior close-up, the lid is clear of the room on
+  screen (it rises out of the top of the frame). The sun's shadow map is
+  redrawn on every frame while the lid moves, then stays static.
+- **The developer at work.** `developerPose(seconds)`: in a 5 s cycle the
+  developer types for 3.6 s (each hand taps three times a second, in turn,
+  never both up, at most a third of a ¼ voxel; the taps fade in and out)
+  and then pauses to read the screen, the head bobbing a fifth of a ¼
+  voxel. Smooth everywhere, and the rest pose at 0. `houseMotion.test.ts`
+  checks the lift, the opening steps and the pose.
+- **Triangles.** The room adds about 320 triangles to the detail mesh; the
+  lid is 250 and the developer's parts 48, as their own meshes.
+
 ## Sea
 
 A wide deep-water plane at y = 0.15, plus shallow-water quads (runs merged
@@ -199,13 +252,16 @@ along x) on sea cells within 2 cells of land. Both are opaque
 ## Scene runtime
 
 `mountWorld(canvas, world, meshed?, ui?)` returns a `WorldView`
-`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), dispose() }`. `ui` is
+`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), setViewCentre(at), setInterior(open, ms), dispose() }`. `ui` is
 `{ frame, hotspots, cards? }`: the element round the canvas that takes pan and zoom
 input, the Landmark hotspot links inside it, and the Data Cards (default: the canvas's
 parent, no hotspots, no cards). `setViewCentre(at)` says where the visitor
 looks (CSS px from the frame's centre: the middle of the part the floating
 cards leave free, from `freeCentre`), which picks the Data Card shown and
-is where the pan bounds apply (`CameraLimits.at`, below). `camera` is the camera rig (below); `focus` flies the
+is where the pan bounds apply (`CameraLimits.at`, below). `setInterior(open, ms)`
+opens the House (its lid lifts over `ms`, the developer's link shows) or
+shuts it (the lid comes down); 0 cuts. The House stays open or shut across
+`show`: a new World's lid starts where the old one was. `camera` is the camera rig (below); `focus` flies the
 camera to a Landmark (see "Landmark focus and flights").
 
 - **Renderer:** `WebGPURenderer` (`three/webgpu`), falling back to WebGL 2 by
@@ -234,7 +290,13 @@ camera to a Landmark (see "Landmark focus and flights").
   advance at most 0.1 s a frame, so ships never leap after a pause. With no
   ships, under `prefers-reduced-motion: reduce` (ships keep still where they
   are) or on a hidden page, nothing renders while idle; a change to either
-  setting requests a frame. Each frame first updates the camera's matrices, re-places the hotspots
+  setting requests a frame. The House keeps frames coming too: while its
+  lid moves (the page cuts it under reduced motion), and while it is open,
+  the page visible and motion allowed, when every frame advances the
+  developer and the screen (`house.work`). Elapsed time is shared: at most
+  0.1 s a frame for ships and the developer alike. Under reduced motion
+  the open House renders once and goes idle, the developer in their pose of
+  the moment. Each frame first updates the camera's matrices, re-places the hotspots
   and the Data Cards, then renders.
   three's `render()` also starts the renderer's internal animation loop,
   which would then tick `requestAnimationFrame` forever (it only advances
@@ -244,7 +306,8 @@ camera to a Landmark (see "Landmark focus and flights").
   Other animation should request frames only while it moves, like the ships.
 - The canvas gets `data-seed` (the Seed actually used, after the default
   fallback), `data-triangles` (voxel triangle count), `data-backend`
-  (`webgpu` or `webgl2`), `data-frames` (frames rendered so far) and
+  (`webgpu` or `webgl2`), `data-frames` (frames rendered so far),
+  `data-interior` (`open`, `shut` or `moving`: the House's lid) and
   `data-camera` (target x, target z, zoom) for checks in a browser. The page
   adds `data-generate-ms`.
 
@@ -301,6 +364,13 @@ on the isometric axis above the target.
   keyboard focus. If a hotspot takes focus while off screen, the camera
   cuts to centre on it. The frame uses `overflow: clip`, so focusing a
   hotspot never scrolls the frame. This is not GPU picking.
+- **The developer's link** (ticket 11): right after the House's hotspot, the
+  page renders a link to Team (`a.hotspot.developer[data-developer]`,
+  `data-hotspot="house-interior"`, labelled "Meet the Team"), sized to the
+  developer's box (`developerExtent`). It is hidden while the House is shut
+  and shown while it is open (`setInterior`), above the House's hotspot,
+  which covers the room. On `/about/team` the page marks it with
+  `aria-current="page"` (an outline).
 - **Tree links** (ticket 08): right after the Garden's hotspot, the page
   renders one link per Garden tree (`a.hotspot.tree[data-project]`, also
   `data-hotspot="garden"`) to `/garden/<id>`, labelled with the Project's
@@ -370,8 +440,9 @@ camera):
     frame: zoom = Overview radius / (half the footprint's longer side + 5),
     never below 1.
   - House Interior: the World's House Interior view (the middle of the
-    House), at Overview radius / view radius, so closer than the House. The
-    roof lift and the room come in a later ticket.
+    House), at Overview radius / view radius, so closer than the House.
+    Both `/about` and `/about/team` fly here (`routeView` in
+    `src/lib/landmarkRoutes.ts`), with the House open.
 - **`stateShowing(point, zoom, at, limits)`** is the camera state that shows a
   World point at a screen offset (frame units from the centre). A raised
   point is seen where the view ray through it meets the ground, so the
@@ -409,10 +480,12 @@ over Seeds `0`–`299`: 5,610; with 24 trees in the Garden, 7,672 (the Station's
 ones. Boats (ticket 10) add about 53 triangles each, so 12 boats about 640
 (highest over Seeds `0`–`299` with 24 trees and 12 boats: 8,320); each
 ship adds 206, outside the voxel chunks (`data-triangles` counts them).
-Real tree models and decoration (later tickets) will add most of the
-remaining triangles.
+The House's room (ticket 11) adds about 320 to the detail mesh, and its
+lid (250) and the developer (48) are meshes of their own (counted in
+`data-triangles`). Real tree models and decoration (later tickets) will
+add most of the remaining triangles.
 
 ## Not yet built
 
 Day/Night lighting, animation of water and trees, boat and ship kinds, the reduced-decoration tier,
-real models for the House, Garden, Dock and Mailbox, and the Guide's dissolve and re-form on a new Seed.
+real models for the Garden, Dock and Mailbox, House Variants and one room per Biome, and the Guide's dissolve and re-form on a new Seed.

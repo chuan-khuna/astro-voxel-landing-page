@@ -25,3 +25,21 @@ export function landmarkForPath(pathname: string, landmarks: readonly Landmark[]
   }
   return best?.id ?? null;
 }
+
+/** What the World shows for a route's Landmark. */
+export interface RouteView {
+  /** The Landmark the camera goes to. */
+  focus: LandmarkId;
+  /** Whether the House is open: its roof lifted and its room in view. */
+  interior: boolean;
+}
+
+/**
+ * About and Team both open the House: the roof lifts and the camera dives
+ * into the room, with the panel beside it. Every other route keeps the House
+ * shut and sends the camera to its own Landmark.
+ */
+export function routeView(id: LandmarkId): RouteView {
+  const interior = id === 'house' || id === 'house-interior';
+  return { focus: interior ? 'house-interior' : id, interior };
+}

@@ -69,3 +69,19 @@ export const partnerSchema = z.object({
 });
 
 export type PartnerData = z.infer<typeof partnerSchema>;
+
+/**
+ * A Team Member: a person at the company, shown inside the House (on
+ * `/about/team`). The MDX body is a short bio. Without an avatar, the Team
+ * page shows their initials.
+ */
+export const teamMemberSchema = z.object({
+  name: z.string().min(1),
+  role: z.string().min(1),
+  /** A portrait under `public/`, with its alt text. */
+  avatar: z.object({ src: z.string().min(1), alt: z.string() }).optional(),
+  /** Position in the Team list, from 1 (ties go by id). */
+  order: z.number().int().min(1),
+});
+
+export type TeamMemberData = z.infer<typeof teamMemberSchema>;

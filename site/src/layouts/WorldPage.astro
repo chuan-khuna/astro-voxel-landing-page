@@ -39,6 +39,8 @@ const counts: ContentCounts = {
 
 // One hotspot link per placed Landmark; the World positions them over its model.
 const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly string[]).includes(l.id));
+// The developer inside the House links to Team; the World shows it while the House is open.
+const team = site.landmarks.find((l) => l.id === 'house-interior')!;
 // One link per Garden tree, right after the Garden's own link: a tree per Project, in order by id, up to the cap.
 const treeLinks = projects.slice(0, MAX_TREES);
 // One Data Card per Landmark with a metric in site data, in Story Order; the World lays each over its Landmark.
@@ -107,6 +109,18 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
               <a class="hotspot" href={landmark.route} data-hotspot={landmark.id} data-seed-link draggable="false" hidden>
                 <span class="hotspot-label">{landmark.label}</span>
               </a>
+              {landmark.id === 'house' && (
+                <a
+                  class="hotspot developer"
+                  href={team.route}
+                  data-hotspot="house-interior"
+                  data-developer
+                  data-seed-link
+                  draggable="false"
+                  hidden>
+                  <span class="hotspot-label">Meet the {team.label}</span>
+                </a>
+              )}
               {landmark.id === 'garden' &&
                 treeLinks.map((project) => (
                   <a
@@ -149,11 +163,13 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
   import { createWorldSource } from '../render/worldSource';
   import type { CameraState } from '../render/cameraMath';
   import { rollSeed, seedFromUrl, withSeed, SEED_PARAM } from '../lib/seedUrl';
-  import { landmarkForPath } from '../lib/landmarkRoutes';
+  import { landmarkForPath, routeView } from '../lib/landmarkRoutes';
   import type { ContentCounts, LandmarkId } from '../world';
 
   /** How long a camera flight to a Landmark takes; a cut under reduced motion. */
   const FLIGHT_MS = 900;
+  /** How long the House's lid takes to lift or come down; a cut under reduced motion. */
+  const ROOF_MS = 800;
 
   // The frame and controls are persisted, so these elements live for the whole visit.
   const canvas = document.querySelector<HTMLCanvasElement>('#world-canvas');
@@ -194,10 +210,13 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
       }
     };
 
-    /** Mark the tree of the Project page now open, if any (the tree links are persisted, so the page cannot). */
-    const markCurrentTree = () => {
+    /**
+     * Mark the World link of the page now open, if any: a Project's tree, or
+     * the developer on Team (the links are persisted, so the page cannot).
+     */
+    const markCurrentLink = () => {
       const here = location.pathname.replace(/\/(index\.html)?$/, '');
-      for (const link of frame.querySelectorAll<HTMLAnchorElement>('a[data-project]')) {
+      for (const link of frame.querySelectorAll<HTMLAnchorElement>('a[data-project], a[data-developer]')) {
         const current = new URL(link.href).pathname.replace(/\/$/, '') === here;
         if (current) link.setAttribute('aria-current', 'page');
         else link.removeAttribute('aria-current');
@@ -223,9 +242,12 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
      */
     const followRoute = (view: WorldView, ms: number, fresh = false) => {
       const id = routeLandmark();
+      const { focus, interior } = routeView(id);
       const at = freeCentre();
       // Where the visitor looks: the Data Card shown is the one nearest it, and the pan bounds hold it.
       view.setViewCentre(at);
+      // About and Team open the House: its lid lifts as the camera dives in; anywhere else it comes down.
+      view.setInterior(interior, ms > 0 ? ROOF_MS : 0);
       if (id === 'overview') {
         // A section opened directly has no earlier view of the World: go to the Overview.
         if (worldState) void view.camera.flyTo(worldState, ms);
@@ -233,7 +255,7 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
         worldState = null;
       } else {
         if (shownLandmark === 'overview') worldState = view.camera.state;
-        void view.focus(id, { at, ms });
+        void view.focus(focus, { at, ms });
       }
       shownLandmark = id;
     };
@@ -275,7 +297,7 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     /** A new page is in: show its Seed's World, or move the camera for its route. */
     const onRoute = async () => {
       keepSeedOnLinks();
-      markCurrentTree();
+      markCurrentLink();
       if (currentSeed() !== shownSeed) return showSeed(currentSeed());
       if (!mounting) return;
       followRoute(await mounting, flightMs());
@@ -307,7 +329,7 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     window.addEventListener('resize', () => {
       if (mounted) void mounting?.then((view) => view.setViewCentre(freeCentre()));
     });
-    markCurrentTree();
+    markCurrentLink();
     void showSeed(currentSeed());
   }
 </script>
@@ -607,8 +629,13 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
   .hotspot.tree[data-small] {
     pointer-events: none;
   }
-  /* The tree of the Project page that is open. */
-  .hotspot.tree[aria-current='page'] {
+  /* The developer in the open House: above the House's own link, which covers the room. */
+  .hotspot.developer {
+    z-index: 1;
+  }
+  /* The tree of the Project page that is open, and the developer on Team. */
+  .hotspot.tree[aria-current='page'],
+  .hotspot.developer[aria-current='page'] {
     outline: 2px solid var(--brand);
     outline-offset: 1px;
   }

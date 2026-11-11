@@ -36,28 +36,30 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | Path | What it holds |
 |---|---|
 | `src/data/site.ts` | The site data module: company identity, brand colour and fonts (`brand.fonts.body` Jersey 20, `brand.fonts.heading` Jersey 15, each with a fallback stack), SEO defaults, default Seed, brand Biome (the Biome the default Seed always gets), the Landmark list (id, route, label, Story Order) and the Data Card metrics (`dataCards`, keyed to a placed Landmark id). `landmarksInStoryOrder` is the sorted list. |
-| `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id and an optional meta `description`) `projects` (MDX, schema `projectSchema`), `services` (MDX, schema `serviceSchema`), `clients` (YAML, schema `clientSchema`) and `partners` (YAML, schema `partnerSchema`). |
-| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema`, `serviceSchema`, `clientSchema` and `partnerSchema` (see "Projects", "Services" and "Clients and Partners" below). Tested in `contentSchemas.test.ts`. |
+| `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id and an optional meta `description`) `projects` (MDX, schema `projectSchema`), `services` (MDX, schema `serviceSchema`), `clients` (YAML, schema `clientSchema`), `partners` (YAML, schema `partnerSchema`) and `team` (MDX, schema `teamMemberSchema`). |
+| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema`, `serviceSchema`, `clientSchema`, `partnerSchema` and `teamMemberSchema` (see "Projects", "Services", "Clients and Partners" and "Team" below). Tested in `contentSchemas.test.ts`. |
 | `src/content/projects/` | One MDX file per Project; the file name is its id and URL slug, the body its case study. Six mock Projects. |
 | `src/content/services/` | One MDX file per Service; the body says more about it. Four mock Services. |
 | `src/content/clients/` | One YAML file per Client; the file name is its id. Six mock Clients, the organisations the mock Projects were for. |
 | `src/content/partners/` | One YAML file per Partner; the file name is its id. Three fictional Partners. |
+| `src/content/team/` | One MDX file per Team Member; the body is a short bio. Four mock Team Members. |
 | `src/content/pages/` | `home.mdx` (the home hook) and one intro per section, found by its `landmark`: `services.mdx` (station), `about.mdx` (house), `team.mdx` (house-interior), `garden.mdx`, `dock.mdx`, `contact.mdx` (mailbox). |
 | `src/world/` | The World generator. See `world-generator.md`. |
 | `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`), camera rig (pan, zoom and flights), Landmark focus and hotspots. See `rendering-and-shading.md`. |
 | `src/lib/seedUrl.ts` | The Seed in the URL: `seedFromUrl`, `rollSeed` (numeric) and `withSeed` (keep the Seed on a route link). Tested in `seedUrl.test.ts`. |
 | `src/lib/gardenTrees.ts` | `treeOrder(projects)`: Projects sorted by id (tree order). `gardenTrees(world, projectIds)`: the World's tree cells, each paired with its Project (tree `k` is the `k`-th Project by id; none beyond the cap). Tested in `gardenTrees.test.ts`. |
-| `src/lib/landmarkRoutes.ts` | `landmarkForPath(pathname)`: the Landmark a route belongs to, from the Landmark list. A trailing slash and `index.html` are ignored, `/garden/<slug>` belongs to the Garden, and any other route gives `null`. Tested in `landmarkRoutes.test.ts`. |
+| `src/lib/landmarkRoutes.ts` | `landmarkForPath(pathname)`: the Landmark a route belongs to, from the Landmark list. A trailing slash and `index.html` are ignored, `/garden/<slug>` belongs to the Garden, and any other route gives `null`. `routeView(id)`: what the World shows for it: the Landmark the camera goes to, and whether the House is open (About and Team both open it and go to the House Interior). Tested in `landmarkRoutes.test.ts`. |
 | `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order: a floating rounded bar, collapsing below 60rem into a menu button that opens the list as a popover (the Popover API, so it needs no JS). Its links carry `data-seed-link`, so they keep a rolled Seed; the current section's link has `aria-current="page"`. |
 | `src/components/Logo.astro` | The logo mark beside the company name: one isometric voxel in three shades of the brand colour. |
 | `src/components/SectionPanel.astro` | A section's panel over the World, as a floating card: heading, close link and the intro copy. |
 | `src/components/ServiceList.astro` | The Station's list of every Service in `order`: icon, title, summary and body. |
 | `src/components/ProjectList.astro` | The Garden's list of every Project in tree order: title (a link to its page), Client, year and summary. |
 | `src/components/DockList.astro` | The Dock's two lists: Clients (by id) and Partners (closest tier first), each with its logo or initials. |
+| `src/components/TeamList.astro` | Team's list of every Team Member in `order`: avatar or initials, name, role and bio. |
 | `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), Astro's `<ClientRouter />`, the self-hosted Jersey fonts, the colour, card and font tokens, and the inline script that turns on the full-screen layout (`data-world="live"`). |
-| `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the Garden's tree links and the Data Cards, and the HUD floating over it (company name, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice button), and the client script that runs the World across routes. |
+| `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's tree links and the Data Cards, and the HUD floating over it (company name, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice button), and the client script that runs the World across routes. |
 | `src/pages/index.astro` | The home page: the World and the home hook. |
-| `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project, the Dock's every Client and Partner. |
+| `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project, the Dock's every Client and Partner, and Team's every Team Member; About links on to Team. |
 | `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. |
 
 Company identity, the fonts, the default Seed, the Landmark list and the
@@ -67,7 +69,7 @@ Data Card metrics live only in `src/data/site.ts`. Landmark ids are typed agains
 
 Every page is the World plus, on a section page, that section's panel. The
 World gets its content counts from the collections: Projects, Clients and
-Partners.
+Partners. Team Members do not change the World.
 
 - **Home (`/`):** the company name (the page's `h1`), the World, the dice
   button with the current Seed, the Landmark menu, and the intro card: the
@@ -88,6 +90,12 @@ Partners.
   (sailing between the Isles, one ship each), closest tier first, each with
   its logo or initials, name and tier. Clients beyond the Dock's 12 boats
   are listed too.
+- **About (`/about`):** the intro copy, then a "Meet the Team →" link to
+  `/about/team`. The House opens beside the panel (see "Routes over the
+  World").
+- **Team (`/about/team`):** the intro copy, then every Team Member in
+  `order` (then by id): their avatar (or initials), name, role and bio.
+  The House stays open, and the developer's link in it is marked current.
 - **Project pages (`/garden/<id>`):** the panel's heading is the Project's
   title, then a link back to all Projects, the Client and year, the tags, the
   cover image if any, the summary (also the meta description) and the case
@@ -180,6 +188,15 @@ route on every `astro:after-swap`:
   navigates to `/`, and the camera flies back to where it was before the
   first section opened. If the visit started on a section page, it flies to
   the Overview.
+- **About and Team open the House** (`routeView`): its lid (the roof and
+  front walls) lifts off over 800 ms as the camera dives into the House
+  Interior, a close-up of the room: a developer typing at a computer whose
+  screen scrolls code. About or Team opens beside it. While the House is
+  open the developer has a link ("Meet the Team") that opens Team. Leaving
+  for any other route (closing, Escape, Back, the menu) lowers the lid as
+  the camera flies out. Under reduced motion the lid and camera cut and
+  the developer and screen keep still. A direct load of `/about` or
+  `/about/team` opens the House at once.
 - **Moving between sections** flies from one Landmark to the next. The
   World view to return to is still the one from before the first section.
 - **Opening a route directly** mounts the World and cuts the camera to the
@@ -302,6 +319,22 @@ Partner (no cap). Clients are taken in order by id, so boat `k` is the
 Partner's ship. See `world-generator.md` ("Boats", "Ships") and
 `rendering-and-shading.md` ("Boats and ships").
 
+## Team
+
+A Team Member is one MDX file in `src/content/team/`; adding a file adds
+them to Team (`/about/team`). The body is a short bio. The schema
+(`teamMemberSchema`):
+
+| Field | Type |
+|---|---|
+| `name` | non-empty string |
+| `role` | non-empty string |
+| `order` | whole number from 1: the place in the list (ties go by id) |
+| `avatar` | optional `{ src, alt }`: a portrait under `public/` (initials stand in without one; the mock Team Members have none) |
+
+Team Members do not change the World: the House always has the one
+developer.
+
 ## Data Cards
 
 A Data Card floats beside a Landmark in the World and shows one company
@@ -327,5 +360,6 @@ and returns a view whose `show` swaps in another World, whose `camera` is
 the pan, zoom and flight rig, and whose `focus` flies to a Landmark. It
 has a mesher with culling, baked AO and greedy merging, a TSL material for
 seams, bevel and colour jitter, a static sun shadow map, and frames only on
-demand: while the camera moves, and while the Partners' ships sail (never
-under reduced motion). See `rendering-and-shading.md`.
+demand: while the camera moves, while the Partners' ships sail and while
+the House is open (the developer at work) or its lid moves (never under
+reduced motion). See `rendering-and-shading.md`.

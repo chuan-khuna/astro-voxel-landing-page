@@ -5,7 +5,9 @@
  * `/about/team`, `/garden`, `/dock`, `/contact`. Each shows its intro copy
  * from the `pages` collection in a panel over the World; the Station's also
  * lists every Service, the Garden's every Project (each Project's page is
- * `garden/[slug].astro`) and the Dock's every Client and Partner.
+ * `garden/[slug].astro`), the Dock's every Client and Partner, and Team's
+ * every Team Member. About links on to Team (as does the developer in the
+ * World's open House).
  */
 import type { GetStaticPaths } from 'astro';
 import { getCollection, render } from 'astro:content';
@@ -14,6 +16,7 @@ import SectionPanel from '../components/SectionPanel.astro';
 import ProjectList from '../components/ProjectList.astro';
 import ServiceList from '../components/ServiceList.astro';
 import DockList from '../components/DockList.astro';
+import TeamList from '../components/TeamList.astro';
 import { site } from '../data/site';
 
 export const getStaticPaths = (async () => {
@@ -30,6 +33,7 @@ export const getStaticPaths = (async () => {
 const { landmark, page } = Astro.props;
 const { Content } = await render(page);
 const { company } = site;
+const team = site.landmarks.find((l) => l.id === 'house-interior')!;
 ---
 
 <WorldPage title={`${page.data.title} · ${company.name}`} description={page.data.description}>
@@ -38,6 +42,16 @@ const { company } = site;
     {landmark.id === 'station' && <ServiceList />}
     {landmark.id === 'garden' && <ProjectList route={landmark.route} />}
     {landmark.id === 'dock' && <DockList />}
+    {
+      landmark.id === 'house' && (
+        <p class="next">
+          <a href={team.route} data-seed-link>
+            Meet the {team.label} →
+          </a>
+        </p>
+      )
+    }
+    {landmark.id === 'house-interior' && <TeamList />}
     {
       landmark.id === 'mailbox' && (
         <dl class="contact">
@@ -79,7 +93,8 @@ const { company } = site;
     margin: 0;
     overflow-wrap: anywhere;
   }
-  .contact a {
+  .contact a,
+  .next a {
     color: var(--brand-ink);
   }
 </style>

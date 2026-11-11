@@ -1,0 +1,84 @@
+---
+/**
+ * The Team page's list of every Team Member, in `order` (then by id): their
+ * avatar or initials, name, role and short bio (the MDX body).
+ */
+import { getCollection, render } from 'astro:content';
+
+const members = (await getCollection('team')).toSorted((a, b) => a.data.order - b.data.order || a.id.localeCompare(b.id));
+const rendered = await Promise.all(members.map(async (member) => ({ member, Content: (await render(member)).Content })));
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+---
+
+{
+  rendered.length === 0 ? (
+    <p>No Team Members yet.</p>
+  ) : (
+    <ul class="team" aria-label="Team Members">
+      {rendered.map(({ member, Content }) => (
+        <li>
+          {member.data.avatar ? (
+            <img class="avatar" src={member.data.avatar.src} alt={member.data.avatar.alt} width="48" height="48" />
+          ) : (
+            <span class="avatar initials" aria-hidden="true">
+              {initials(member.data.name)}
+            </span>
+          )}
+          <div>
+            <h2>{member.data.name}</h2>
+            <p class="role">{member.data.role}</p>
+            <div class="bio">
+              <Content />
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+<style>
+  .team {
+    display: grid;
+    gap: 1.1rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .team li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.75rem;
+  }
+  .avatar {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+  .initials {
+    display: grid;
+    place-items: center;
+    background: var(--brand-ink);
+    color: var(--on-brand);
+    font: 1.40625rem / 1 var(--font-heading);
+  }
+  h2 {
+    margin: 0;
+    font-size: 1.40625rem;
+  }
+  .role {
+    margin: 0.1rem 0 0;
+    color: var(--brand-ink);
+  }
+  .bio :global(p) {
+    margin: 0.35rem 0 0;
+    font-size: 1rem;
+  }
+</style>

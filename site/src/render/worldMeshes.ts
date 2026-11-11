@@ -1,7 +1,8 @@
 /**
  * World to three.js objects: meshes the World's voxel grids into chunked
  * `BufferGeometry` with the soft-voxel material, plus the sea and the
- * Partners' sailing ships (`ships.ts`).
+ * Partners' sailing ships (`ships.ts`) and the House's moving parts (`house.ts`:
+ * its lid, the developer and the screen).
  */
 import * as THREE from 'three/webgpu';
 import type { World } from '../world';
@@ -10,6 +11,7 @@ import { oklchToLinear } from './palette';
 import { voxelMaterial } from './voxelMaterial';
 import { meshWorld, type MeshedWorld } from './worldVoxels';
 import { buildFleet, type Fleet } from './ships';
+import { buildHouse, type HouseParts } from './house';
 
 /** Sea cells this close to land (Chebyshev) are shallow water. */
 const SHALLOW_REACH = 2;
@@ -17,10 +19,12 @@ export const SEA_LEVEL = 0.15;
 
 export interface WorldObjects {
   group: THREE.Group;
-  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks, boats, ships); the sea adds a handful more. */
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks, boats, ships, the House's lid and developer); the sea and the screen add a handful more. */
   triangles: number;
   /** The Partners' ships, which sail: `ships.sail(seconds)` moves them. */
   ships: Fleet;
+  /** The House's lid, developer and screen: `house.setOpening` lifts the lid, `house.work` animates the room. */
+  house: HouseParts;
   dispose: () => void;
 }
 
@@ -50,13 +54,17 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
   group.add(sea.group);
   const ships = buildFleet(world);
   group.add(ships.group);
+  const house = buildHouse(world);
+  group.add(house.group);
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + ships.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + ships.triangles + house.triangles,
     ships,
+    house,
     dispose: () => {
       ships.dispose();
+      house.dispose();
       for (const g of geometries) g.dispose();
       for (const m of materials) m.dispose();
       sea.dispose();

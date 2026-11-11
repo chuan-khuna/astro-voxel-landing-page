@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clientSchema, partnerSchema, projectSchema, serviceSchema } from './contentSchemas';
+import { clientSchema, partnerSchema, projectSchema, serviceSchema, teamMemberSchema } from './contentSchemas';
 
 const valid = {
   title: 'Tide tables that forecast themselves',
@@ -77,5 +77,24 @@ describe('partnerSchema', () => {
     expect(partnerSchema.safeParse({ ...partner, tier: 'platinum-plus' }).success).toBe(false);
     const { name: _, ...noName } = partner;
     expect(partnerSchema.safeParse(noName).success).toBe(false);
+  });
+});
+
+describe('teamMemberSchema', () => {
+  const member = { name: 'Aroha Bennett', role: 'Principal data engineer', order: 1 };
+
+  it('accepts a Team Member with a name, role and order, and an optional avatar', () => {
+    expect(teamMemberSchema.parse(member)).toEqual(member);
+    const withAvatar = { ...member, avatar: { src: '/team/aroha.png', alt: 'Aroha Bennett' } };
+    expect(teamMemberSchema.parse(withAvatar)).toEqual(withAvatar);
+  });
+
+  it('rejects a Team Member with no name, an empty role, an order that is not a whole number from 1, or an avatar without a source', () => {
+    const { name: _, ...noName } = member;
+    expect(teamMemberSchema.safeParse(noName).success).toBe(false);
+    expect(teamMemberSchema.safeParse({ ...member, role: '' }).success).toBe(false);
+    expect(teamMemberSchema.safeParse({ ...member, order: 0 }).success).toBe(false);
+    expect(teamMemberSchema.safeParse({ ...member, order: 2.5 }).success).toBe(false);
+    expect(teamMemberSchema.safeParse({ ...member, avatar: { alt: 'x' } }).success).toBe(false);
   });
 });

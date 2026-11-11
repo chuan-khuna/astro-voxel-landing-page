@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { landmarkForPath } from './landmarkRoutes';
+import { landmarkForPath, routeView } from './landmarkRoutes';
 import { site } from '../data/site';
 
 describe('landmarkForPath', () => {
@@ -31,5 +31,18 @@ describe('landmarkForPath', () => {
 
   it('follows the Landmark list in the site data module', () => {
     for (const landmark of site.landmarks) expect(landmarkForPath(landmark.route)).toBe(landmark.id);
+  });
+});
+
+describe('routeView', () => {
+  it('opens the House on About and Team: the roof lifts and the camera looks into the room', () => {
+    expect(routeView('house')).toEqual({ focus: 'house-interior', interior: true });
+    expect(routeView('house-interior')).toEqual({ focus: 'house-interior', interior: true });
+  });
+
+  it('keeps the House shut everywhere else, the camera on the route\'s own Landmark', () => {
+    for (const id of ['overview', 'station', 'garden', 'dock', 'mailbox'] as const) {
+      expect(routeView(id)).toEqual({ focus: id, interior: false });
+    }
   });
 });

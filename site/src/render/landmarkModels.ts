@@ -1,7 +1,8 @@
 /**
  * Landmark models in ¼-unit voxels, one per placed Landmark. The Station's
- * is its real model (ticket 09); the others are simple placeholders, which
- * real models replace in later tickets by changing only this module.
+ * and the House's are real models (tickets 09 and 11; the House's lives in
+ * `houseModel.ts`); the others are simple placeholders, which real models
+ * replace in later tickets by changing only this module.
  *
  * Each model fills its Landmark's footprint. It is drawn into the detail
  * grid with its origin at the min corner of the footprint's origin cell, on
@@ -11,6 +12,7 @@
 import type { Cell, PlacedLandmark, PlacedLandmarkId } from '../world';
 import type { VoxelGrid } from './mesher';
 import { DETAIL, type WorldColours } from './worldVoxels';
+import { drawHouseBase, drawHouseLid, drawHouseRoom, type HouseDraw } from './houseModel';
 
 interface Origin {
   x: number;
@@ -18,10 +20,7 @@ interface Origin {
   z: number;
 }
 
-type Draw = {
-  box: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, colour: number | null) => void;
-  set: (x: number, y: number, z: number, colour: number) => void;
-};
+type Draw = HouseDraw;
 
 /** What a model needs to know about its Landmark, in local ¼ voxels. */
 interface Shape {
@@ -77,20 +76,13 @@ const MODELS: Record<PlacedLandmarkId, Model> = {
     box(w - 2, 1, d - 3, w, 4, d - 1, fixed('whitewash'));
     box(w - 2, 4, d - 3, w, 5, d - 1, fixed('metal'));
   },
-  /** A whitewashed block on a plinth, with a blue door, windows, a flat roof and a blue dome. */
-  house: ({ box, set }, { fixed }, { w, d }) => {
-    box(0, 0, 0, w, 1, d, fixed('plinth'));
-    box(1, 1, 1, w - 1, 9, d - 1, fixed('whitewash'));
-    box(0, 9, 0, w, 10, d, fixed('roofWhite'));
-    const mid = Math.floor(w / 2);
-    box(mid - 1, 1, d - 2, mid + 1, 6, d - 1, fixed('blueDoor'));
-    for (const z of [2, d - 4]) box(w - 2, 5, z, w - 1, 7, z + 2, fixed('glass'));
-    box(2, 5, d - 2, 4, 7, d - 1, fixed('glass'));
-    box(mid - 2, 10, Math.floor(d / 2) - 2, mid + 2, 12, Math.floor(d / 2) + 2, fixed('blueTrim'));
-    box(mid - 1, 12, Math.floor(d / 2) - 1, mid + 1, 13, Math.floor(d / 2) + 1, fixed('blueTrim'));
-    set(1, 7, d - 2, fixed('bougainvillea'));
-    set(1, 6, d - 2, fixed('bougainLight'));
-    set(1, 8, d - 3, fixed('bougainvillea'));
+  /**
+   * The House's base and its room (`houseModel.ts`). Its lid (roof, dome and
+   * front walls) is not drawn here: it is its own mesh, so it can lift off.
+   */
+  house: (draw, colours) => {
+    drawHouseBase(draw, colours);
+    drawHouseRoom(draw, colours);
   },
   /** One tree per Project, each filling its cell, and a flower in every other cell. */
   garden: ({ box, set }, { biome, fixed }, { w, d, trees }) => {
@@ -193,7 +185,10 @@ export function landmarkExtent(landmark: PlacedLandmark): ModelExtent {
   for (const c of shape.jetty) cover(c.x, -1, c.z, c.x + DETAIL, 0, c.z + DETAIL);
   // Models only pick colours through `biome` and `fixed`; any id will do here.
   const anyColour = () => 0;
-  MODELS[landmark.id](draw, { biome: anyColour, fixed: anyColour } as Omit<WorldColours, 'table'> as WorldColours, shape);
+  const colours = { biome: anyColour, fixed: anyColour } as Omit<WorldColours, 'table'> as WorldColours;
+  MODELS[landmark.id](draw, colours, shape);
+  // The House's lid, shut: it is a mesh of its own, but part of what a visitor clicks.
+  if (landmark.id === 'house') drawHouseLid(draw, colours);
   // Posts reaching down to the sea floor are not part of what a visitor clicks.
   min.y = Math.max(min.y, -1);
   const unit = (v: number) => v / DETAIL;

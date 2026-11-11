@@ -249,8 +249,9 @@ the Biome.
 
 ## Not yet built
 
-Later tickets: decoration, Data Card anchors, House Interior room layout,
-Landmark variants beyond 0, and boat and ship kinds (ASCII structures, ADR
+Later tickets: decoration, Data Card anchors, Landmark variants beyond 0
+(the House Interior's room is drawn by the renderer; see
+`rendering-and-shading.md`, "The House and its room"), and boat and ship kinds (ASCII structures, ADR
 0004). The site passes the sizes of the `projects`, `clients` and
 `partners` collections; it pairs tree `k` with the `k`-th Project by id
 (`site/src/lib/gardenTrees.ts`; see `site-project.md`); the generator never

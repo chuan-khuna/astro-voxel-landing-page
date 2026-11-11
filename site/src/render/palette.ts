@@ -53,6 +53,16 @@ export const FIXED_COLOURS = {
   glass: oklch(0.34, 0.035, 245),
   bougainvillea: oklch(0.6, 0.1, 352),
   bougainLight: oklch(0.69, 0.085, 348),
+  // The House's room and its developer.
+  floorWood: oklch(0.7, 0.05, 70),
+  rug: oklch(0.62, 0.07, 30),
+  desk: oklch(0.56, 0.05, 55),
+  chair: oklch(0.5, 0.025, 250),
+  screenDark: oklch(0.24, 0.025, 250),
+  skin: oklch(0.72, 0.06, 55),
+  hair: oklch(0.4, 0.05, 50),
+  shirt: oklch(0.6, 0.08, 185),
+  trousers: oklch(0.36, 0.04, 255),
   // Landmark parts (Station, Garden, Dock, Mailbox).
   trunk: oklch(0.46, 0.035, 60),
   plank: oklch(0.62, 0.045, 62),

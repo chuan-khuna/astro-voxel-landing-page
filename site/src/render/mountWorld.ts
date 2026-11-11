@@ -6,8 +6,10 @@
  * - One directional light (the sun) whose shadow map renders only when the
  *   World changes, plus a hemisphere sky light.
  * - Frames render only on request (mount, resize, a new World, a camera move),
- *   and every frame while the Partners' ships sail; with no ships, under
- *   reduced motion or on a hidden page nothing renders while idle. Each frame bumps `canvas.dataset.frames` and
+ *   and every frame while something moves: the Partners' ships sailing, the
+ *   House's lid lifting or lowering, the developer at work in the open
+ *   House. With nothing moving, under reduced motion or on a hidden page
+ *   nothing renders while idle. Each frame bumps `canvas.dataset.frames` and
  *   writes `canvas.dataset.camera` (target x, z and zoom), for checks.
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
  *   Landmark hotspots (`landmarkHotspots.ts`) and Data Cards (`dataCards.ts`)
@@ -17,6 +19,8 @@
  *   bounds hold the ground seen there (`CameraLimits.at`).
  * - `focus(landmark)` flies (or cuts) the camera to a Landmark
  *   (`landmarkFocus.ts`), optionally off centre to leave room for a panel.
+ * - `setInterior(open, ms)` opens the House (its lid lifts, the developer's
+ *   link appears) or shuts it.
  * - `show(world)` swaps in another World (a new Seed) and disposes the old one.
  * - DPR is capped at 1.5 on touch devices and 2 elsewhere.
  */
@@ -29,6 +33,7 @@ import { createDataCards } from './dataCards';
 import { landmarkFocus } from './landmarkFocus';
 import { stateShowing, type CameraState } from './cameraMath';
 import { buildWorldObjects, type WorldObjects } from './worldMeshes';
+import { openingStep } from './houseMotion';
 import type { MeshedWorld } from './worldVoxels';
 import type { ScreenOffset } from './freeArea';
 
@@ -70,6 +75,11 @@ export interface WorldView {
    * Data Card shown is the one of the near Landmark seen closest to it.
    */
   setViewCentre(at: ScreenOffset): void;
+  /**
+   * Open the House (its lid lifts off over `ms` and the developer's link
+   * shows) or shut it (the lid comes down). 0 cuts. Kept across `show`.
+   */
+  setInterior(open: boolean, ms: number): void;
   dispose(): void;
 }
 
@@ -127,21 +137,41 @@ export async function mountWorld(
   // then every frame asks for the next. Otherwise they keep still where they are.
   const stillness = window.matchMedia('(prefers-reduced-motion: reduce)');
   const sailing = () => !!objects && objects.ships.count > 0 && !stillness.matches && document.visibilityState === 'visible';
-  /** Seconds sailed so far, and the time of the last sailing frame (0 when not sailing). */
+  /** Seconds sailed so far. */
   let sailed = 0;
+  /** The House: open or shut, how far its lid is lifted (0–1), how long a lift takes, and seconds worked inside. */
+  let interior = false;
+  let opening = 0;
+  let openingMs = 0;
+  let worked = 0;
+  const lifting = () => opening !== (interior ? 1 : 0);
+  // The developer works while the House is open, the page visible and motion allowed.
+  const working = () => interior && opening > 0 && !stillness.matches && document.visibilityState === 'visible';
+  const moving = () => sailing() || lifting() || working();
+  /** The time of the last frame while something moved (0 when nothing did). */
   let lastTick = 0;
   const requestRender = () => {
     if (frame) return;
     frame = requestAnimationFrame((now) => {
       frame = 0;
+      // At most a tenth of a second a frame, so nothing leaps after a pause.
+      const dt = lastTick ? Math.min(100, now - lastTick) : 0;
       if (sailing()) {
-        // At most a tenth of a second a frame, so ships never leap after a pause.
-        if (lastTick) sailed += Math.min(0.1, (now - lastTick) / 1000);
-        lastTick = now;
+        sailed += dt / 1000;
         objects!.ships.sail(sailed);
-      } else {
-        lastTick = 0;
       }
+      if (lifting()) {
+        opening = openingStep(opening, interior, dt, openingMs);
+        objects?.house.setOpening(opening);
+        // The lid casts a shadow: redraw the static shadow map while it moves.
+        sun.shadow.needsUpdate = true;
+        canvas.dataset.interior = opening === 1 ? 'open' : opening === 0 ? 'shut' : 'moving';
+      }
+      if (working()) {
+        worked += dt / 1000;
+        objects!.house.work(worked);
+      }
+      lastTick = moving() ? now : 0;
       // The overlays project through the camera's matrices: bring them up to date first.
       camera.updateMatrixWorld();
       hotspots.place(camera);
@@ -151,7 +181,7 @@ export async function mountWorld(
       canvas.dataset.frames = String(++frames);
       const { target, zoom } = rig.state;
       canvas.dataset.camera = `${target.x.toFixed(2)} ${target.z.toFixed(2)} ${zoom.toFixed(3)}`;
-      if (sailing()) requestRender();
+      if (moving()) requestRender();
     });
   };
   const wake = () => requestRender();
@@ -207,6 +237,8 @@ export async function mountWorld(
       objects.dispose();
     }
     objects = buildWorldObjects(next, nextMeshed);
+    objects.house.setOpening(opening);
+    objects.house.work(worked);
     scene.add(objects.group);
 
     const { width, depth } = next.terrain;
@@ -219,6 +251,7 @@ export async function mountWorld(
     frameCamera();
     lookAtViewCentre();
     hotspots.setWorld(next);
+    hotspots.setInterior(interior);
     cards.setWorld(next);
     rig.reset(
       {
@@ -255,6 +288,13 @@ export async function mountWorld(
     camera: rig,
     focusState,
     focus: (id, { at, ms }) => rig.flyTo(focusState(id, at), ms),
+    setInterior: (open, ms) => {
+      interior = open;
+      openingMs = ms;
+      hotspots.setInterior(open);
+      if (!lifting()) canvas.dataset.interior = open ? 'open' : 'shut';
+      requestRender();
+    },
     setViewCentre: (at) => {
       viewCentre = at;
       lookAtViewCentre();

@@ -2,7 +2,7 @@ import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { LANDMARK_IDS } from './world';
-import { clientSchema, partnerSchema, projectSchema, serviceSchema } from './lib/contentSchemas';
+import { clientSchema, partnerSchema, projectSchema, serviceSchema, teamMemberSchema } from './lib/contentSchemas';
 
 /**
  * `pages`: copy that is not a content item of its own: the home hook and
@@ -56,4 +56,13 @@ const partners = defineCollection({
   schema: partnerSchema,
 });
 
-export const collections = { pages, projects, services, clients, partners };
+/**
+ * `team`: one MDX file per Team Member, listed inside the House
+ * (`/about/team`) in `order` (then by id); the body is a short bio.
+ */
+const team = defineCollection({
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/team' }),
+  schema: teamMemberSchema,
+});
+
+export const collections = { pages, projects, services, clients, partners, team };

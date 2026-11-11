@@ -5,6 +5,9 @@
  * affordance, a pointer cursor and keyboard focus without any GPU picking;
  * the links themselves are rendered by the page.
  *
+ * The developer inside the House has a link too (`data-hotspot="house-interior"`,
+ * to Team), shown only while the House is open (`setInterior`).
+ *
  * `place(camera)` re-positions them; call it whenever the camera changes.
  * Focusing a hotspot that is off screen moves the camera onto it.
  */
@@ -13,6 +16,8 @@ import type { GroundPoint } from './cameraMath';
 import type { PlacedLandmarkId, World } from '../world';
 import { landmarkExtent, treeExtent } from './landmarkModels';
 import { gardenTrees } from '../lib/gardenTrees';
+import { developerExtent } from './houseModel';
+import { DETAIL } from './worldVoxels';
 
 /** Smallest hotspot side, in CSS px, so a far-away Landmark is still easy to hit. */
 const MIN_SIZE = 28;
@@ -24,6 +29,8 @@ const TREE_LINK = { w: 0.7, h: 0.8 };
 export interface LandmarkHotspots {
   /** A new World: new Landmark positions. */
   setWorld(world: World): void;
+  /** Show the developer's link while the House is open; hide it while it is shut. */
+  setInterior(open: boolean): void;
   /** Move every hotspot onto its Landmark as `camera` sees it. */
   place(camera: THREE.Camera): void;
   dispose(): void;
@@ -34,6 +41,8 @@ interface Placed {
   box: THREE.Box3;
   /** A Garden tree's link (one per Project), rather than a whole Landmark's. */
   tree: boolean;
+  /** The developer's link, inside the House: shown only while it is open. */
+  interior: boolean;
 }
 
 /**
@@ -46,6 +55,7 @@ export function createLandmarkHotspots(
   centreOn: (point: GroundPoint) => void,
 ): LandmarkHotspots {
   let placed: Placed[] = [];
+  let open = false;
   const corner = new THREE.Vector3();
 
   const onFocus = (event: FocusEvent) => {
@@ -65,7 +75,19 @@ export function createLandmarkHotspots(
       placed = [];
       const projectIds = links.flatMap((link) => (link.dataset.project ? [link.dataset.project] : []));
       const trees = new Map(gardenTrees(world, projectIds).map((t) => [t.projectId, t.cell]));
+      const house = world.landmarks.find((l) => l.id === 'house');
       for (const link of links) {
+        if (link.dataset.hotspot === 'house-interior') {
+          if (!house) continue;
+          // The developer's box, in the House's ¼ voxels, to world units.
+          const { min, max } = developerExtent();
+          const { origin } = house.footprint;
+          const at = (v: { x: number; y: number; z: number }) =>
+            new THREE.Vector3(origin.x + v.x / DETAIL, house.y + v.y / DETAIL, origin.z + v.z / DETAIL);
+          placed.push({ link, box: new THREE.Box3(at(min), at(max)), tree: false, interior: true });
+          link.hidden = !open;
+          continue;
+        }
         const landmark = world.landmarks.find((l) => l.id === (link.dataset.hotspot as PlacedLandmarkId));
         const project = link.dataset.project;
         const tree = project === undefined ? undefined : trees.get(project);
@@ -85,14 +107,20 @@ export function createLandmarkHotspots(
             new THREE.Vector3(max.x, max.y, max.z).add(origin),
           ),
           tree: tree !== undefined,
+          interior: false,
         });
         link.hidden = false;
       }
     },
+    setInterior(next) {
+      open = next;
+      for (const p of placed) if (p.interior) p.link.hidden = !open;
+    },
     place(camera) {
       const width = frame.clientWidth;
       const height = frame.clientHeight;
-      for (const { link, box, tree } of placed) {
+      for (const { link, box, tree, interior } of placed) {
+        if (interior && !open) continue;
         let left = Infinity;
         let top = Infinity;
         let right = -Infinity;
