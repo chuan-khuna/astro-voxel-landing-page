@@ -1,25 +1,28 @@
 # Voxel structures
 
 Predefined voxel models drawn as ASCII files (ADR 0004) at ⅛ unit (ADR
-0006): how a file is written, how it becomes voxels at build time, how a
-structure is placed in a World or repeated with instancing, and how to
-review structures in the Model Gallery.
+0006), and the House Interior's rooms at 1/16 unit: how a file is written,
+how it becomes voxels at build time, how a structure is placed in a World
+or repeated with instancing, and how to review structures in the Model
+Gallery.
 
 - Files: `site/src/structures/<kind>/<biome>-<variant>.structure` (`house`,
-  `station`, `mailbox`, `dock`)
+  `station`, `mailbox`, `dock`; `room` and `developer` for the House
+  Interior)
 - Code: `site/src/structures/` (parser, roles, registry, Vite plugin),
   `site/src/render/structureModels.ts` (placing), `structureMeshes.ts`
-  (instancing), `site/src/dev/` and `site/src/integrations/modelGallery.ts`
+  (instancing), `interiorModel.ts` (the House Interior's room), `site/src/dev/` and `site/src/integrations/modelGallery.ts`
   (the Model Gallery)
 - Decisions: `docs/adr/0004-ascii-voxel-structures.md`,
   `docs/adr/0006-voxel-resolution-tiers.md`
 - Tests: `structures/parse.test.ts`, `structures/structures.test.ts`,
-  `render/structureModels.test.ts`, `render/structureMeshes.test.ts`
+  `render/structureModels.test.ts`, `render/structureMeshes.test.ts`,
+  `render/interiorModel.test.ts`
 
 ## The format
 
 A structure file is a header, a key, and one block of characters per
-⅛-unit layer, bottom to top:
+layer (⅛ unit unless it says `scale: 16`), bottom to top:
 
 ```text
 # Comments start with #.
@@ -46,11 +49,13 @@ layers 2-7
 | `kind` | What the structure is: a Landmark (`house`, `station`, `mailbox`, `dock`) today; later trees, flowers, boats, ships, Decoration, creatures. |
 | `biome` | The Biome whose style it is (`tropical`, `northern`, `autumn`, `volcanic`), or `any` for one shared by every Biome. |
 | `variant` | Its Variant number within that kind and Biome, from 1 with no gaps. |
-| `footprint` | Its footprint in cells, `<width>x<depth>`; each cell is 8 voxels, so every layer is `8 × width` characters wide and `8 × depth` rows deep. |
+| `footprint` | Its footprint in cells, `<width>x<depth>`; each cell is `scale` voxels (8 by default), so every layer is `scale × width` characters wide and `scale × depth` rows deep. |
 | `door` | The face its door is on, `+x`, `-x`, `+z` or `-z`, or `none`. Draw doors on `+z` (south): a placement turns the structure to face its Landmark's way. |
 | `anchor` | The voxel corner (x, y, z) that stands on the footprint's min corner, on the ground. `0 0 0` for anything that stands on its footprint; the Dock's things use `0 -2 0`, so their first layer stands on the Dock's ¼-unit deck; a boat's anchor will sit at its waterline. |
 | `interior` | Optional: a box of voxels (min x y z, then max x y z, max exclusive) that must stay empty, for a room. |
-| `key:` | One line per character: the character, a colour role, and optionally a part (`lid`; the default is `base`). |
+| `scale` | Optional: voxels a unit, `8` (the default, ⅛ unit) or `16` (1/16 unit: the House Interior's rooms and the developer). |
+| `developer` | Optional, a room's: the voxel (x y z) where the seated developer's anchor goes. |
+| `key:` | One line per character: the character, a colour role, and optionally a part (`lid`, `head`, `leftHand`, `rightHand`; the default is `base`). |
 | `layer N` / `layers A-B` | One block of rows for layer N, or the same block for every layer A to B. Every layer from 0 to the top appears exactly once. |
 
 In a block, rows run north to south (z = 0 first) and the characters of a
@@ -76,16 +81,19 @@ the terrain:
 | Roofs | `roof`, `thatch`, `thatchDark`, `shingle`, `shingleDark`, `tile`, `tileDark`, `slate`, `slateDark`, `snow` |
 | Openings and trim | `door`, `doorWood`, `window`, `frame`, `trim`, `accent` (the Biome's accent), `metal`, `metalDark`, `flag` (a mailbox's red flag), `canvas` (sail, awning, rope), `lamp` |
 | Plants | `foliage`, `foliageLight` (the Biome's foliage), `flower`, `flowerLight` |
+| House Interior | `screen` (the computer's screen, which glows with code), `fire` (a hearth or brazier), `desk`, `chair`, and the developer's `skin`, `hair`, `shirt`, `trousers`, `shoe` |
 
 A new material is a new role in `roles.ts` (and, if needed, a fixed colour
 with chroma at most 0.10 in `palette.ts`).
 
 ### Parts
 
-Every voxel is in the `base` part unless its key says `lid`. The House's
-lid is its roof and its two front walls (high x and high z, the faces the
-camera sees): it lifts off as a mesh of its own, leaving the room open to
-the camera like a doll's house.
+Every voxel is in the `base` part unless its key says otherwise. The
+House's `lid` is its roof and its two front walls (high x and high z, the
+faces the camera sees): it lifts off as a mesh of its own, leaving the room
+open to the camera like a doll's house. The developer's `head`,
+`leftHand` and `rightHand` are their moving parts, each a mesh of its own
+in the House Interior scene.
 
 ## Build-time parsing
 
@@ -133,7 +141,8 @@ biome)` lists one kind's Variants for a Biome.
 - `drawHousePart(world, colours, part, paint)` and `houseStructure(world)`:
   one part of the World's House Variant, and that Variant.
 - `drawStructures(world, …)`: the World's structure grid: the House's base,
-  the Station, the Mailbox and the Dock's things.
+  the Station, the Mailbox and the Dock's things. The House Interior's room
+  joins the grid at ⅛ unit (`drawWorldRoom`, below).
 - `houseWindowFaces(world)`: the open +x and +z faces of window glass, lit
   at Night (`rendering-and-shading.md`, "The House and its room").
 
@@ -172,7 +181,7 @@ directly.
 chimney), with the door (4×10) in the middle of the +z wall, windows with
 shutters and sills on the two front walls, one window in each back wall,
 eaves overhanging the walls by two voxels, and a shared interior box (x and
-z 4–20, y 2–20) that holds the ¼-unit room. Variants 2 and 3 keep Variant
+z 4–20, y 2–20) that holds the Biome's room. Variants 2 and 3 keep Variant
 1's walls (layers 0–19) and change the roof, the chimney and the porch:
 
 | Biome | 1 | 2 | 3 |
@@ -187,7 +196,7 @@ door on +z with a 4×10 opening, an interior box per Biome that holds the
 room and stays empty, a lid over every interior column, no base wall on the
 front sides above the floor, glass in the walls, and everything above the
 walls in the lid. So every House Variant in a Biome has a liftable roof and
-the same interior space (the Biome's room, polish ticket 04, fits them all).
+the same interior space (the Biome's room fits them all; see below).
 
 ### Station
 
@@ -245,6 +254,52 @@ checks them in the World: each Landmark draws its own Variant from the
 World's Biome, fills its footprint on its ground, the Mailbox faces the
 House's door, and the Dock's things stand on its deck.
 
+## The House Interior rooms
+
+One room per Biome (polish ticket 04), drawn at 1/16 unit (`scale: 16`,
+ADR 0006) in `structures/room/<biome>-1.structure`, and one seated
+developer for every room, `structures/developer/any-1.structure`. They were
+drawn with a throwaway generator script and committed as plain ASCII; edit
+the files directly.
+
+A room is 2×2 cells (32×32 voxels) and 31 layers, standing at the min
+corner of the House Variants' interior box (16×18×16 at ⅛ unit, so 32×36×32
+at 1/16): its back walls are the House's own (low x and low z), and its
+front is open to the camera. Each has its own floor, a desk on the west
+wall with the computer (its `screen` voxels face +x), keyboard and mug, a
+chair, the developer at its `developer:` anchor (9 1 4), a lamp or a fire,
+and the Biome's furniture. Tall furniture keeps clear of the back walls'
+windows, wherever they fall with the door south or east.
+
+| Biome | The room |
+|---|---|
+| tropical | bamboo slat floor, a woven pink rug, a bamboo desk and chair, a tall potted palm, a surfboard on the wall, a low bamboo table with a fruit bowl, a rolled-up hammock |
+| northern | plank floor, a fur rug before a stone hearth with a fire and a mantel, stacked logs, a timber desk and chair, snowshoes on the wall, a little spruce in a pot |
+| autumn | plank floor, a patterned rug, a bookshelf full of books, an armchair under a floor lamp, a padded chair, a pumpkin, a plant in a pot |
+| volcanic | checked stone floor, a dark rug, a slate desk with a lava lamp, a shelf of glowing crystals, a brazier with a fire, crystals by the wall, a plant in a stone pot |
+
+The developer is 20 voxels tall seated (1.25 units; a 6×5×6 head under a
+layer of hair), facing −x, so the camera looks over their shoulder at the
+screen; their head and hands are moving parts.
+
+`render/interiorModel.ts` (pure):
+
+- `furnishedRoom(biome)`: the room with the developer merged in, one
+  1/16-unit structure (cached), their moving parts kept apart.
+- `coarsen(structure, factor)`: the structure at a coarser scale: a block
+  of `factor`³ voxels becomes one if at least a quarter of it is filled, in
+  its most common role, all in `base`.
+- `interiorPlacement(world)`: where the room's min corner stands in a
+  World (1/16-unit World voxels): the House Variant's interior box as
+  placed. The room never turns with the door (the box is square in plan).
+- `drawWorldRoom(world, …)`: the furnished room coarsened to ⅛ unit and
+  drawn into the World's structure grid, so a room shows as the lid lifts.
+- `developerBox`, `screenFace`, `roomLight`: the developer's box (for their
+  link), the screen's face (for its glowing code) and the middle of the
+  lamps and fires (for the Night light).
+- `showsInterior(…)`: when the House Interior scene takes over from the
+  World (`rendering-and-shading.md`, "The House Interior").
+
 ## Data tests
 
 `structures.test.ts` reads every `*.structure` file from disk and checks
@@ -252,6 +307,14 @@ that it parses, that the build-time module holds the same voxels, that it
 uses only known roles, and that it fills its declared footprint (every
 cell has voxels; the grid is the footprint's size). `parse.test.ts`
 checks the format on a small inline structure, including its errors.
+
+For the House Interior, `structures.test.ts` checks one 1/16-unit room per
+Biome; that each fits the interior space of every House Variant in its
+Biome; that each seats the developer at its anchor, inside the room, clear
+of the furniture and on a seat; that the screen faces the developer at eye
+height; and that each has a lamp or a fire. `interiorModel.test.ts` checks
+the furnished room, `coarsen`, the room's place in the World and in its
+structure grid, and `showsInterior`.
 
 ## The Model Gallery
 
@@ -263,7 +326,9 @@ so the models stay large enough to judge; the grid re-lays when the screen
 turns. It uses the World's
 renderer (`WebGPURenderer`, WebGL 2 fallback), soft-voxel material, sun,
 sky light and Day and Night tokens (the light only: window glow shows in the World, not here). **Turn** turns every model a quarter
-turn; **Lift lids** lifts the House lids to show the interior; **Night**
+turn; **Lift lids** lifts the House lids to show the interior; a House
+Interior room (kind `room`) shows furnished, the developer at the
+computer, at its own 1/16 unit; **Night**
 switches the light, and the page's own colours follow (the site's theme
 tokens and fonts). On a phone the buttons show icons only (their names stay
 as tooltips and for screen readers). It renders on demand and on resize.

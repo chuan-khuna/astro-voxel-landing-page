@@ -1,11 +1,10 @@
 /**
  * The ¼-unit parts of the Landmarks, drawn into the detail grid: the
- * Garden (a placeholder until polish ticket 05), the Dock's plank deck and
- * jetty on posts (ground detail, ADR 0006), and the House's room
- * (`houseModel.ts`) until the House Interior (polish ticket 04). Everything
- * else a Landmark shows is its Variant's ⅛-unit structure
- * (`structureModels.ts`): the House, the Station, the Mailbox and the
- * things on the Dock's deck.
+ * Garden (a placeholder until polish ticket 05) and the Dock's plank deck
+ * and jetty on posts (ground detail, ADR 0006). Everything else a Landmark
+ * shows is its Variant's ⅛-unit structure (`structureModels.ts`): the
+ * House, the Station, the Mailbox and the things on the Dock's deck. The
+ * House's room is the House Interior's, drawn at ⅛ unit (`interiorModel.ts`).
  *
  * A model is drawn with its origin at the min corner of the footprint's
  * origin cell, on top of the ground: local x runs 0 to `4 × width`, local z
@@ -15,7 +14,6 @@ import { HOUSE_CELLS, type Cell, type PlacedLandmark, type PlacedLandmarkId, typ
 import type { VoxelGrid } from './mesher';
 import type { WorldColours } from './worldVoxels';
 import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
-import { drawHouseRoom, type HouseDraw } from './houseModel';
 import { drawStructure, landmarkPlacement, landmarkStructure } from './structureModels';
 
 interface Origin {
@@ -24,7 +22,11 @@ interface Origin {
   z: number;
 }
 
-type Draw = HouseDraw;
+/** Draws ¼ voxels: `box` fills [x0, x1) × [y0, y1) × [z0, z1). */
+interface Draw {
+  box: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, colour: number | null) => void;
+  set: (x: number, y: number, z: number, colour: number) => void;
+}
 
 /** What a model needs to know about its Landmark, in local ¼ voxels. */
 interface Shape {
@@ -48,10 +50,8 @@ const TREE_HEIGHT = 8;
 const MODELS: Record<PlacedLandmarkId, Model> = {
   /** The Station is a structure (`structureModels.ts`): nothing at ¼ unit. */
   station: () => {},
-  /** The House's room (`houseModel.ts`); the House round it is a structure (`structureModels.ts`). */
-  house: (draw, colours) => {
-    drawHouseRoom(draw, colours);
-  },
+  /** The House is a structure (`structureModels.ts`), its room the House Interior's (`interiorModel.ts`): nothing at ¼ unit. */
+  house: () => {},
   /** One tree per Project, each filling its cell, and a flower in every other cell. */
   garden: ({ box, set }, { biome, fixed }, { w, d, trees }) => {
     const treeAt = new Set(trees.map((t) => `${t.x},${t.z}`));

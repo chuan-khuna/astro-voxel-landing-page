@@ -334,10 +334,14 @@ route on every `astro:after-swap`:
 - **About and Team open the House** (`routeView`): its lid (the roof and
   front walls) lifts off over 800 ms as the camera dives into the House
   Interior, a close-up of the room: a developer typing at a computer whose
-  screen scrolls code. About or Team opens beside it. While the House is
+  screen scrolls code. Once the lid is up and the camera has landed, the
+  House Interior scene (the Biome's room at 1/16 unit) takes over from the
+  World; zooming out or panning the room off screen brings the World back.
+  About or Team opens beside it. While the House is
   open the developer has a link ("Meet the Team") that opens Team. Leaving
   for any other route (closing, Escape, Back, the menu) lowers the lid as
-  the camera flies out. Under reduced motion the lid and camera cut and
+  the camera flies out, the World back on screen first. Under reduced
+  motion the lid and camera cut and
   the developer and screen keep still. A direct load of `/about` or
   `/about/team` opens the House at once.
 - **Moving between sections** flies from one Landmark to the next. The
@@ -576,7 +580,8 @@ page does not change: the Tour is not a route.
 - About shows the House shut from outside; Team lifts its lid and looks
   into the room. The camera comes no closer than 1.3 × the close-up of the
   Landmark the Guide floats beside, so the Guide stays in view inside the
-  House too.
+  House too (the House Interior scene takes over there, and the Guide goes
+  with it).
 - Under reduced motion the camera, the Guide and the lid cut.
 
 **Controls.** Previous (inactive, `aria-disabled`, at the first step),
@@ -616,6 +621,6 @@ the pan, zoom and flight rig, whose `focus` flies to a Landmark, and whose
 has a mesher with culling, baked AO and greedy merging, a TSL material for
 seams, bevel and colour jitter, a static sun shadow map, and frames only on
 demand: while the camera moves, while the Partners' ships sail and while
-the House is open (the developer at work) or its lid moves (never under
+the House Interior shows (the developer at work) or the House's lid moves (never under
 reduced motion). `onFrame` reports each frame (time, triangles, draw calls)
 to the render stats overlay without asking for any. See `rendering-and-shading.md`.

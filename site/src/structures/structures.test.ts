@@ -3,8 +3,7 @@ import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BIOME_IDS, LANDMARK_HEIGHT, LANDMARK_VARIANTS } from '@/world';
-import { HOUSE_INTERIOR } from '@/render/houseModel';
-import { GROUND_DETAIL, STRUCTURE } from '@/render/voxelTiers';
+import { GROUND_DETAIL, INTERIOR, STRUCTURE } from '@/render/voxelTiers';
 import { STRUCTURES, STRUCTURE_FILES, variantsOf } from './index';
 import { parseStructure, structureVoxels, voxelAt, type Structure } from './parse';
 import { STRUCTURE_ROLES } from './roles';
@@ -35,10 +34,10 @@ describe('structure files', () => {
 
   it('each fills its declared footprint: every cell has voxels, and nothing lies outside it', () => {
     for (const s of STRUCTURES) {
-      expect(s.size.x, s.name).toBe(s.footprint.width * STRUCTURE);
-      expect(s.size.z, s.name).toBe(s.footprint.depth * STRUCTURE);
+      expect(s.size.x, s.name).toBe(s.footprint.width * s.scale);
+      expect(s.size.z, s.name).toBe(s.footprint.depth * s.scale);
       const reached = new Set<string>();
-      for (const v of structureVoxels(s)) reached.add(`${Math.floor(v.x / STRUCTURE)},${Math.floor(v.z / STRUCTURE)}`);
+      for (const v of structureVoxels(s)) reached.add(`${Math.floor(v.x / s.scale)},${Math.floor(v.z / s.scale)}`);
       for (let z = 0; z < s.footprint.depth; z++) for (let x = 0; x < s.footprint.width; x++) expect(reached.has(`${x},${z}`), `${s.name} ${x},${z}`).toBe(true);
     }
   });
@@ -139,16 +138,7 @@ describe('the House Variants', () => {
       const interiors = variantsOf('house', biome).map((s) => s.interior);
       for (const box of interiors) expect(box, biome).toEqual(interiors[0]);
     }
-    // The room (¼ voxels, `HOUSE_INTERIOR`) fits inside each interior, in ⅛ voxels.
-    const scale = STRUCTURE / GROUND_DETAIL;
-    for (const s of houses) {
-      const box = s.interior!;
-      expect(box, s.name).not.toBeNull();
-      for (const axis of ['x', 'y', 'z'] as const) {
-        expect(HOUSE_INTERIOR.min[axis] * scale, `${s.name} ${axis}`).toBeGreaterThanOrEqual(box.min[axis]);
-        expect(HOUSE_INTERIOR.max[axis] * scale, `${s.name} ${axis}`).toBeLessThanOrEqual(box.max[axis]);
-      }
-    }
+    for (const s of houses) expect(s.interior, s.name).not.toBeNull();
   });
 
   it('keeps the interior empty, closes it from above with the lid, and opens it to the camera with the lid off', () => {
@@ -177,6 +167,75 @@ describe('the House Variants', () => {
       const voxels = [...structureVoxels(s)];
       expect(voxels.filter((v) => v.role === 'window').length, s.name).toBeGreaterThan(20);
       for (const v of voxels) if (v.y >= s.interior!.max.y) expect(v.part, `${s.name} ${v.x},${v.y},${v.z}`).toBe('lid');
+    }
+  });
+});
+
+describe('the House Interior rooms', () => {
+  const developer = STRUCTURES.find((s) => s.kind === 'developer');
+  const key = (v: { x: number; y: number; z: number }) => `${v.x},${v.y},${v.z}`;
+
+  it('gives every Biome one room, drawn at 1/16 unit', () => {
+    for (const biome of BIOME_IDS) {
+      const rooms = variantsOf('room', biome);
+      expect(rooms.map((r) => r.variant), biome).toEqual([1]);
+      expect(rooms[0]!.scale, biome).toBe(INTERIOR);
+    }
+  });
+
+  it('fits each room in the interior space of every House Variant in its Biome', () => {
+    for (const biome of BIOME_IDS) {
+      const [room] = variantsOf('room', biome);
+      for (const house of variantsOf('house', biome)) {
+        const { min, max } = house.interior!;
+        // The room stands at the interior's min corner; ⅛ voxels to 1/16 voxels.
+        const k = INTERIOR / STRUCTURE;
+        for (const axis of ['x', 'y', 'z'] as const) expect(room!.size[axis], `${room!.name} in ${house.name} ${axis}`).toBeLessThanOrEqual((max[axis] - min[axis]) * k);
+        expect(room!.anchor, room!.name).toEqual({ x: 0, y: 0, z: 0 });
+      }
+    }
+  });
+
+  it('seats the developer at each room’s developer anchor, inside the room and clear of its furniture', () => {
+    expect(developer?.scale).toBe(INTERIOR);
+    expect(new Set(developer!.palette.map((p) => p.part))).toEqual(new Set(['base', 'head', 'leftHand', 'rightHand']));
+    for (const room of STRUCTURES.filter((s) => s.kind === 'room')) {
+      const at = room.developer;
+      expect(at, room.name).not.toBeNull();
+      const furniture = new Set([...structureVoxels(room)].map(key));
+      for (const v of structureVoxels(developer!)) {
+        const p = { x: at!.x + v.x, y: at!.y + v.y, z: at!.z + v.z };
+        for (const axis of ['x', 'y', 'z'] as const) {
+          expect(p[axis], `${room.name} ${key(p)}`).toBeGreaterThanOrEqual(0);
+          expect(p[axis], `${room.name} ${key(p)}`).toBeLessThan(room.size[axis]);
+        }
+        expect(furniture.has(key(p)), `${room.name} ${key(p)}`).toBe(false);
+      }
+      // The developer sits on something: a voxel of the room right under their lowest layer.
+      const lowest = [...structureVoxels(developer!)].filter((v) => v.y === 0);
+      expect(lowest.some((v) => furniture.has(key({ x: at!.x + v.x, y: at!.y - 1, z: at!.z + v.z }))), room.name).toBe(true);
+    }
+  });
+
+  it('puts a computer in front of the developer: a screen facing them (+x), in view over their shoulder', () => {
+    for (const room of STRUCTURES.filter((s) => s.kind === 'room')) {
+      const screen = [...structureVoxels(room)].filter((v) => v.role === 'screen');
+      expect(screen.length, room.name).toBeGreaterThanOrEqual(30);
+      const at = room.developer!;
+      for (const v of screen) {
+        expect(v.x, room.name).toBeLessThan(at.x);
+        expect(voxelAt(room, v.x + 1, v.y, v.z), `${room.name} in front of ${key(v)}`).toBeNull();
+      }
+      // The screen spans the developer's eye line.
+      const eyes = at.y + Math.max(...[...structureVoxels(developer!)].filter((v) => v.part === 'head').map((v) => v.y)) - 3;
+      expect(Math.min(...screen.map((v) => v.y)), room.name).toBeLessThanOrEqual(eyes);
+      expect(Math.max(...screen.map((v) => v.y)), room.name).toBeGreaterThanOrEqual(eyes - 4);
+    }
+  });
+
+  it('has a light for the Night: a lamp or a fire in every room', () => {
+    for (const room of STRUCTURES.filter((s) => s.kind === 'room')) {
+      expect([...structureVoxels(room)].some((v) => v.role === 'lamp' || v.role === 'fire'), room.name).toBe(true);
     }
   });
 });

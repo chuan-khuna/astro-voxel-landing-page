@@ -65,12 +65,33 @@ export const STRUCTURE_ROLES = {
   foliageLight: { biome: 'foliage', dl: 0.05 },
   flower: { fixed: 'bougainvillea' },
   flowerLight: { fixed: 'bougainLight' },
+  // The House Interior's rooms (1/16 unit) and the developer at work.
+  /** The computer's screen: the glowing code is drawn over its +x face (`interiorModel.ts`). */
+  screen: { fixed: 'screenDark' },
+  /** Fire in a hearth or a brazier: the room's warm light at Night. */
+  fire: { fixed: 'fire' },
+  desk: { fixed: 'desk' },
+  chair: { fixed: 'chair' },
+  skin: { fixed: 'skin' },
+  hair: { fixed: 'hair' },
+  shirt: { fixed: 'shirt' },
+  trousers: { fixed: 'trousers' },
+  shoe: { fixed: 'trousers', dl: -0.12 },
 } as const satisfies Record<string, RoleColour>;
 
 export type StructureRole = keyof typeof STRUCTURE_ROLES;
 
 export const isStructureRole = (role: string): role is StructureRole => Object.hasOwn(STRUCTURE_ROLES, role);
 
-/** The parts a structure's voxels belong to. `lid` lifts off (the House's roof and front walls); everything else is `base`. */
-export const STRUCTURE_PARTS = ['base', 'lid'] as const;
+/** The developer's moving parts (`developer/any-1`), each its own mesh in the House Interior scene. */
+export const DEVELOPER_PARTS = ['head', 'leftHand', 'rightHand'] as const;
+export type DeveloperPart = (typeof DEVELOPER_PARTS)[number];
+
+/**
+ * The parts a structure's voxels belong to, each its own mesh where it moves:
+ * `lid` lifts off (the House's roof and front walls); `head`, `leftHand` and
+ * `rightHand` are the developer's moving parts (`developer/any-1`);
+ * everything else is `base`.
+ */
+export const STRUCTURE_PARTS = ['base', 'lid', ...DEVELOPER_PARTS] as const;
 export type StructurePart = (typeof STRUCTURE_PARTS)[number];

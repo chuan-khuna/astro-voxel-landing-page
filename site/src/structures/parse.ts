@@ -3,19 +3,24 @@
  * array. Runs at build time only (the Vite plugin in `vitePlugin.ts`) and in
  * tests: the browser never parses ASCII.
  *
- * A structure file is a header, a key and layers of ⅛-unit voxels:
+ * A structure file is a header, a key and layers of voxels (⅛ unit, or
+ * 1/16 for the House Interior's rooms):
  *
  * ```
  * # Comments start with #.
  * kind: house              what it is (the House, a tree, a boat...)
  * biome: tropical          the Biome whose style it is, or `any`
  * variant: 1               its Variant number within that Biome
- * footprint: 3x3           cells along x and z; 8 voxels a cell
+ * footprint: 3x3           cells along x and z; `scale` voxels a cell
  * door: +z                 the face the door is on (+x, -x, +z, -z) or `none`
  * anchor: 0 0 0            the voxel corner that stands on the footprint's
  *                          min corner, on the ground
  * interior: 4 2 4 20 20 20 optional: a box (min x y z, max x y z, max
  *                          exclusive) kept empty for a room
+ * scale: 16                optional: voxels a unit, 8 (the default, ⅛ unit)
+ *                          or 16 (1/16 unit, the House Interior's rooms)
+ * developer: 9 0 14        optional, a room's: where the developer's anchor
+ *                          goes (the seated figure, `developer/any-1`)
  * key:
  *   P plinth               character, colour role, optional part (`lid`)
  *   w wall lid
@@ -31,7 +36,7 @@
 // Relative, not `@/`: this module loads with the Vite and Vitest configs, before the alias exists.
 import { BIOME_IDS, type BiomeId } from '../world/types';
 import { STRUCTURE_PARTS, isStructureRole, type StructurePart, type StructureRole } from './roles';
-import { STRUCTURE } from '../render/voxelTiers';
+import { INTERIOR, STRUCTURE } from '../render/voxelTiers';
 
 export type DoorFace = '+x' | '-x' | '+z' | '-z';
 
@@ -55,13 +60,17 @@ export interface Structure {
   /** The Biome whose style it is; null for one shared by every Biome. */
   biome: BiomeId | null;
   variant: number;
-  /** Size in ⅛-unit voxels. */
+  /** Voxels a unit: 8 (⅛ unit, the World's structures) or 16 (1/16 unit, the House Interior). */
+  scale: number;
+  /** Size in voxels (`scale` a unit). */
   size: Point;
   /** Footprint in cells. */
   footprint: { width: number; depth: number };
   door: DoorFace | null;
   anchor: Point;
   interior: { min: Point; max: Point } | null;
+  /** A room's developer anchor: where the seated developer's own anchor goes, in the room's voxels. */
+  developer: Point | null;
   /** `voxels` holds 0 for empty, or 1 + an index into this list. */
   palette: StructureVoxel[];
   /** One byte per voxel, at `x + size.x · (z + size.z · y)`. */
@@ -69,6 +78,8 @@ export interface Structure {
 }
 
 const DOORS: readonly string[] = ['+x', '-x', '+z', '-z'];
+/** Voxels a unit a structure may be drawn at (ADR 0006): ⅛ unit, or 1/16 for the House Interior. */
+const SCALES: readonly number[] = [STRUCTURE, INTERIOR];
 
 export function parseStructure(text: string, name: string): Structure {
   const fail = (line: number, message: string): never => {
@@ -138,9 +149,12 @@ export function parseStructure(text: string, name: string): Structure {
   if (doorName !== 'none' && !DOORS.includes(doorName)) fail(header.get('door')!.line, `door is one of ${DOORS.join(', ')} or none`);
   const [ax, ay, az] = numbers('anchor', 3);
   const interiorBox = header.has('interior') ? numbers('interior', 6) : null;
+  const developer = header.has('developer') ? numbers('developer', 3) : null;
+  const scale = header.has('scale') ? Number(need('scale')) : STRUCTURE;
+  if (!SCALES.includes(scale)) fail(header.get('scale')!.line, `scale is one of ${SCALES.join(', ')} voxels a unit`);
 
-  const sx = width * STRUCTURE;
-  const sz = depth * STRUCTURE;
+  const sx = width * scale;
+  const sz = depth * scale;
   blocks.sort((a, b) => a.from - b.from);
   let next = 0;
   for (const b of blocks) {
@@ -170,6 +184,7 @@ export function parseStructure(text: string, name: string): Structure {
     kind,
     biome: biomeName === 'any' ? null : (biomeName as BiomeId),
     variant,
+    scale,
     size: { x: sx, y: sy, z: sz },
     footprint: { width, depth },
     door: doorName === 'none' ? null : (doorName as DoorFace),
@@ -178,6 +193,7 @@ export function parseStructure(text: string, name: string): Structure {
       min: { x: interiorBox[0]!, y: interiorBox[1]!, z: interiorBox[2]! },
       max: { x: interiorBox[3]!, y: interiorBox[4]!, z: interiorBox[5]! },
     },
+    developer: developer && { x: developer[0]!, y: developer[1]!, z: developer[2]! },
     palette,
     voxels,
   };

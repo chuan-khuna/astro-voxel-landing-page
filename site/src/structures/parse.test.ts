@@ -77,6 +77,26 @@ describe('parseStructure', () => {
     expect(t.interior).toEqual({ min: { x: 1, y: 1, z: 1 }, max: { x: 7, y: 3, z: 7 } });
   });
 
+  it('is drawn at ⅛ unit unless it says otherwise', () => {
+    expect(s.scale).toBe(8);
+    expect(s.developer).toBeNull();
+  });
+
+  it('reads a 1/16-unit structure (an Interior room): 16 voxels a cell, and where the developer sits', () => {
+    const fine = SMALL.replace('anchor: 0 0 0', 'anchor: 0 0 0\nscale: 16\ndeveloper: 3 1 4').replace(/^([.PWR]{8})$/gm, '$1$1');
+    const rows = (block: string) => block.split('\n').filter(Boolean);
+    // 16 rows a layer: each block's 8 rows twice.
+    const text = fine.replace(/((?:^[.PWR]{16}\n){8})/gm, (block) => block + rows(block).join('\n') + '\n');
+    const t = parseStructure(text, 'fine');
+    expect(t.scale).toBe(16);
+    expect(t.size).toEqual({ x: 16, y: 4, z: 16 });
+    expect(t.developer).toEqual({ x: 3, y: 1, z: 4 });
+  });
+
+  it('rejects a scale other than 8 or 16', () => {
+    expect(() => parseStructure(SMALL.replace('anchor: 0 0 0', 'anchor: 0 0 0\nscale: 4'), 'bad')).toThrow(/scale/);
+  });
+
   it('rejects an unknown colour role', () => {
     expect(() => parseStructure(SMALL.replace('W wall', 'W purple'), 'bad')).toThrow(/unknown role "purple"/);
   });

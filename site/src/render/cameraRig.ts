@@ -28,6 +28,8 @@ export interface CameraRig {
   reset(limits: CameraLimits, state: CameraState, distance: number): void;
   /** The limits the state is clamped to (the World's bounds and zoom range). */
   readonly limits: CameraLimits;
+  /** A flight is under way (`flyTo`); pans, zooms and cuts are not flights. */
+  readonly flying: boolean;
   /**
    * Where the visitor looks (`CameraLimits.at`, frame units from the centre,
    * y up): from now on the bounds hold the ground seen there. Kept across
@@ -223,6 +225,9 @@ export function createCameraRig({ element, camera, onChange, onInput }: Options)
     },
     get limits() {
       return limits;
+    },
+    get flying() {
+      return flight !== null;
     },
     lookAt(at) {
       limits = { ...limits, at };

@@ -7,8 +7,8 @@
  *   World changes, plus a hemisphere sky light.
  * - Frames render only on request (mount, resize, a new World, a camera move),
  *   and every frame while something moves: the Partners' ships sailing, the
- *   House's lid lifting or lowering, the developer at work in the open
- *   House, the Guide assembling, dissolving or idling. With nothing moving, under reduced motion or on a hidden page
+ *   House's lid lifting or lowering, the developer at work in the House
+ *   Interior, the Guide assembling, dissolving or idling. With nothing moving, under reduced motion or on a hidden page
  *   nothing renders while idle. Each frame bumps `canvas.dataset.frames` and
  *   writes `canvas.dataset.camera` (target x, z and zoom), for checks.
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
@@ -20,7 +20,15 @@
  * - `focus(landmark)` flies (or cuts) the camera to a Landmark
  *   (`landmarkFocus.ts`), optionally off centre to leave room for a panel.
  * - `setInterior(open, ms)` opens the House (its lid lifts, the developer's
- *   link appears) or shuts it.
+ *   link appears) or shuts it. Once the House is open and the camera has
+ *   come to rest close on it (`showsInterior`), the House Interior scene
+ *   (`interior.ts`, 1/16 unit) takes over from the World: drawn through the
+ *   same camera, the House stays put while its room sharpens and the rest
+ *   of the World gives way to the sky. Shutting the House hands back to
+ *   the World at once, and then the lid comes down; zooming out or panning
+ *   the room off screen also hands back, the House still open. The Guide
+ *   moves into whichever scene is on show;
+ *   `canvas.dataset.scene` (and the frame's `data-scene`) says which.
  * - `show(world)` swaps in another World (a new Seed) and disposes the old one.
  * - The Guide (`guide.ts`) lives for the whole visit: it assembles at the
  *   Station's spot (`guideSpot`) when the World mounts and dissolves and
@@ -58,6 +66,8 @@ import { createDataCards } from './dataCards';
 import { landmarkFocus } from './landmarkFocus';
 import { stateShowing, type CameraState } from './cameraMath';
 import { buildWorldObjects, type WorldObjects } from './worldMeshes';
+import { buildInterior, type InteriorScene } from './interior';
+import { showsInterior } from './interiorModel';
 import { openingStep } from './houseMotion';
 import type { MeshedWorld } from './worldVoxels';
 import type { Rect, ScreenOffset } from './freeArea';
@@ -232,8 +242,8 @@ export async function mountWorld(
   let openingMs = 0;
   let worked = 0;
   const lifting = () => opening !== (interior ? 1 : 0);
-  // The developer works while the House is open, the page visible and motion allowed.
-  const working = () => interior && opening > 0 && idling();
+  // The developer works while the House Interior is on show, the page visible and motion allowed.
+  const working = () => interiorShown && idling();
   // The Guide assembles and dissolves whenever it does; it bobs and blinks only while idling.
   const moving = () => sailing() || lifting() || working() || guide.moving(idling());
   /** The time of the last frame while something moved (0 when nothing did). */
@@ -266,18 +276,29 @@ export async function mountWorld(
         sun.shadow.needsUpdate = true;
         canvas.dataset.interior = opening === 1 ? 'open' : opening === 0 ? 'shut' : 'moving';
       }
+      // The overlays project through the camera's matrices: bring them up to date first.
+      camera.updateMatrixWorld();
+      setInside(
+        !!interiorScene &&
+          showsInterior({
+            open: interior,
+            opening,
+            flying: rig.flying,
+            zoom: rig.state.zoom,
+            interiorZoom: landmarkFocus(current, 'house-interior').zoom,
+            room: roomOnScreen.copy(interiorScene.centre).project(camera),
+          }),
+      );
       if (working()) {
         worked += dt / 1000;
-        objects!.house.work(worked);
+        interiorScene!.work(worked);
       }
       guide.step(dt, idling());
       lastTick = moving() ? now : 0;
-      // The overlays project through the camera's matrices: bring them up to date first.
-      camera.updateMatrixWorld();
       hotspots.place(camera);
       cards.place(camera, rig.state, viewCentre);
       guide.place(camera);
-      renderer.render(scene, camera);
+      renderer.render(interiorShown && interiorScene ? interiorScene.scene : scene, camera);
       idleRenderer();
       if (frameListeners.size > 0) {
         // `render()` restarts three's animation loop, which resets the counts first: they are this frame's.
@@ -340,6 +361,20 @@ export async function mountWorld(
   };
 
   let objects: WorldObjects | null = null;
+  /** The House Interior scene of the World on show (null for a World with no House), and whether it is on show. */
+  let interiorScene: InteriorScene | null = null;
+  let interiorShown = false;
+  const roomOnScreen = new THREE.Vector3();
+  /** Show the House Interior scene or the World; the Guide goes with the camera. */
+  const setInside = (next: boolean) => {
+    if (next === interiorShown) return;
+    interiorShown = next;
+    (interiorShown && interiorScene ? interiorScene.scene : scene).add(guide.object);
+    canvas.dataset.scene = interiorShown ? 'interior' : 'world';
+    ui.frame.dataset.scene = canvas.dataset.scene;
+  };
+  canvas.dataset.scene = 'world';
+  ui.frame.dataset.scene = 'world';
   let current = world;
   const show = (next: World, nextMeshed?: MeshedWorld) => {
     current = next;
@@ -351,8 +386,12 @@ export async function mountWorld(
     objects = buildWorldObjects(next, nextMeshed);
     objects.setTheme(theme);
     objects.house.setOpening(opening);
-    objects.house.work(worked);
     scene.add(objects.group);
+    setInside(false);
+    interiorScene?.dispose();
+    interiorScene = next.landmarks.some((l) => l.id === 'house') ? buildInterior(next) : null;
+    interiorScene?.setTheme(theme);
+    interiorScene?.work(worked);
 
     const { width, depth } = next.terrain;
     const centre = new THREE.Vector3(width / 2, 0, depth / 2);
@@ -363,7 +402,7 @@ export async function mountWorld(
     radius = next.views.overview.radius;
     frameCamera();
     lookAtViewCentre();
-    hotspots.setWorld(next);
+    hotspots.setWorld(next, interiorScene?.developer ?? null);
     hotspots.setInterior(interior);
     cards.setWorld(next);
     // The Guide (dis)assembles in flight only where it can be seen; otherwise it is simply there.
@@ -383,6 +422,7 @@ export async function mountWorld(
 
     canvas.dataset.seed = next.seed;
     canvas.dataset.triangles = String(objects.triangles);
+    canvas.dataset.interiorTriangles = String(interiorScene?.triangles ?? 0);
     requestRender();
   };
 
@@ -418,6 +458,7 @@ export async function mountWorld(
       theme = next;
       lightFor(theme);
       objects?.setTheme(theme);
+      interiorScene?.setTheme(theme);
       requestRender();
     },
     onFrame: (listener) => {
@@ -441,6 +482,7 @@ export async function mountWorld(
       guide.dispose();
       observer.disconnect();
       objects?.dispose();
+      interiorScene?.dispose();
       renderer.dispose();
     },
   };

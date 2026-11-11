@@ -64,6 +64,8 @@ export const FIXED_COLOURS = {
   hair: oklch(0.4, 0.05, 50),
   shirt: oklch(0.6, 0.08, 185),
   trousers: oklch(0.36, 0.04, 255),
+  /** Fire in a hearth or brazier (the House Interior). */
+  fire: oklch(0.76, 0.1, 62),
   // Landmark parts (Station, Garden, Dock, Mailbox).
   trunk: oklch(0.46, 0.035, 60),
   plank: oklch(0.62, 0.045, 62),

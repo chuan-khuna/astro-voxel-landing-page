@@ -6,10 +6,12 @@
  *   stratum's colour, so cliffs show layered bands.
  * - `detail`: ¼-unit voxels (`GROUND_DETAIL`) for what is built on the
  *   terrain and not yet a structure: bridge decks, stairs, the Garden and
- *   the Dock's deck and jetty (`landmarkModels.ts`), the House's room, the
- *   Clients' moored boats and the buoys.
+ *   the Dock's deck and jetty (`landmarkModels.ts`), the Clients' moored
+ *   boats and the buoys.
  * - `structure`: ⅛-unit voxels (`STRUCTURE`) for placed structures
- *   (`structureModels.ts`): the House's base, the Station, the Mailbox and the Dock's things.
+ *   (`structureModels.ts`): the House's base, the Station, the Mailbox and
+ *   the Dock's things; and the House Interior's room at ⅛ unit
+ *   (`interiorModel.ts`), seen while the lid lifts.
  *
  * The grids index one shared colour list. See `voxelTiers.ts` for the tiers.
  */
@@ -20,6 +22,7 @@ import { drawBuoy } from './buoyModel';
 import { meshVoxels, VoxelGrid, type ChunkMesh } from './mesher';
 import { FIXED_COLOURS, LOOK, oklchToLinear, shiftLightness, type FixedColour, type Rgb } from './palette';
 import { drawStructures } from './structureModels';
+import { drawWorldRoom } from './interiorModel';
 import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 
 /** A colour list that hands out one id per distinct colour. */
@@ -144,6 +147,7 @@ export function worldToVoxels(world: World): WorldVoxels {
 
   const structure = new VoxelGrid(1 / STRUCTURE);
   drawStructures(world, colours, (x, y, z, colour) => structure.set(x, y, z, colour));
+  drawWorldRoom(world, colours, (x, y, z, colour) => structure.set(x, y, z, colour));
 
   return { terrain, detail, structure, colours: colours.table.colours, terrainSolid };
 }

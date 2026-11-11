@@ -18,9 +18,9 @@ const voxelsOf = (landmark: PlacedLandmark, world = worlds[0]!) => {
 };
 
 describe('Landmark models', () => {
-  it('draw only the Garden, the Dock\'s deck and jetty, and the House\'s room at ¼ unit: the rest are structures', () => {
+  it('draw only the Garden and the Dock’s deck and jetty at ¼ unit: the rest are structures', () => {
     for (const world of worlds) {
-      for (const l of world.landmarks.filter((l) => l.id === 'station' || l.id === 'mailbox')) expect(voxelsOf(l, world), `${world.seed} ${l.id}`).toHaveLength(0);
+      for (const l of world.landmarks.filter((l) => l.id === 'station' || l.id === 'mailbox' || l.id === 'house')) expect(voxelsOf(l, world), `${world.seed} ${l.id}`).toHaveLength(0);
       for (const l of world.landmarks.filter((l) => l.id === 'garden' || l.id === 'dock')) {
         const voxels = voxelsOf(l, world);
         const reached = new Set(voxels.map((v) => `${Math.floor(v.x / GROUND_DETAIL)},${Math.floor(v.z / GROUND_DETAIL)}`));
@@ -28,18 +28,6 @@ describe('Landmark models', () => {
         // ...and nothing outside it.
         const inside = new Set([...l.footprint.cells, ...l.jetty].map((c) => `${c.x},${c.z}`));
         for (const key of reached) expect(inside.has(key), `${world.seed} ${l.id} ${key}`).toBe(true);
-      }
-    }
-  });
-
-  it('draw only the room inside the House, within the House\'s 3×3', () => {
-    for (const world of worlds) {
-      const house = world.landmarks.find((l) => l.id === 'house')!;
-      const voxels = voxelsOf(house, world);
-      expect(voxels.length).toBeGreaterThan(0);
-      for (const v of voxels) {
-        expect(Math.floor(v.x / GROUND_DETAIL) - house.footprint.origin.x, world.seed).toBeLessThan(3);
-        expect(Math.floor(v.z / GROUND_DETAIL) - house.footprint.origin.z, world.seed).toBeLessThan(3);
       }
     }
   });

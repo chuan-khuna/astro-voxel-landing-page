@@ -6,7 +6,7 @@
  * (`structureModels.ts`).
  *
  * The geometry is the structure's own, meshed once by the greedy mesher at
- * ⅛ unit with its anchor at the origin, in the soft-voxel material in local
+ * its own scale (⅛ unit, or 1/16 for the House Interior) with its anchor at the origin, in the soft-voxel material in local
  * space. Instances move by whole voxels and turn by quarter turns, so the
  * seams stay on voxel edges.
  */
@@ -17,7 +17,6 @@ import { meshVoxels, triangleCount, VoxelGrid, type ChunkMesh } from './mesher';
 import { LOOK } from './palette';
 import { drawStructure } from './structureModels';
 import { voxelMaterial } from './voxelMaterial';
-import { STRUCTURE } from './voxelTiers';
 import type { WorldColours } from './worldVoxels';
 
 /** Where one copy goes, in world units, and how many quarter turns (about +y) it makes. */
@@ -50,13 +49,13 @@ export function instanceMatrix(placement: InstancePlacement, pivot: Point): numb
   return [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, placement.x - rx, placement.y - pivot.y, placement.z - rz, 1];
 }
 
-/** A structure (or one part of it) meshed at ⅛ unit, its anchor at the origin. */
+/** A structure (or one part of it) meshed at its own scale, its anchor at the origin. */
 export function structureGeometry(
   structure: Structure,
   colours: WorldColours,
   part?: StructurePart,
 ): { geometry: THREE.BufferGeometry; triangles: number } {
-  const grid = new VoxelGrid(1 / STRUCTURE);
+  const grid = new VoxelGrid(1 / structure.scale);
   drawStructure(structure, { x: 0, y: 0, z: 0, facing: 'south' }, colours, (x, y, z, colour) => grid.set(x, y, z, colour), part);
   const chunks = meshVoxels(grid, { colours: colours.table.colours, aoStrength: LOOK.aoStrength, chunkSize: 256 });
   return { geometry: mergeChunks(chunks), triangles: triangleCount(chunks) };
@@ -74,11 +73,11 @@ export function structureInstances(
   options: { part?: StructurePart; pivot?: Point } = {},
 ): { mesh: THREE.InstancedMesh; triangles: number; setPlacements: (placements: readonly InstancePlacement[]) => void; dispose: () => void } {
   const { geometry, triangles } = structureGeometry(structure, colours, options.part);
-  const material = voxelMaterial(1 / STRUCTURE, 'local');
+  const material = voxelMaterial(1 / structure.scale, 'local');
   const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, placements.length));
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  const pivot = options.pivot ?? { x: structure.size.x / STRUCTURE / 2, y: 0, z: structure.size.z / STRUCTURE / 2 };
+  const pivot = options.pivot ?? { x: structure.size.x / structure.scale / 2, y: 0, z: structure.size.z / structure.scale / 2 };
   const matrix = new THREE.Matrix4();
   const setPlacements = (next: readonly InstancePlacement[]) => {
     next.forEach((p, i) => mesh.setMatrixAt(i, matrix.fromArray(instanceMatrix(p, pivot))));

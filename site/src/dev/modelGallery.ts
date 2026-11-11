@@ -5,12 +5,15 @@
  * band's Variants down it), drawn with the World's renderer, soft-voxel material,
  * light and Day and Night tokens. Each model is an `InstancedMesh` of one
  * (`structureMeshes.ts`), its lid (if it has one) a second one that lifts.
- * Renders on demand. Dev only (`/dev/models`).
+ * A House Interior room shows furnished, the developer at their computer
+ * (`furnishedRoom`), at its own 1/16 unit. Renders on demand. Dev only
+ * (`/dev/models`).
  */
 import * as THREE from 'three/webgpu';
 import { BIOMES } from '@/world/biomes';
 import { BIOME_IDS } from '@/world';
 import { STRUCTURES, type Structure } from '@/structures';
+import { furnishedRoom } from '@/render/interiorModel';
 import { THEME_TOKENS } from '@/data/theme';
 import type { Theme } from '@/lib/theme';
 import { LOOK, oklchToLinear } from '@/render/palette';
@@ -22,6 +25,8 @@ import type { Oklch } from '@/world';
 
 /** Cells between neighbouring models' centres. */
 const SPACING = 6;
+/** Cells between the House Interior's rooms (2×2, and low): closer, so each shows larger. */
+const ROOM_SPACING = 4;
 /** Rows (in SPACING) between one row and the next: a row step is shallower on screen than a column step, so it needs more room. */
 const ROW_GAP = 1.8;
 /** Biomes side by side on a tall screen. */
@@ -189,10 +194,13 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
       clear();
       kindShown = kind;
       laidOutPortrait = isPortrait();
-      const list = STRUCTURES.filter((s) => s.kind === kind);
+      // A room shows furnished: the developer seated at its computer.
+      const list = STRUCTURES.filter((s) => s.kind === kind).map((s) => (s.kind === 'room' && s.biome ? furnishedRoom(s.biome) : s));
       const columns = BIOME_IDS.map((biome) => list.filter((s) => s.biome === biome));
       columns.push(list.filter((s) => s.biome === null));
       const used = columns.filter((column) => column.length > 0);
+      const spacing = kind === 'room' ? ROOM_SPACING : SPACING;
+      const margin = kind === 'room' ? 2.5 : 4;
       const rows = Math.max(1, ...used.map((column) => column.length));
       used.forEach((column, c) => {
         column.forEach((s, r) => {
@@ -200,7 +208,7 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
           const band = laidOutPortrait ? Math.floor(c / PORTRAIT_COLUMNS) : 0;
           const across = laidOutPortrait ? c % PORTRAIT_COLUMNS : c;
           const down = (band * rows + r) * ROW_GAP;
-          const at = new THREE.Vector3((down + across) * SPACING, 0, (down - across) * SPACING);
+          const at = new THREE.Vector3((down + across) * spacing, 0, (down - across) * spacing);
           const colours = coloursOf(s);
           const hasLid = s.palette.some((p) => p.part === 'lid');
           const base = structureInstances(s, colours, [placementOf(at)], hasLid ? { part: 'base' } : {});
@@ -218,8 +226,8 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
       extent = {
         cx: shown.reduce((sum, { at }) => sum + at.x, 0) / Math.max(1, shown.length),
         cz: shown.reduce((sum, { at }) => sum + at.z, 0) / Math.max(1, shown.length),
-        halfW: span(across) / 2 + 4,
-        halfH: span(down) / 2 + 5,
+        halfW: span(across) / 2 + margin,
+        halfH: span(down) / 2 + margin + 1,
       };
       sun.shadow.needsUpdate = true;
       render();

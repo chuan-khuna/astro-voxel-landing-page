@@ -2,7 +2,11 @@
  * How the House moves, as pure functions of time: the lid lifting off and
  * the developer at work. No three.js; `house.ts` applies them to meshes.
  */
-import { ROOF_LIFT, type DeveloperPart } from './houseModel';
+import type { DeveloperPart } from '@/structures/roles';
+import { INTERIOR } from './voxelTiers';
+
+/** How high the lid lifts when the House opens, in world units: clear of the room as the camera sees it. */
+export const ROOF_LIFT = 6;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 /** Cubic ease in and out, like the camera's flights. */
@@ -32,10 +36,10 @@ const CYCLE = 5;
 const TYPING = 3.6;
 /** Key taps a second, per hand. */
 const TAPS = 3;
-/** Highest a hand lifts: a third of a ¼ voxel. */
-const TAP_HEIGHT = 0.25 / 3;
-/** Deepest nod: a fifth of a ¼ voxel. */
-const NOD = 0.05;
+/** Highest a hand lifts: one 1/16-unit voxel of the Interior. */
+const TAP_HEIGHT = 1 / INTERIOR;
+/** Deepest nod: two thirds of a 1/16-unit voxel. */
+const NOD = (2 / 3) * (1 / INTERIOR);
 
 /**
  * The developer `seconds` into their work: bursts of typing (the hands tap

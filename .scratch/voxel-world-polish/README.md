@@ -87,15 +87,15 @@ layout สำรอง (safe layout) เป็นเกาะกลมเกา�
 | **terrain chunk** | 1 unit | chunk ละ 16×16×16 unit (16³ voxel) · ใช้ 3×3 ถึง 8×8 chunk ตามแนวราบ (ก่อน ticket 02: 2×2 ถึง 6×6) · สูง 1 chunk | เสาดินทุก cell ตั้งแต่ y = 0 ถึงความสูงของ cell · ผิวบนมีสีหญ้า ทราย หรือทางเดิน · ชั้นใต้ผิวมีสีหินเป็นแถบตามความสูง เห็นได้ที่หน้าผา | `worldVoxels.ts` |
 | **detail chunk** | ¼ unit | chunk ละ 16×16×16 unit (64³ voxel) · ใช้ grid เดียวกับ terrain chunk | ของที่อยู่กับที่ทั้งหมด: พื้นสะพาน · บันได · Station · ฐานและห้องของ House · ต้นไม้และดอกไม้ใน Garden · Dock, jetty และเสา · Mailbox · เรือ Client ที่จอดอยู่ | `worldVoxels.ts`, `landmarkModels.ts`, `vesselModels.ts` |
 | **ship mesh** | ¼ unit | ลำละ 1 mesh · grid 8×4×11 | เรือ Partner 1 ลำต่อ Partner · แล่นไปตามเส้นทางรอบเกาะ | `ships.ts` |
-| **house lid mesh** | ¼ unit | 1 mesh | หลังคา โดม และผนังด้านหน้า 2 ด้าน (มีประตูและหน้าต่าง) · ยกขึ้นได้เมื่อเปิดดูห้อง | `house.ts`, `houseModel.ts` |
-| **developer mesh** | ¼ unit | 3 mesh | หัว มือซ้าย และมือขวา · ขยับแยกจากตัว | `house.ts`, `houseMotion.ts` |
+| **house lid mesh** | ⅛ unit (ตั้งแต่ ticket 01) | 1 mesh | หลังคาและผนังด้านหน้า 2 ด้าน (มีประตูและหน้าต่าง) · ยกขึ้นได้เมื่อเปิดดูห้อง | `house.ts` |
+| **House Interior scene** (ticket 04) | 1/16 unit | อีก scene · mesh ห้อง 1 + หัวและมือ 3 | ห้องของ Biome พร้อม Developer · โครงบ้าน (⅛) และพื้นหญ้าใต้บ้าน · จอโค้ด · แสงของตัวเอง | `interior.ts`, `interiorModel.ts` |
 
 **ส่วนที่ยังไม่เป็น voxel**
 
 | ส่วน | รูปแบบตอนนี้ | ที่มา |
 |---|---|---|
 | ทะเล | ระนาบเรียบ 2 ชั้น: ทะเลลึกกว้าง 6 เท่าของ World และทะเลตื้นรอบเกาะ | `worldMeshes.ts` |
-| จอคอมพิวเตอร์ | ระนาบเรืองแสงที่เลื่อนแสดงโค้ด | `house.ts` |
+| จอคอมพิวเตอร์ | ระนาบเรืองแสงที่เลื่อนแสดงโค้ด (ใน scene House Interior) | `interior.ts` |
 
 **Block ที่จะเพิ่ม**
 
@@ -236,6 +236,15 @@ Garden แสดง Project ได้สูงสุด 9 รายการ ท
 | Developer นั่ง | ~20 |
 | หัว | 8×8×8 |
 
+**ขนาดที่สร้างจริง (ticket 04)**
+
+| ค่า | 1/16 voxel | หมายเหตุ |
+|---|---|---|
+| ห้อง | 32×32×31 | กล่อง interior ของ House คือ 16×18×16 ที่ ⅛ = 32×36×32 ที่ 1/16 · ผนังด้านหลังเป็นของตัวบ้าน (⅛) |
+| Developer นั่ง | 10×20×8 | หัว 6×5×6 และผม 1 ชั้น (เล็กกว่า 8×8×8 ในตาราง ให้สมส่วนกับตัว) |
+| voxel ต่อห้อง | 3,000–4,100 | สามเหลี่ยม 2,100–2,800 · scene ทั้งหมดราว 3,500 |
+| ห้องใน World (⅛) | 670–800 voxel | สามเหลี่ยม 1,000–1,200 · ใช้ตอนฝายกและกล้องซูม |
+
 ## Ambient Life เทียบกับ World
 
 - สัตว์ใช้ **⅛ voxel** เป็น ASCII structure และวาดด้วย `InstancedMesh`
@@ -287,6 +296,6 @@ Garden แสดง Project ได้สูงสุด 9 รายการ ท
 | ขนาดเกาะ | `site/src/world/terrain.ts` |
 | ความสูงตาม Biome | `site/src/world/biomes.ts` (`BIOME_RELIEF`) |
 | footprint ของ Landmark | `site/src/world/landmarks.ts` |
-| โมเดล | `site/src/render/landmarkModels.ts`, `houseModel.ts`, `vesselModels.ts` |
+| โมเดล | `site/src/render/landmarkModels.ts`, `interiorModel.ts`, `vesselModels.ts`, `site/src/structures/` |
 | chunk | `site/src/render/worldVoxels.ts` |
 | หน่วยของ structure และ particle | ADR 0004, ADR 0005, ADR 0006 |

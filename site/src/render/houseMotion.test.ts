@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { developerPose, openingStep, roofLift } from './houseMotion';
-import { ROOF_LIFT } from './houseModel';
+import { ROOF_LIFT, developerPose, openingStep, roofLift } from './houseMotion';
 
 describe('roofLift', () => {
   it('sits on the House when shut and ROOF_LIFT above it when open', () => {
@@ -48,7 +47,7 @@ describe('developerPose', () => {
       const { leftHand, rightHand } = developerPose(t);
       for (const hand of [leftHand, rightHand]) {
         expect(hand.y).toBeGreaterThanOrEqual(0);
-        expect(hand.y).toBeLessThanOrEqual(0.25 / 3);
+        expect(hand.y).toBeLessThanOrEqual(1 / 16); // one Interior voxel
       }
       expect(leftHand.y > 0 && rightHand.y > 0, `t=${t}`).toBe(false);
     }
@@ -61,7 +60,7 @@ describe('developerPose', () => {
     expect(still.length).toBeGreaterThan(times.length * 0.15);
     const nods = times.map((t) => developerPose(t).head.y);
     expect(Math.max(...nods)).toBeGreaterThan(0);
-    for (const y of nods) expect(Math.abs(y)).toBeLessThanOrEqual(0.25 / 4);
+    for (const y of nods) expect(Math.abs(y)).toBeLessThanOrEqual(1 / 16);
   });
 
   it('moves smoothly: no part jumps between frames at 60 fps', () => {

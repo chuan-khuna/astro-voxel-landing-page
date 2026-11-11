@@ -5,10 +5,11 @@
  * - `TERRAIN` (1 unit): ground, sea, clouds.
  * - `GROUND_DETAIL` (¼ unit): bridges, stairs, path edging, the Dock's deck
  *   and jetty, and (until they are redrawn as structures) the
- *   Garden, boats, buoys and the House's room.
+ *   Garden, boats and buoys.
  * - `STRUCTURE` (⅛ unit): predefined structures (`structures/`): Landmarks,
  *   plants, boats, ships, Decoration, creatures. Particles share this size.
- * - `INTERIOR` (1/16 unit): the House Interior, a scene of its own.
+ * - `INTERIOR` (1/16 unit): the House Interior's rooms (`structures/room/`), a
+ *   scene of its own (`interior.ts`).
  *
  * The mesher and the soft-voxel material take any voxel size: seams and
  * bevels are fractions of one voxel, so they scale with it.

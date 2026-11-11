@@ -2,7 +2,8 @@
  * World to three.js objects: meshes the World's voxel grids into chunked
  * `BufferGeometry` with the soft-voxel material, plus the sea, the
  * Partners' sailing ships (`ships.ts`), the House's moving parts (`house.ts`:
- * its lid, the developer, the screen and its lights) and the buoys' lamps.
+ * its lid and its lights) and the buoys' lamps. The House Interior is a
+ * scene of its own (`interior.ts`).
  * `setTheme` recolours the sea and lights the lamps and the House's windows
  * at Night; it never moves or adds anything.
  */
@@ -24,11 +25,11 @@ export const SEA_LEVEL = 0.15;
 
 export interface WorldObjects {
   group: THREE.Group;
-  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure, boats, ships, the House's lid and developer); the sea and the screen add a handful more. */
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure and room, boats, ships, the House's lid); the sea adds a handful more. */
   triangles: number;
   /** The Partners' ships, which sail: `ships.sail(seconds)` moves them. */
   ships: Fleet;
-  /** The House's lid, developer and screen: `house.setOpening` lifts the lid, `house.work` animates the room. */
+  /** The House's lid and its lights: `house.setOpening` lifts the lid. */
   house: HouseParts;
   /** Recolour the sea and light (or put out) the House's windows and the buoys' lamps. */
   setTheme: (theme: Theme) => void;

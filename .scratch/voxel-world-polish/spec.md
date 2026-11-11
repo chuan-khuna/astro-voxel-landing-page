@@ -182,6 +182,7 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 - There is one furnished room per Biome, four in all.
 - Every House Variant in a Biome has a roof that lifts off and the same interior space, so that Biome's room fits it.
 - Every room has the developer at a computer, and clicking the developer opens Team.
+- Built in ticket 04: the rooms are `room/<biome>-1.structure` and the seated developer `developer/any-1.structure`, both at 1/16 unit. While the lid lifts, the World shows the room coarsened to ⅛ unit; once the lid is up and the camera at rest close on the House, the Interior scene (the House's shell and ground, the room at 1/16) takes over through the same camera. Shutting the House, zooming out or panning the room off screen hands back to the World, and the lid comes down.
 
 **Model Gallery**
 - A dev-only page at `/dev/models`. It is not part of the production build.
