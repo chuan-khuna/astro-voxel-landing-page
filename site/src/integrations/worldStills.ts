@@ -3,7 +3,9 @@
  * (Playwright) loads the built home page, lets the default Seed's World
  * draw, and saves a still of it by Day and by Night in `dist/stills/`
  * (`lib/worldStill.ts` names the files). Pages show the still in the
- * World's place when the browser cannot draw the World.
+ * World's place when the browser cannot draw the World. The Day capture is
+ * also cut to 1200×630 and saved as the default OG image (`OG_IMAGE`), the
+ * picture a shared link previews.
  *
  * The capture serves `dist` itself on a free local port, with reduced motion
  * on so the Guide is simply there and the ships keep their starting places:
@@ -12,7 +14,8 @@
  *
  * If Playwright or its Chromium is missing, or the World fails to draw, the
  * build still succeeds: it warns how to fix it and takes the still out of
- * every page, so none shows a broken image. `WORLD_STILLS=off` skips the
+ * every page, so none shows a broken image, and the OG image's tags out of
+ * every page that uses it, so no preview points at a missing file. `WORLD_STILLS=off` skips the
  * capture the same way.
  */
 import type { AstroIntegration, AstroIntegrationLogger } from 'astro';
@@ -24,7 +27,7 @@ import { extname, join, normalize, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { Theme } from '@/lib/theme';
-import { STILL_SIZE, STILL_WIDTHS, stillPath, stripStills } from '@/lib/worldStill';
+import { OG_CROP, OG_IMAGE, STILL_SIZE, STILL_WIDTHS, stillPath, stripOgStill, stripStills } from '@/lib/worldStill';
 
 /** How long the World may take to draw before the capture gives up, ms. */
 const DRAW_TIMEOUT_MS = 60_000;
@@ -100,31 +103,40 @@ async function capture(root: string, logger: AstroIntegrationLogger): Promise<vo
       // Only the World: no cards, hotspots, Data Cards or speech bubble over it.
       await page.addStyleTag({ content: '.hud-bar, .hud-main > :not(.world), .world > :not(canvas) { visibility: hidden !important; }' });
       const png = await page.locator('#world-canvas').screenshot({ type: 'png' });
-      // Scale and encode as WebP in the page: Chromium does it, so no image library is needed.
+      // Scale (and for the OG image crop) and encode in the page: Chromium does it, so no image library is needed.
+      const jobs = [
+        ...STILL_WIDTHS.map((width) => ({
+          file: stillPath(theme, width),
+          width,
+          height: Math.round((STILL_SIZE.height * width) / STILL_SIZE.width),
+          crop: { x: 0, y: 0, width: STILL_SIZE.width, height: STILL_SIZE.height },
+          type: 'image/webp',
+        })),
+        // The OG image: the Day still cut to its 1.91:1 shape across the middle, as JPEG.
+        ...(theme === 'day' ? [{ file: OG_IMAGE.src, width: OG_IMAGE.width, height: OG_IMAGE.height, crop: OG_CROP, type: OG_IMAGE.type }] : []),
+      ];
       const encoded = await page.evaluate(
-        async ({ data, widths, height, width, quality }) => {
+        async ({ data, jobs, quality }) => {
           const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${data}`)).blob());
           return Promise.all(
-            widths.map(async (w) => {
-              const h = Math.round((height * w) / width);
-              const canvas = new OffscreenCanvas(w, h);
+            jobs.map(async ({ width, height, crop, type }) => {
+              const canvas = new OffscreenCanvas(width, height);
               const context = canvas.getContext('2d')!;
               context.imageSmoothingQuality = 'high';
-              context.drawImage(bitmap, 0, 0, w, h);
-              const bytes = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/webp', quality })).arrayBuffer());
+              context.drawImage(bitmap, crop.x, crop.y, crop.width, crop.height, 0, 0, width, height);
+              const bytes = new Uint8Array(await (await canvas.convertToBlob({ type, quality })).arrayBuffer());
               let binary = '';
               for (const byte of bytes) binary += String.fromCharCode(byte);
               return btoa(binary);
             }),
           );
         },
-        { data: png.toString('base64'), widths: [...STILL_WIDTHS], quality: QUALITY, ...STILL_SIZE },
+        { data: png.toString('base64'), jobs, quality: QUALITY },
       );
-      for (const [i, width] of STILL_WIDTHS.entries()) {
-        const file = join(root, ...stillPath(theme, width).split('/'));
-        await writeFile(file, Buffer.from(encoded[i]!, 'base64'));
+      for (const [i, job] of jobs.entries()) {
+        await writeFile(join(root, ...job.file.split('/')), Buffer.from(encoded[i]!, 'base64'));
       }
-      logger.info(`captured the ${theme} still (${STILL_WIDTHS.join(' and ')} px)`);
+      logger.info(`captured the ${theme} still (${STILL_WIDTHS.join(' and ')} px)${theme === 'day' ? ' and the OG image' : ''}`);
       await context.close();
     }
   } finally {
@@ -145,11 +157,11 @@ export function worldStills(): AstroIntegration {
         } catch (error) {
           const reason = error instanceof Error ? error.message.split('\n')[0] : String(error);
           logger.warn(
-            `No World still this build (${reason}). Pages without WebGPU or WebGL will show only the Landmark menu. ` +
+            `No World still this build (${reason}). Pages without WebGPU or WebGL will show only the Landmark menu, and shared links preview without a picture. ` +
               'To capture it, install Playwright\'s Chromium once: `bunx playwright install chromium` in site/ ' +
               '(see docs/documents/site-project.md, "World still").',
           );
-          for (const file of await htmlFiles(root)) await writeFile(file, stripStills(await readFile(file, 'utf8')));
+          for (const file of await htmlFiles(root)) await writeFile(file, stripOgStill(stripStills(await readFile(file, 'utf8'))));
         }
       },
     },

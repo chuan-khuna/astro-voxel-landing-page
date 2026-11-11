@@ -18,7 +18,8 @@ docs and skills at the repo root.
 - bun is the package manager. `bunfig.toml` and `.npmrc` set a 7-day minimum
   release age, so newer releases are skipped on install.
 - TypeScript extends `astro/tsconfigs/strict`.
-- Output is static (`output: 'static'`), with no adapter or host.
+- Output is static (`output: 'static'`), with no adapter or host. Astro's
+  `site` is `site.url` from the site data module.
 
 ## Commands
 
@@ -28,7 +29,7 @@ bun install
 bun run dev      # dev server
 bun run check    # astro check
 bun run test     # vitest run
-bun run build    # static build into site/dist, then the World still (needs Playwright's Chromium, below)
+bun run build    # static build into site/dist, then the World still and OG image (needs Playwright's Chromium, below)
 bun run preview  # serve the build (Astro 7 runs it in the background; stop with `bunx astro preview stop`)
 ```
 
@@ -50,10 +51,10 @@ build` skips the capture the same way.
 
 | Path | What it holds |
 |---|---|
-| `src/data/site.ts` | The site data module: company identity, brand colour and fonts (`brand.fonts.body` Jersey 20, `brand.fonts.heading` Jersey 15, each with a fallback stack), SEO defaults, default Seed, brand Biome (the Biome the default Seed always gets), the Guide's name (`guide.name`, Lumen), the Landmark list (id, route, label, Story Order) and the Data Card metrics (`dataCards`, keyed to a placed Landmark id). `landmarksInStoryOrder` is the sorted list. |
+| `src/data/site.ts` | The site data module: company identity, brand colour and fonts (`brand.fonts.body` Jersey 20, `brand.fonts.heading` Jersey 15, each with a fallback stack), the published origin (`url`), SEO and OG defaults (`seo`: title, description, locale, the World still's alt text), default Seed, brand Biome (the Biome the default Seed always gets), the Guide's name (`guide.name`, Lumen), the Landmark list (id, route, label, Story Order) and the Data Card metrics (`dataCards`, keyed to a placed Landmark id). `landmarksInStoryOrder` is the sorted list. See `content-model.md`. |
 | `src/data/theme.ts` | The Day and Night theme tokens (`THEME_TOKENS`): one set of OKLCH values for the page (`ui`: ink, paper, surface, brand ink and its hover, text on brand, shadow) and for the World (`world`: sky, sun or moon light, sky and ground light, water darkening, the House's window light and the buoys' lamp light, and `lightsOn`). `themeCss()` writes the `ui` tokens as CSS custom properties; `seaColour` is a Biome's water in a theme; `contrastRatio` is the WCAG ratio. Tested in `theme.test.ts` (every text pair AA in both themes). |
 | `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id, an optional meta `description`, the optional Guide lines `guide`, schema `guideSchema`, and the optional Tour lines `tour`, schema `tourLinesSchema`) `projects` (MDX, schema `projectSchema`), `services` (MDX, schema `serviceSchema`), `clients` (YAML, schema `clientSchema`), `partners` (YAML, schema `partnerSchema`) and `team` (MDX, schema `teamMemberSchema`). |
-| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema`, `serviceSchema`, `clientSchema`, `partnerSchema`, `teamMemberSchema`, `guideSchema` and `tourLinesSchema` (see "Projects", "Services", "Clients and Partners", "Team" "The Guide" and "The Tour" below). Tested in `contentSchemas.test.ts`. |
+| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema`, `serviceSchema`, `clientSchema`, `partnerSchema`, `teamMemberSchema`, `guideSchema` and `tourLinesSchema` (see `content-model.md`, and "The Guide" and "The Tour" below). Tested in `contentSchemas.test.ts`. |
 | `src/content/projects/` | One MDX file per Project; the file name is its id and URL slug, the body its case study. Six mock Projects. |
 | `src/content/services/` | One MDX file per Service; the body says more about it. Four mock Services. |
 | `src/content/clients/` | One YAML file per Client; the file name is its id. Six mock Clients, the organisations the mock Projects were for. |
@@ -70,8 +71,8 @@ build` skips the capture the same way.
 | `src/lib/gardenTrees.ts` | `treeOrder(projects)`: Projects sorted by id (tree order). `gardenTrees(world, projectIds)`: the World's tree cells, each paired with its Project (tree `k` is the `k`-th Project by id; none beyond the cap). Tested in `gardenTrees.test.ts`. |
 | `src/lib/contactDetails.ts` | `contactDetails(company)`: the Contact panel's details, from `site.company`: email, phone, address, then each social, each with a label, the text shown and a link (none for the address). Tested in `contactDetails.test.ts`. |
 | `src/lib/renderTier.ts` | The render tier: `renderTier(device, override)` (`reduced` for a touch device whose screen's shorter side is under 600px, `full` otherwise; `?tier=full` or `?tier=reduced` overrides), `pixelRatio(device)` (the DPR cap) and `ambientFrameDue` (the 30 fps gate for ambient frames). Tested in `renderTier.test.ts`. See "Phones and the render tier". |
-| `src/lib/worldStill.ts` | The World still's files: `STILL_SIZE` (1600×1000), `STILL_WIDTHS` (800, 1600), `stillPath(theme, width)` (`/stills/world-<theme>-<width>.webp`), `stillSrcset` and `stripStills(html)` (a page without its still). Tested in `worldStill.test.ts`. See "World still". |
-| `src/integrations/worldStills.ts` | The `worldStills` Astro integration (in `astro.config.mjs`): after the build, captures the World still by Day and by Night with Playwright. See "World still". |
+| `src/lib/worldStill.ts` | The World still's files: `STILL_SIZE` (1600×1000), `STILL_WIDTHS` (800, 1600), `stillPath(theme, width)` (`/stills/world-<theme>-<width>.webp`), `stillSrcset`, `stripStills(html)` (a page without its still), and the OG image: `OG_IMAGE` (`/stills/og-world-day.jpg`, 1200×630 JPEG), `OG_CROP` (the part of the still it shows) and `stripOgStill(html)` (a page without the OG still's tags). Tested in `worldStill.test.ts`. See "World still". |
+| `src/integrations/worldStills.ts` | The `worldStills` Astro integration (in `astro.config.mjs`): after the build, captures the World still by Day and by Night, and the OG image, with Playwright. See "World still" and "SEO and link previews". |
 | `src/lib/landmarkRoutes.ts` | `landmarkForPath(pathname)`: the Landmark a route belongs to, from the Landmark list. A trailing slash and `index.html` are ignored, `/garden/<slug>` belongs to the Garden, and any other route gives `null`. `routeView(id)`: what the World shows for it: the Landmark the camera goes to, and whether the House is open (About and Team both open it and go to the House Interior). Tested in `landmarkRoutes.test.ts`. |
 | `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order: a floating rounded bar, collapsing below 64rem into a menu button that opens the list as a popover (the Popover API, so it needs no JS). Its links carry `data-seed-link`, so they keep a rolled Seed; the current section's link has `aria-current="page"`. |
 | `src/components/ThemeToggle.astro` | The theme toggle: one icon button (a monitor, a sun or a moon, for the choice in force) that cycles Auto, Day and Night, and the script that keeps the choice (see "Day and Night"). |
@@ -82,11 +83,14 @@ build` skips the capture the same way.
 | `src/components/DockList.astro` | The Dock's two lists: Clients (by id) and Partners (closest tier first), each with its logo or initials. |
 | `src/components/TeamList.astro` | Team's list of every Team Member in `order`: avatar or initials, name, role and bio. |
 | `src/components/ContactList.astro` | Contact's details (`contactDetails`) as a definition list in an `<address>`. |
-| `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), Astro's `<ClientRouter />`, the self-hosted Jersey fonts, the theme's boot script and colour tokens (`themeBootScript`, `themeCss()`, both inline in `<head>`), the card and font tokens, and the inline script that turns on the full-screen layout (`data-world="live"`). |
+| `src/lib/seo.ts` | What a page says about itself: `canonicalUrl(siteUrl, path)`, `pageMeta` (the canonical URL and the Open Graph and Twitter tags), `sitemapXml(siteUrl, paths)` and `robotsTxt(siteUrl)`. Tested in `seo.test.ts`. See "SEO and link previews". |
+| `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), the canonical link and the Open Graph and Twitter tags (`pageMeta`; the page's `image`, or the OG image), Astro's `<ClientRouter />`, the self-hosted Jersey fonts, the theme's boot script and colour tokens (`themeBootScript`, `themeCss()`, both inline in `<head>`), the card and font tokens, and the inline script that turns on the full-screen layout (`data-world="live"`). |
 | `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's tree links, the Data Cards and the Guide's button and speech bubble, and the HUD floating over it (company name, theme toggle, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice and Tour buttons, the Tour's card), and the client script that runs the World and the Tour across routes. |
 | `src/pages/index.astro` | The home page: the World and the home hook. |
 | `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project, the Dock's every Client and Partner, Team's every Team Member, and Contact the company's contact details; About links on to Team. |
-| `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. |
+| `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. Its cover, if any, is its link preview's image. |
+| `src/pages/sitemap.xml.ts` | `/sitemap.xml`: every route (`sitemapXml`). |
+| `src/pages/robots.txt.ts` | `/robots.txt` (`robotsTxt`), naming the sitemap. |
 
 Company identity, the fonts, the default Seed, the Landmark list and the
 Data Card metrics live only in `src/data/site.ts`. Landmark ids are typed against the generator's id lists.
@@ -211,12 +215,13 @@ Day and by Night, captured at build time.
   theme set to light, then dark. Once the canvas has drawn in that theme it
   hides the cards, hotspots, Data Cards and bubble, screenshots the canvas
   and encodes it as WebP at 800 and 1600px in the page
-  (`dist/stills/world-day-800.webp` and so on, about 17–70 KB each). No GPU
-  is needed: Chromium falls back to SwiftShader.
+  (`dist/stills/world-day-800.webp` and so on, about 17–70 KB each). The Day
+  capture is also cut to 1200×630 and saved as JPEG: the OG image (see "SEO
+  and link previews"). No GPU is needed: Chromium falls back to SwiftShader.
 - **On the page.** `WorldPage.astro` has a `<figure class="world-still"
   data-world-still>` before the World frame: one `<img>` per theme
   (`srcset` at both widths, `loading="lazy"`, `width`/`height` set, an
-  `alt` naming what the World holds), and a caption. CSS shows the Day
+  `alt` naming what the World holds, `site.seo.imageAlt`), and a caption. CSS shows the Day
   picture, or the Night one on `<html data-theme="night">` and, before any
   script or without JS, when the system prefers dark (as `themeCss` does).
   The figure is hidden whenever the full-screen World is on, so a visitor
@@ -224,7 +229,8 @@ Day and by Night, captured at build time.
 - **No browser.** If Playwright or its Chromium is missing, or the World
   does not draw, the build warns with the reason and the install command,
   and `stripStills` takes the figure out of every built page: no broken
-  image, only the Landmark menu and the cards.
+  image, only the Landmark menu and the cards. `stripOgStill` takes the OG
+  image's tags out too.
 
 ### Phones and the render tier
 
@@ -424,83 +430,58 @@ plain CSS import would be hoisted onto every page).
 - **Cost:** it never requests a frame. `view.onFrame` reports frames that
   render anyway; the text is rewritten every 250 ms while the card is on.
 
-## Projects
+## Content
 
-A Project is one MDX file in `src/content/projects/`. Adding a file adds
-the Project to the Garden's list, gives it a page and grows a tree (up to
-24). The schema (`projectSchema`, validated at build time, so a mistake
-fails the build):
+The site data module and the content collections (`pages`, Projects,
+Services, Clients and Partners, Team), their schemas, and what each adds
+to the pages, the World and the link previews are in `content-model.md`.
 
-| Field | Type |
-|---|---|
-| `title` | non-empty string |
-| `summary` | non-empty string: the list entry and the page's meta description |
-| `client` | non-empty string: the Client's name |
-| `year` | whole number, 1900–2100 |
-| `tags` | list of strings, default none |
-| `tree` | optional tree shape hint: `round`, `tall` or `bushy` (not drawn yet; every tree has one shape) |
-| `cover` | optional `{ src, alt }`: an image under `public/` (the mock Projects have none) |
+## SEO and link previews
 
-**Trees.** The World generator gets only the Project count. It lays out
-one tree cell per Project, in order, up to 24. The site takes Projects in
-a stable order by id (`treeOrder`), so tree `k` is the `k`-th Project by
-id, and a new Project whose id sorts last adds a tree without moving the
-others' Projects (it may still change the World's layout; see
-`world-generator.md`).
+Every page's `<head>` (`Base.astro`) says what the page is, so search
+engines index each route (ADR 0003) and shared links preview well. It is
+built by `pageMeta` (`src/lib/seo.ts`, tested in `seo.test.ts`) from the
+site data module and the page's own title, description and image (which
+page takes which is in `content-model.md`, "What reaches a page's link
+preview"):
 
-## Services
+- `<title>` and `<meta name="description">`; `<html lang>` from
+  `site.seo.locale`.
+- `<link rel="canonical">`: the route on `site.url` (`canonicalUrl`), with
+  no trailing slash (the home page keeps its `/`), no `index.html` and no
+  query, so `?seed=` and `?stats` never make another page.
+- Open Graph: `og:type` (`website`), `og:site_name`, `og:locale`,
+  `og:title`, `og:description`, `og:url` (the canonical URL), `og:image`
+  (absolute), and its `type`, `width` and `height` when known, and `alt`.
+- Twitter: `summary_large_image`, with the same title, description, image
+  and alt.
+- `<link rel="sitemap" href="/sitemap.xml">`.
 
-A Service is one MDX file in `src/content/services/`; adding a file adds it
-to the Station's list on `/services`. The schema (`serviceSchema`):
+The client router swaps the `<head>` on each route, so the tags always
+match the page on show.
 
-| Field | Type |
-|---|---|
-| `title` | non-empty string |
-| `summary` | non-empty string: one sentence under the title |
-| `icon` | `pipeline`, `model`, `chart` or `platform`: a line icon drawn by `ServiceList.astro` |
-| `order` | whole number from 1: the place in the list (ties go by id) |
+**The OG image** is the World still (the default Seed's World by Day), cut
+across its middle to 1.91:1 (`OG_CROP`) and saved by the `worldStills`
+integration as a 1200×630 JPEG, `dist/stills/og-world-day.jpg`
+(`OG_IMAGE`, about 70 KB), with `site.seo.imageAlt` as its alt text. A
+Project with a `cover` previews with its cover instead. The still's tags
+carry `data-og-still`: a build that could not capture the still takes them
+out (`stripOgStill`) and makes the Twitter card `summary`, so no preview
+points at a missing file.
 
-Services do not change the World and have no pages of their own.
+**Sitemap and robots.** `src/pages/sitemap.xml.ts` writes `/sitemap.xml`
+(`sitemapXml`): every Landmark route in Story Order, then every Project's
+page in tree order, as canonical URLs. `src/pages/robots.txt.ts` writes
+`/robots.txt` (`robotsTxt`): every crawler may index everything, and it
+names the sitemap.
 
-## Clients and Partners
+**Headings.** Each page has one `h1`: the company name on the Overview,
+the panel's title on a section or Project page; `h2` and `h3` follow
+inside the panel.
 
-A Client is one YAML file in `src/content/clients/`, a Partner one in
-`src/content/partners/`; adding a file adds it to `/dock` and a boat or a
-ship to the World. Mock data only: fictional names, no real brands or
-logos. The schemas (`clientSchema`, `partnerSchema`):
-
-| Collection | Field | Type |
-|---|---|---|
-| `clients` | `name` | non-empty string |
-| `clients` | `industry` | non-empty string |
-| `clients` | `logo` | optional `{ src, alt }`: an image under `public/` (initials stand in without one) |
-| `partners` | `name` | non-empty string |
-| `partners` | `tier` | `strategic`, `technology` or `community` (closest first) |
-| `partners` | `logo` | optional `{ src, alt }`, as for Clients |
-
-**Boats and ships.** The World generator gets only the counts. It moors one
-boat per Client at the Dock, up to 12 (`MAX_BOATS`), and sails one ship per
-Partner (no cap). Clients are taken in order by id, so boat `k` is the
-`k`-th Client by id; Clients beyond the cap have no boat but stay on
-`/dock`. Every Client's boat is the same kind for now, as is every
-Partner's ship. See `world-generator.md` ("Boats", "Ships") and
-`rendering-and-shading.md` ("Boats and ships").
-
-## Team
-
-A Team Member is one MDX file in `src/content/team/`; adding a file adds
-them to Team (`/about/team`). The body is a short bio. The schema
-(`teamMemberSchema`):
-
-| Field | Type |
-|---|---|
-| `name` | non-empty string |
-| `role` | non-empty string |
-| `order` | whole number from 1: the place in the list (ties go by id) |
-| `avatar` | optional `{ src, alt }`: a portrait under `public/` (initials stand in without one; the mock Team Members have none) |
-
-Team Members do not change the World: the House always has the one
-developer.
+**The site URL** (`site.url`, also Astro's `site` in `astro.config.mjs`) is
+the placeholder `https://lighthouse.example` until the real domain is
+known; change it there and every canonical, OG and sitemap URL follows.
 
 ## Data Cards
 

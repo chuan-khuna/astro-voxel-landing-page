@@ -2,12 +2,14 @@
 /**
  * One page per Project, `/garden/<id>`: its full case study in a panel over
  * the World, the camera at the Garden. Clicking the Project's tree opens it.
+ * Its summary is the meta description, and its cover (if any) the link
+ * preview's picture in place of the World still.
  */
 import type { GetStaticPaths } from 'astro';
 import { getCollection, render } from 'astro:content';
-import WorldPage from '../../layouts/WorldPage.astro';
-import SectionPanel from '../../components/SectionPanel.astro';
-import { site } from '../../data/site';
+import WorldPage from '@/layouts/WorldPage.astro';
+import SectionPanel from '@/components/SectionPanel.astro';
+import { site } from '@/data/site';
 
 export const getStaticPaths = (async () => {
   const projects = await getCollection('projects');
@@ -20,7 +22,7 @@ const garden = site.landmarks.find((l) => l.id === 'garden')!;
 const { title, summary, client, year, tags, cover } = project.data;
 ---
 
-<WorldPage title={`${title} · ${site.company.name}`} description={summary}>
+<WorldPage title={`${title} · ${site.company.name}`} description={summary} image={cover}>
   <SectionPanel slot="panel" title={title}>
     <p class="back">
       <a href={garden.route} data-seed-link>← All {garden.label}</a>

@@ -45,12 +45,15 @@ import { treeOrder } from '@/lib/gardenTrees';
 import type { GuideLines } from '@/lib/contentSchemas';
 import { tourSteps } from '@/lib/tour';
 import { STILL_SIZE, stillPath, stillSrcset } from '@/lib/worldStill';
+import type { PageImage } from '@/lib/seo';
 
 interface Props {
   title?: string;
   description?: string;
+  /** The page's link preview picture; the World still by default (see `Base.astro`). */
+  image?: PageImage;
 }
-const { title, description } = Astro.props;
+const { title, description, image } = Astro.props;
 const hasPanel = Astro.slots.has('panel');
 
 const projects = treeOrder(await getCollection('projects'));
@@ -82,14 +85,11 @@ const tour = tourSteps(
   landmarksInStoryOrder,
   (await getCollection('pages')).map((page) => ({ landmark: page.data.landmark, tour: page.data.tour })),
 );
-// The World still's description: what the picture shows, for anyone who cannot see it.
-const stillAlt =
-  `${site.company.name}'s World seen from above: voxel Isles in the sea with a lighthouse station (Services), ` +
-  'a house (About), a garden of trees (Projects), a dock with moored boats and ships sailing by (Clients & Partners) ' +
-  'and a mailbox (Contact).';
+// The World still's description: what the picture shows, for anyone who cannot see it (also the OG image's).
+const stillAlt = site.seo.imageAlt;
 ---
 
-<Base title={title} description={description}>
+<Base title={title} description={description} image={image}>
   <!--
     The HUD: every UI element floats over the full-screen World as a card.
     Top: the company name (left) and the Landmark menu (right); then the

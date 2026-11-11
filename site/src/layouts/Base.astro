@@ -2,26 +2,53 @@
 import { ClientRouter } from 'astro:transitions';
 import '@fontsource/jersey-20';
 import '@fontsource/jersey-15';
-import { site } from '../data/site';
-import { themeCss } from '../data/theme';
-import { themeBootScript } from '../lib/theme';
+import { site } from '@/data/site';
+import { themeCss } from '@/data/theme';
+import { themeBootScript } from '@/lib/theme';
+import { pageMeta, type PageImage } from '@/lib/seo';
+import { OG_IMAGE } from '@/lib/worldStill';
 
 interface Props {
   title?: string;
   description?: string;
+  /** The picture the page's link preview shows; the World still (the OG image) by default. */
+  image?: PageImage;
 }
-const { title = site.seo.title, description = site.seo.description } = Astro.props;
+const { title = site.seo.title, description = site.seo.description, image } = Astro.props;
+// Canonical URL, Open Graph and Twitter tags, from site data and the page's own title, description and image.
+const meta = pageMeta({
+  siteUrl: site.url,
+  siteName: site.company.name,
+  locale: site.seo.locale,
+  path: Astro.url.pathname,
+  title,
+  description,
+  image: image ?? { ...OG_IMAGE, alt: site.seo.imageAlt },
+});
+// The OG still's tags are marked, so a build that could not capture it takes them out (stripOgStill).
+const ogStill = !image;
 const { colour, fonts } = site.brand;
 ---
 
 <!doctype html>
 <!-- No page cross-fade: the World stays put and only the panel changes. -->
-<html lang="en" transition:animate="none">
+<html lang={site.seo.locale.split(/[-_]/)[0]} transition:animate="none">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    <link rel="canonical" href={meta.canonical} />
+    {
+      meta.tags.map((tag) =>
+        tag.attr === 'property' ? (
+          <meta property={tag.key} content={tag.content} data-og-still={(ogStill && tag.image) || undefined} />
+        ) : (
+          <meta name={tag.key} content={tag.content} data-og-still={(ogStill && tag.image) || undefined} />
+        ),
+      )
+    }
+    <link rel="sitemap" href="/sitemap.xml" />
     <link rel="icon" href="data:," />
     <!--
       Day or Night, before first paint: the visitor's choice (Auto, Day or

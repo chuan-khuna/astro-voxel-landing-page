@@ -47,18 +47,21 @@ const landmarks: Landmark[] = [
   { id: 'mailbox', route: '/contact', label: 'Contact', storyOrder: 7 },
 ];
 
+/** Company identity. */
+const company = {
+  name: 'Lighthouse Data',
+  tagline: 'We turn raw data into insight, and insight into value. Reproducibly.',
+  email: 'hello@lighthouse.example',
+  phone: '+1 555 0142',
+  address: '12 Harbour Row, Port Meridian',
+  socials: [
+    { label: 'GitHub', url: 'https://github.com/lighthouse-data-example' },
+    { label: 'LinkedIn', url: 'https://www.linkedin.com/company/lighthouse-data-example' },
+  ],
+};
+
 export const site = {
-  company: {
-    name: 'Lighthouse Data',
-    tagline: 'We turn raw data into insight, and insight into value. Reproducibly.',
-    email: 'hello@lighthouse.example',
-    phone: '+1 555 0142',
-    address: '12 Harbour Row, Port Meridian',
-    socials: [
-      { label: 'GitHub', url: 'https://github.com/lighthouse-data-example' },
-      { label: 'LinkedIn', url: 'https://www.linkedin.com/company/lighthouse-data-example' },
-    ],
-  },
+  company,
   brand: {
     /** Brand colour, OKLCH. Fixed; never changes with the Biome. */
     colour: 'oklch(0.55 0.09 235)',
@@ -74,9 +77,27 @@ export const site = {
       heading: '"Jersey 15", "Jersey 20", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
     },
   },
+  /**
+   * Where the site is published: the origin of canonical URLs, the sitemap
+   * and the OG image's URL (also Astro's `site`). A placeholder until the
+   * real domain is known.
+   */
+  url: 'https://lighthouse.example',
+  /**
+   * SEO and OG defaults. A page without its own title or description uses
+   * these; a page without its own image previews with the World still
+   * (`OG_IMAGE` in `lib/worldStill.ts`), described by `imageAlt`.
+   */
   seo: {
     title: 'Lighthouse Data: data and AI engineering',
     description: 'A data and AI studio, told as a walk across a small generated World.',
+    /** Open Graph locale (`og:locale`); the page's `lang` is its language part. */
+    locale: 'en',
+    /** What the World still shows, for anyone who cannot see it: its alt text and the OG image's. */
+    imageAlt:
+      `${company.name}'s World seen from above: voxel Isles in the sea with a lighthouse station (Services), ` +
+      'a house (About), a garden of trees (Projects), a dock with moored boats and ships sailing by (Clients & Partners) ' +
+      'and a mailbox (Contact).',
   },
   /** The Seed visitors see first. Also used for an empty or too-long Seed. */
   defaultSeed: 'lighthouse',
