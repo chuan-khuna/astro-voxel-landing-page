@@ -4,13 +4,13 @@
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Spec: `.scratch/voxel-world-landing/spec.md`
 
-- [ ] One set of OKLCH tokens drives both CSS and the three.js materials
-- [ ] A toggle offers Auto, Day and Night; Auto follows `prefers-color-scheme`
-- [ ] At Night the House lights are on, buoys glow and the water darkens
-- [ ] Changing theme never changes the World's layout
-- [ ] `astro check` and `astro build` pass
-- [ ] Documents under `docs/documents/` and its INDEX are updated for anything this ticket adds or changes
+- [x] One set of OKLCH tokens drives both CSS and the three.js materials
+- [x] A toggle offers Auto, Day and Night; Auto follows `prefers-color-scheme`
+- [x] At Night the House lights are on, buoys glow and the water darkens
+- [x] Changing theme never changes the World's layout
+- [x] `astro check` and `astro build` pass
+- [x] Documents under `docs/documents/` and its INDEX are updated for anything this ticket adds or changes
