@@ -1,7 +1,8 @@
 /**
  * The Model Gallery's scene: every structure of one kind, Biomes in columns
  * and Variants in rows as the camera sees them, each on a patch of its
- * Biome's ground, drawn with the World's renderer, soft-voxel material,
+ * Biome's ground (on a tall screen the Biomes wrap two to a band, each
+ * band's Variants down it), drawn with the World's renderer, soft-voxel material,
  * light and Day and Night tokens. Each model is an `InstancedMesh` of one
  * (`structureMeshes.ts`), its lid (if it has one) a second one that lifts.
  * Renders on demand. Dev only (`/dev/models`).
@@ -21,6 +22,10 @@ import type { Oklch } from '@/world';
 
 /** Cells between neighbouring models' centres. */
 const SPACING = 6;
+/** Rows (in SPACING) between one row and the next: a row step is shallower on screen than a column step, so it needs more room. */
+const ROW_GAP = 1.8;
+/** Biomes side by side on a tall screen. */
+const PORTRAIT_COLUMNS = 2;
 /** How high a lifted lid floats, in world units. */
 const LID_LIFT = 2.5;
 
@@ -154,19 +159,35 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
     ground.add(mesh);
   };
 
-  return {
+  /** The kind on show, and whether the grid was laid out for a tall screen. */
+  let kindShown: string | null = null;
+  let laidOutPortrait = false;
+  const isPortrait = () => canvas.clientHeight > canvas.clientWidth;
+  // Redraw on resize; re-lay the grid when the screen turns between wide and tall.
+  new ResizeObserver(() => {
+    if (kindShown !== null && isPortrait() !== laidOutPortrait) gallery.show(kindShown);
+    else render();
+  }).observe(canvas);
+
+  const gallery = {
     backend: ((renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'WebGPU' : 'WebGL 2') as string,
     /** Show every structure of a kind; returns how many. */
     show(kind: string): number {
       clear();
+      kindShown = kind;
+      laidOutPortrait = isPortrait();
       const list = STRUCTURES.filter((s) => s.kind === kind);
       const columns = BIOME_IDS.map((biome) => list.filter((s) => s.biome === biome));
       columns.push(list.filter((s) => s.biome === null));
       const used = columns.filter((column) => column.length > 0);
+      const rows = Math.max(1, ...used.map((column) => column.length));
       used.forEach((column, c) => {
         column.forEach((s, r) => {
-          // Columns run across the screen (+x −z), rows down it (+x +z).
-          const at = new THREE.Vector3((r + c) * SPACING, 0, (r - c) * SPACING);
+          // Biomes run across the screen (+x −z), Variants down it (+x +z). On a tall screen the Biomes wrap into bands.
+          const band = laidOutPortrait ? Math.floor(c / PORTRAIT_COLUMNS) : 0;
+          const across = laidOutPortrait ? c % PORTRAIT_COLUMNS : c;
+          const down = (band * rows + r) * ROW_GAP;
+          const at = new THREE.Vector3((down + across) * SPACING, 0, (down - across) * SPACING);
           const colours = coloursOf(s);
           const hasLid = s.palette.some((p) => p.part === 'lid');
           const base = structureInstances(s, colours, [placementOf(at)], hasLid ? { part: 'base' } : {});
@@ -185,7 +206,7 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
         cx: shown.reduce((sum, { at }) => sum + at.x, 0) / Math.max(1, shown.length),
         cz: shown.reduce((sum, { at }) => sum + at.z, 0) / Math.max(1, shown.length),
         halfW: span(across) / 2 + 4,
-        halfH: span(down) / 2 + 4.5,
+        halfH: span(down) / 2 + 5,
       };
       sun.shadow.needsUpdate = true;
       render();
@@ -213,4 +234,5 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
     /** Voxel size of the models, for reference. */
     voxel: 1 / STRUCTURE,
   };
+  return gallery;
 }

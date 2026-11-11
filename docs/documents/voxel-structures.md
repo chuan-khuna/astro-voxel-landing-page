@@ -181,11 +181,16 @@ checks the format on a small inline structure, including its errors.
 
 `/dev/models` shows every structure of one kind (a picker) in a grid:
 Biomes across, then structures shared by every Biome, and Variants down,
-each on a patch of its Biome's grass with a label. It uses the World's
+each on a patch of its Biome's grass with a label. On a tall screen (a
+phone) the Biomes wrap two to a band, each band with its Variants down it,
+so the models stay large enough to judge; the grid re-lays when the screen
+turns. It uses the World's
 renderer (`WebGPURenderer`, WebGL 2 fallback), soft-voxel material, sun,
 sky light and Day and Night tokens (the light only: window glow shows in the World, not here). **Turn** turns every model a quarter
 turn; **Lift lids** lifts the House lids to show the interior; **Night**
-switches the light. It renders on demand.
+switches the light, and the page's own colours follow (the site's theme
+tokens and fonts). On a phone the buttons show icons only (their names stay
+as tooltips and for screen readers). It renders on demand and on resize.
 
 The route is injected by the `modelGallery` integration only under
 `astro dev` (`command === 'dev'`), so `bun run build` never builds it.
