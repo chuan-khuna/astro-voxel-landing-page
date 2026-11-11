@@ -174,6 +174,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - Each Landmark is a real static route layered over a persistent World canvas: home, `/services`, `/about`, `/about/team`, `/garden`, `/garden/[slug]`, `/dock`, `/contact`.
 - The World and its state survive route changes, using Astro's client router with a persisted canvas element.
 - Loading a route directly places the camera at its Landmark.
+- **Risk and fallback.** Persisting a WebGPU canvas across routes is unproven on Astro 7, so the routing work starts by proving it. If it fails, the panel fetches the page's content itself; URLs and static pages stay the same.
 
 ### Modules
 
@@ -200,6 +201,11 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
   - the Dock is on the shoreline
   - the Station is on high ground
   - all Isles are connected by bridges
+- **Placed vs derived Landmarks.** There are seven Landmarks in Story Order, but the generator places only five: Station, House, Garden, Dock and Mailbox. The other two are camera views derived from the layout: Overview from the World's bounds, and House Interior from the House's position.
+- **Landmark variants.** Each Landmark starts with one variant. The World data carries a variant field so more can be added later without restructuring.
+- **Seed format.** A Seed is a short string, hashed to drive the PRNG. The dice button rolls a numeric one. An empty Seed or one longer than 32 characters falls back to the default Seed. A rolled Seed follows the visitor across routes (e.g. `/garden?seed=1234`).
+- **Determinism scope.** The same Seed gives the same World only for the same content counts. Adding a Project may change the World of an existing Seed.
+- **Caps.** The Garden shows at most 24 trees and the Dock at most 12 moored boats. Entries beyond the cap are not shown in the World but stay on their section pages. With a single Isle, Partner ships sail a loop around it.
 - **Retry.** If the rules fail, generation retries from a deterministically derived Seed, so the same input always gives the same output.
 - **Seeded PRNG.** A seeded PRNG is threaded through every step, with no `Math.random`.
 - **Web Worker.** It runs in a Web Worker in the browser, and results are cached per Seed.
@@ -225,6 +231,12 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - Frames render on demand, only while something moves.
 - DPR is capped at 1.5 on mobile and 2 on desktop.
 - A reduced-decoration tier applies on small devices.
+
+**Performance budget**
+- Mid-range phone: at least 30 fps while the camera moves. Desktop: 60 fps.
+- The whole World is at most 300k triangles.
+- Generation finishes within 1 second.
+- No frames render while nothing moves.
 
 **Camera and interaction**
 - Pan and zoom with bounds work by drag, wheel and pinch.
@@ -256,7 +268,10 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
   - dice button: roll a new Seed
   - theme toggle: Auto, Day, Night
   - Tour button
-- **Fallback.** A build-time still render of the default Seed is shown when WebGL/WebGPU or JS is unavailable.
+- **Fallback.** A still image of the default Seed's World is shown when WebGL/WebGPU or JS is unavailable.
+  - The still is captured automatically at build time: a headless browser (Playwright) loads the World for the default Seed and screenshots it, in Day and Night.
+  - The same capture serves as the default OG image.
+  - Everything in the image is drawn by the three.js World itself. Nothing comes from the claude-drawing skill.
 
 ### Data contracts
 
@@ -288,6 +303,8 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - The company is fictional.
 - Content: about 6 Projects, 4 Services, 4 Team Members, 5 Clients and 3 fictional Partners, plus Data Card metrics and contact details.
 - No real brands or logos are used.
+- The implementer picks the fictional company name, UI font and brand colour and puts them in the site data module; the user may change them later.
+- The Guide's voice is talkative with dry humour.
 
 ## Testing Decisions
 
@@ -305,7 +322,7 @@ This uses Vitest.
 - Different Seeds give different Worlds, sampled.
 
 **Landmarks are complete**
-- For hundreds of sampled Seeds, every one of the seven Landmarks is present exactly once.
+- For hundreds of sampled Seeds, each of the five placed Landmarks is present exactly once, and the two derived views (Overview, House Interior) are defined.
 
 **Placement rules hold**
 - House and Garden share an Isle.
@@ -360,6 +377,8 @@ None: the repo has no code yet. This suite sets the pattern.
 - Any design copied from Portal or other Valve characters.
 
 ## Further Notes
+
+**Look prototype first.** The biggest risk is whether code-built voxel models look close to the reference house. Before the rest of the work, build a throwaway single-page three.js prototype: one House, a tree and a terrain patch, with the seam, bevel, colour-jitter and AO shading. The user reviews and tunes it, and the approved look sets the target for the real renderer.
 
 **References.** Visual and interaction references, with links, are in the discussion record:
 - haru-ni.net, for the explorable map with routes over the canvas

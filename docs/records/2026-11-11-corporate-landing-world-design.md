@@ -131,6 +131,18 @@ The starting visual reference was `claude-drawing/examples/isometric_weather_isl
     - `docs/adr/0002-webgpu-renderer-with-tsl.md`
     - `docs/adr/0003-html-routes-over-the-world.md`
 
+26. **Fallback still image.** It is captured automatically at build time by a headless browser screenshotting the three.js World of the default Seed. It is also the OG image. Nothing is drawn with the claude-drawing skill; that image was only the starting reference.
+27. **Placed vs derived Landmarks.** The generator places five Landmarks (Station, House, Garden, Dock, Mailbox). Overview and House Interior are camera views derived from the layout.
+28. **Look prototype first.** A throwaway three.js prototype (one House, a tree, a terrain patch, with the voxel shading) is built and approved by the user before the rest of the work.
+29. **Landmark variants.** Each Landmark starts with one variant; more can be added later.
+30. **Smaller gaps closed.**
+    - Determinism holds per content count: adding a Project may change an existing Seed's World.
+    - Caps: 24 trees in the Garden and 12 moored boats at the Dock; the rest stay on the pages. With one Isle, Partner ships loop around it.
+    - A Seed is a short string (max 32 characters, else the default), and it follows the visitor across routes.
+    - Performance budget: 30 fps on a mid-range phone, 60 fps on desktop, at most 300k triangles, generation within 1 second, no idle rendering.
+    - Routing starts by proving the canvas persists across routes; the fallback is a panel that fetches page content.
+    - The implementer picks the mock company name, UI font and brand colour.
+
 ## Palette direction
 
 Muted, easy on the eyes. Colours are converted to OKLCH, chroma is clamped to about ≤ 0.10, and L and h are kept.
