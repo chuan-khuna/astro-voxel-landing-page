@@ -17,13 +17,15 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid and the ¼-unit detail grid with a shared colour list. `meshWorld(world)`: both grids meshed. | no |
 | `landmarkModels.ts` | The ¼-unit Landmark models (placeholders for now). | no |
+| `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
+| `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
 | `voxelMaterial.ts` | `voxelMaterial(voxelSize)`: the TSL node material. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world)`: chunk meshes plus the sea, as a `THREE.Group`. | yes |
-| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand. | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, as a `THREE.Group`. | yes |
+| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, swapping Worlds. | yes |
 
-Everything above the line between `landmarkModels.ts` and `voxelMaterial.ts`
-is plain TypeScript, so meshing can move into the Web Worker with the
-generator later.
+Everything above `voxelMaterial.ts` is plain TypeScript; generation and
+meshing run in the Web Worker. Only geometry upload, materials and the sea
+are built on the main thread.
 
 ## Voxel grids
 
@@ -112,9 +114,26 @@ A wide deep-water plane at y = 0.15, plus shallow-water quads (runs merged
 along x) on sea cells within 2 cells of land. Both are opaque
 `MeshStandardNodeMaterial`s in the Biome's water colours and receive shadows.
 
+## World Web Worker and cache
+
+`createWorldSource().load(seed, counts)` returns `{ world, meshed, ms }`:
+
+- It posts `{ id, seed, counts }` to `world.worker.ts`, which runs
+  `generateWorld` and `meshWorld` and posts back the World and its
+  `MeshedWorld` (chunk typed arrays). The mesh buffers are transferred, not
+  copied. `ms` is the worker's generate-plus-mesh time (about 15–55 ms per
+  Seed in headless Chrome, far inside the 1 s budget).
+- Results are cached per Seed and content counts (the promise is cached, so
+  two requests for one Seed share one build). The cache keeps the 16 most
+  recently used Worlds; a cache hit reports `ms: 0`.
+- If a `Worker` cannot be created, it generates and meshes on the main thread.
+- The cached typed arrays outlive the GPU buffers: disposing a geometry frees
+  only its GPU copy, so a cached World can be shown again.
+
 ## Scene runtime
 
-`mountWorld(canvas, world)`:
+`mountWorld(canvas, world, meshed?)` returns a `WorldView`
+`{ show(world, meshed?), dispose() }`:
 
 - **Renderer:** `WebGPURenderer` (`three/webgpu`), falling back to WebGL 2 by
   itself. Neutral tone mapping, PCF shadows.
@@ -126,14 +145,20 @@ along x) on sea cells within 2 cells of land. Both are opaque
   azimuth and elevation. Its shadow camera covers the whole World
   (2048² map).
 - **Static shadow map:** `shadow.autoUpdate = false`; `needsUpdate = true` is
-  set once when the World is built, so the shadow map renders on the first
-  frame only. Set it again whenever the World changes (a new Seed).
+  set once each time a World is shown, so the shadow map renders on that
+  World's first frame only.
+- **Swapping Worlds:** `show(world, meshed?)` removes the old World's group
+  and disposes its geometries and materials, builds the new one, re-aims the
+  sun and its shadow camera, re-frames the camera on the new Overview view,
+  and requests one frame. The renderer, scene, lights and camera are kept.
 - **Render on demand:** `requestRender()` schedules at most one frame. Today
-  only mount and canvas resizes request frames; nothing renders while idle.
+  only mount, `show` and canvas resizes request frames; nothing renders while idle.
   Camera controls and animation (later tickets) should request frames while
   they move.
-- The canvas gets `data-triangles` (voxel triangle count) and `data-backend`
-  (`webgpu` or `webgl2`) for checks in a browser.
+- The canvas gets `data-seed` (the Seed actually used, after the default
+  fallback), `data-triangles` (voxel triangle count) and `data-backend`
+  (`webgpu` or `webgl2`) for checks in a browser. The home page adds
+  `data-generate-ms`.
 
 ## Budget
 
@@ -155,5 +180,5 @@ remaining triangles.
 ## Not yet built
 
 Day/Night lighting, camera controls, picking, animation (water, trees,
-ships), the reduced-decoration tier, real Landmark models, and meshing in a
-Web Worker.
+ships), the reduced-decoration tier, real Landmark models, and the Guide's
+dissolve and re-form on a new Seed.

@@ -7,7 +7,7 @@ import { landmarksInStoryOrder } from '../data/site';
     {
       landmarksInStoryOrder.map((landmark) => (
         <li>
-          <a href={landmark.route} data-landmark={landmark.id}>
+          <a href={landmark.route} data-landmark={landmark.id} data-seed-link>
             {landmark.label}
           </a>
         </li>

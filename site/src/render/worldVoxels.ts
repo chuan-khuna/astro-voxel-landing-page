@@ -61,8 +61,15 @@ export function worldColours(world: World): WorldColours {
 /** Terrain chunks are 16 × 16 × 16 terrain voxels; detail chunks cover the same 16-unit cube. */
 const CHUNK_UNITS = 16;
 
+/** A World's voxel grids as chunk meshes: plain typed arrays, safe to post from a Web Worker. */
+export interface MeshedWorld {
+  terrain: ChunkMesh[];
+  detail: ChunkMesh[];
+  voxelSizes: [number, number];
+}
+
 /** Mesh a World's voxel grids into chunk meshes (world units). No GPU work. */
-export function meshWorld(world: World): { terrain: ChunkMesh[]; detail: ChunkMesh[]; voxelSizes: [number, number] } {
+export function meshWorld(world: World): MeshedWorld {
   const voxels = worldToVoxels(world);
   const terrain = meshVoxels(voxels.terrain, {
     colours: voxels.colours,

@@ -40,7 +40,8 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/content/pages/home.mdx` | The home hook copy. |
 | `src/world/` | The World generator. See `world-generator.md`. |
 | `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`). See `rendering-and-shading.md`. |
-| `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order. |
+| `src/lib/seedUrl.ts` | The Seed in the URL: `seedFromUrl`, `rollSeed` (numeric) and `withSeed` (keep the Seed on a route link). Tested in `seedUrl.test.ts`. |
+| `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order. Its links carry `data-seed-link`, so they keep a rolled Seed. |
 | `src/layouts/Base.astro` | The HTML shell: title and description from site data. |
 | `src/pages/index.astro` | The home page. |
 
@@ -50,17 +51,38 @@ Company identity, the default Seed and the Landmark list live only in
 ## Home page
 
 The home page shows the company name and tagline, the World canvas, the
-Landmark menu and the home hook. A client script reads the Seed and content
-counts from the canvas's `data-` attributes, calls `generateWorld`, and
-passes the World to `mountWorld`. The counts are all 0 until the Project,
-Client and Partner collections exist.
+dice button with the current Seed, the Landmark menu and the home hook.
+The counts are all 0 until the Project, Client and Partner collections exist.
+
+### Seed in the URL
+
+- **On load:** the Seed comes from `?seed=`; with none (or an empty one) it
+  is the default Seed from the site data module (`data-default-seed` on the
+  canvas). An over-long Seed falls back to the default inside the generator,
+  and the page shows the Seed actually used.
+- **Generation:** the client script asks `createWorldSource()` for the World;
+  it is generated and meshed in a Web Worker and cached per Seed (see
+  `rendering-and-shading.md`). The first World mounts the scene with
+  `mountWorld`; later Worlds are swapped in with `view.show`. Only the latest
+  request is shown, so fast rolls never show a stale World.
+- **Dice button** ("Roll a new World", a real `<button>` with a visible
+  label and focus ring): rolls a numeric Seed different from the current
+  one (`rollSeed`), sets `?seed=` with `history.pushState`, and shows the new
+  World. pushState was chosen so each roll is a history entry: Back returns
+  to the previous World (`popstate` reloads the Seed from the URL, a cache
+  hit). The Seed is announced in a polite live region next to the button,
+  and the World container gets `aria-busy` while a World is loading.
+- **Seed across routes:** after each World is shown, every `a[data-seed-link]`
+  is rewritten with `withSeed`, e.g. `/garden?seed=1234`. The default Seed is
+  left out of links. Later pages should read the Seed the same way.
 
 The menu links to every Landmark route, but only `/` exists yet; the other
 routes arrive in ticket 07.
 
 ## Rendering
 
-`mountWorld(canvas, world)` renders the World as soft voxels: a mesher with
+`mountWorld(canvas, world, meshed?)` renders the World as soft voxels and
+returns a view whose `show` swaps in another World: a mesher with
 culling, baked AO and greedy merging, a TSL material for seams, bevel and
 colour jitter, a static sun shadow map, and frames only on demand. See
 `rendering-and-shading.md`.

@@ -5,13 +5,15 @@
  * - `WebGPURenderer` with the automatic WebGL 2 fallback.
  * - One directional light (the sun) whose shadow map renders only when the
  *   World changes, plus a hemisphere sky light.
- * - Frames render only on request (mount, resize); nothing renders while idle.
+ * - Frames render only on request (mount, resize, a new World); nothing renders while idle.
+ * - `show(world)` swaps in another World (a new Seed) and disposes the old one.
  * - DPR is capped at 1.5 on touch devices and 2 elsewhere.
  */
 import * as THREE from 'three/webgpu';
 import type { World } from '../world';
 import { FIXED_COLOURS, LOOK, oklchToLinear, type FixedColour } from './palette';
-import { buildWorldObjects } from './worldMeshes';
+import { buildWorldObjects, type WorldObjects } from './worldMeshes';
+import type { MeshedWorld } from './worldVoxels';
 
 /** Direction from the target to the camera: true isometric (azimuth 45°, elevation ≈35.26°). */
 const ISO_DIRECTION = new THREE.Vector3(1, 1, 1).normalize();
@@ -28,7 +30,17 @@ function pixelRatio(): number {
   return Math.min(window.devicePixelRatio, mobile ? 1.5 : 2);
 }
 
-export async function mountWorld(canvas: HTMLCanvasElement, world: World): Promise<() => void> {
+export interface WorldView {
+  /**
+   * Swap in another World: disposes the old World's geometry and materials,
+   * re-frames the camera, re-aims the sun and renders its shadow map once.
+   * Pass `meshed` when the World was meshed in the Web Worker.
+   */
+  show(world: World, meshed?: MeshedWorld): void;
+  dispose(): void;
+}
+
+export async function mountWorld(canvas: HTMLCanvasElement, world: World, meshed?: MeshedWorld): Promise<WorldView> {
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: true });
   renderer.setPixelRatio(pixelRatio());
   renderer.toneMapping = THREE.NeutralToneMapping;
@@ -40,22 +52,13 @@ export async function mountWorld(canvas: HTMLCanvasElement, world: World): Promi
   const scene = new THREE.Scene();
   scene.background = fixedColour('sky');
 
-  const objects = buildWorldObjects(world);
-  scene.add(objects.group);
-
-  const { width, depth } = world.terrain;
-  const centre = new THREE.Vector3(width / 2, 0, depth / 2);
-
   scene.add(new THREE.HemisphereLight(fixedColour('skyLight'), fixedColour('groundLight'), LOOK.skyIntensity));
   const sun = new THREE.DirectionalLight(fixedColour('sunLight'), LOOK.sunIntensity);
-  placeSun(sun, centre, Math.hypot(width, depth) / 2 + 2);
   scene.add(sun, sun.target);
 
-  const { target, radius } = world.views.overview;
-  const lookAt = new THREE.Vector3(target.x, target.y, target.z);
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
-  camera.position.copy(lookAt).addScaledVector(ISO_DIRECTION, radius * 4);
-  camera.lookAt(lookAt);
+  /** Overview radius of the World on show; the camera frames it. */
+  let radius = 1;
 
   // Render on demand: a request schedules at most one frame.
   let frame = 0;
@@ -67,12 +70,10 @@ export async function mountWorld(canvas: HTMLCanvasElement, world: World): Promi
     });
   };
 
-  const resize = () => {
+  const frameCamera = () => {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return;
-    renderer.setPixelRatio(pixelRatio());
-    renderer.setSize(w, h, false);
     const aspect = w / h;
     // A square of half-size r spans r·√2 each side horizontally in isometric view.
     const halfHeight = Math.max(radius * 0.9, (radius * Math.SQRT2) / aspect);
@@ -81,20 +82,58 @@ export async function mountWorld(canvas: HTMLCanvasElement, world: World): Promi
     camera.top = halfHeight;
     camera.bottom = -halfHeight;
     camera.updateProjectionMatrix();
+  };
+
+  const resize = () => {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w === 0 || h === 0) return;
+    renderer.setPixelRatio(pixelRatio());
+    renderer.setSize(w, h, false);
+    frameCamera();
     requestRender();
   };
+
+  let objects: WorldObjects | null = null;
+  const show = (next: World, nextMeshed?: MeshedWorld) => {
+    // Free the old World's GPU buffers and materials before building the new one.
+    if (objects) {
+      scene.remove(objects.group);
+      objects.dispose();
+    }
+    objects = buildWorldObjects(next, nextMeshed);
+    scene.add(objects.group);
+
+    const { width, depth } = next.terrain;
+    const centre = new THREE.Vector3(width / 2, 0, depth / 2);
+    placeSun(sun, centre, Math.hypot(width, depth) / 2 + 2);
+
+    const { target } = next.views.overview;
+    radius = next.views.overview.radius;
+    const lookAt = new THREE.Vector3(target.x, target.y, target.z);
+    camera.position.copy(lookAt).addScaledVector(ISO_DIRECTION, radius * 4);
+    camera.lookAt(lookAt);
+    frameCamera();
+
+    canvas.dataset.seed = next.seed;
+    canvas.dataset.triangles = String(objects.triangles);
+    requestRender();
+  };
+
+  show(world, meshed);
   const observer = new ResizeObserver(resize);
   observer.observe(canvas);
   resize();
-
-  canvas.dataset.triangles = String(objects.triangles);
   canvas.dataset.backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl2';
 
-  return () => {
-    cancelAnimationFrame(frame);
-    observer.disconnect();
-    objects.dispose();
-    renderer.dispose();
+  return {
+    show,
+    dispose: () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      objects?.dispose();
+      renderer.dispose();
+    },
   };
 }
 

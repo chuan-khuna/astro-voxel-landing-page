@@ -17,7 +17,8 @@ const world: World = generateWorld(seed, { projects, clients, partners });
 
 `generateWorld` is the single public function and the single test seam. It is:
 
-- **pure**: no three.js, no DOM, no I/O, so it can move into a Web Worker later;
+- **pure**: no three.js, no DOM, no I/O. In the browser it runs in a Web
+  Worker (`site/src/render/world.worker.ts`; see `rendering-and-shading.md`);
 - **deterministic**: the same Seed and counts give a deep-equal World. Every
   random choice comes from one seeded PRNG (`prng.ts`: FNV-1a hash of the Seed
   string, then mulberry32). `Math.random` is never used, and a test fails if it is.
@@ -139,7 +140,7 @@ the Biome.
 ## Not yet built
 
 Later tickets: trees, boats, ships, decoration, Data Card anchors, House
-Interior room layout, Landmark variants beyond 0, and the Web Worker.
+Interior room layout, and Landmark variants beyond 0.
 `ContentCounts` is accepted but not used yet.
 
 ## Tests

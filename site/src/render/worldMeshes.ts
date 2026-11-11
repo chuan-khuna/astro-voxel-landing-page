@@ -7,7 +7,7 @@ import type { World } from '../world';
 import { triangleCount, type ChunkMesh } from './mesher';
 import { oklchToLinear } from './palette';
 import { voxelMaterial } from './voxelMaterial';
-import { meshWorld } from './worldVoxels';
+import { meshWorld, type MeshedWorld } from './worldVoxels';
 
 /** Sea cells this close to land (Chebyshev) are shallow water. */
 const SHALLOW_REACH = 2;
@@ -20,8 +20,9 @@ export interface WorldObjects {
   dispose: () => void;
 }
 
-export function buildWorldObjects(world: World): WorldObjects {
-  const { terrain, detail, voxelSizes } = meshWorld(world);
+/** Build the World's three.js objects. Pass `meshed` when it was meshed elsewhere (the Web Worker). */
+export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(world)): WorldObjects {
+  const { terrain, detail, voxelSizes } = meshed;
   const group = new THREE.Group();
   const materials = [voxelMaterial(voxelSizes[0]), voxelMaterial(voxelSizes[1])];
   const geometries: THREE.BufferGeometry[] = [];
