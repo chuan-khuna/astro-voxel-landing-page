@@ -15,13 +15,13 @@ describe('seedFromUrl', () => {
 
 describe('withSeed', () => {
   it('adds the Seed to a route link', () => {
-    expect(withSeed('/garden', '1234', 'lanternfish', BASE)).toBe('/garden?seed=1234');
+    expect(withSeed('/garden', '1234', 'lighthouse', BASE)).toBe('/garden?seed=1234');
   });
   it('replaces an old Seed and keeps other parameters and the hash', () => {
-    expect(withSeed('/dock?seed=1&tab=a#boats', '42', 'lanternfish', BASE)).toBe('/dock?seed=42&tab=a#boats');
+    expect(withSeed('/dock?seed=1&tab=a#boats', '42', 'lighthouse', BASE)).toBe('/dock?seed=42&tab=a#boats');
   });
   it('leaves the default Seed out', () => {
-    expect(withSeed('/garden?seed=1234', 'lanternfish', 'lanternfish', BASE)).toBe('/garden');
+    expect(withSeed('/garden?seed=1234', 'lighthouse', 'lighthouse', BASE)).toBe('/garden');
   });
 });
 

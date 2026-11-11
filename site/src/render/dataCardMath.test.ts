@@ -7,7 +7,7 @@ import { dataCardAnchors, dataCardTransform, nearestDataCard, placeDataCard } fr
 import { landmarkExtent } from './landmarkModels';
 
 const counts = { projects: 6, clients: 0, partners: 0 };
-const worlds = ['lanternfish', '42', '3'].map((seed) => generateWorld(seed, counts));
+const worlds = ['lighthouse', '42', '3'].map((seed) => generateWorld(seed, counts));
 const open: CameraLimits = { minX: -1000, maxX: 1000, minZ: -1000, maxZ: 1000, minZoom: 1, maxZoom: 100 };
 /** The frame's half size at zoom 1, in frame units: a 16:10 frame. */
 const half = (radius: number) => ({ x: radius * 1.6, y: radius });

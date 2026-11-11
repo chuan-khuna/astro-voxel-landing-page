@@ -48,14 +48,14 @@ const landmarks: Landmark[] = [
 
 export const site = {
   company: {
-    name: 'Lanternfish Data',
+    name: 'Lighthouse Data',
     tagline: 'We turn raw data into insight, and insight into value. Reproducibly.',
-    email: 'hello@lanternfish.example',
+    email: 'hello@lighthouse.example',
     phone: '+1 555 0142',
     address: '12 Harbour Row, Port Meridian',
     socials: [
-      { label: 'GitHub', url: 'https://github.com/lanternfish-data-example' },
-      { label: 'LinkedIn', url: 'https://www.linkedin.com/company/lanternfish-data-example' },
+      { label: 'GitHub', url: 'https://github.com/lighthouse-data-example' },
+      { label: 'LinkedIn', url: 'https://www.linkedin.com/company/lighthouse-data-example' },
     ],
   },
   brand: {
@@ -74,11 +74,11 @@ export const site = {
     },
   },
   seo: {
-    title: 'Lanternfish Data: data and AI engineering',
+    title: 'Lighthouse Data: data and AI engineering',
     description: 'A data and AI studio, told as a walk across a small generated World.',
   },
   /** The Seed visitors see first. Also used for an empty or too-long Seed. */
-  defaultSeed: 'lanternfish',
+  defaultSeed: 'lighthouse',
   /**
    * The brand's main Biome. The default Seed always gets it, whatever the
    * Seed string is; every other Seed picks its Biome from the Seed.

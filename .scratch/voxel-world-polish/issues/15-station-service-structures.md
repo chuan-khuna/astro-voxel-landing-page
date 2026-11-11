@@ -1,6 +1,6 @@
 # 15: Station group with a structure per Service
 
-**What to build:** The Station becomes a group: its own building at the centre and a 2×2 structure for each Service round it, so each Service can be seen in the World.
+**What to build:** The Station becomes a group: a lighthouse at the centre (the company is Lighthouse Data) and a 2×2 structure for each Service round it, so each Service can be seen in the World.
 
 **Blocked by:** 01, 02, 03
 
@@ -14,6 +14,7 @@ Needs the user's answers first:
 - whether each Service structure can be clicked to open its Service
 
 Then:
+- [ ] The central building is a lighthouse, a ⅛-unit ASCII structure on the 2×2 footprint with one style per Biome (a white-and-red tower in the tropics, a stone one in the north, and so on). It stands taller than the House and is the first thing the eye finds in the Overview.
 - [ ] Each Service has a ⅛-unit ASCII structure, 16×16 voxels on a 2×2 footprint, with one style per Biome. Examples:
   - data engineering: pipes and tanks
   - data platforms: silos or a warehouse

@@ -21,7 +21,7 @@ One of a few hand-tuned, muted colour and vegetation sets (e.g. tropical, northe
 _Avoid_: palette, theme (Theme means Day/Night)
 
 **Landmark**:
-A place in the world that stands for one section of the site. Every Seed contains every Landmark. Five are places in the World; Overview and House Interior are views, of the whole World and of the inside of the House. The seven are, in story order: Overview (Hero), Station (Services), House (About), House Interior (Team), Garden (Portfolio), Dock (Clients), Mailbox (Contact). The Mailbox stands in the House's front yard; the Station is a group with a structure for each Service.
+A place in the world that stands for one section of the site. Every Seed contains every Landmark. Five are places in the World; Overview and House Interior are views, of the whole World and of the inside of the House. The seven are, in story order: Overview (Hero), Station (Services), House (About), House Interior (Team), Garden (Portfolio), Dock (Clients), Mailbox (Contact). The Mailbox stands in the House's front yard; the Station is a group: a lighthouse at its centre, the company's own building, with a structure for each Service round it.
 _Avoid_: hotspot, POI, node
 
 **Landmark Variant**:

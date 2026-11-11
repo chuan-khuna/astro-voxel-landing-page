@@ -469,7 +469,7 @@ below that today (counts for the voxel meshes; the sea adds a few hundred):
 
 | Seed | Isles | Terrain | Detail | Total |
 |---|---|---|---|---|
-| default (`lanternfish`) | 2 | 1,330 | 1,448 | 2,778 |
+| default (`lighthouse`, measured after ticket 12) | 1 | 1,088 | 1,624 | 2,712 |
 | `2` | 3 | 1,956 | 1,798 | 3,754 |
 | `3` | 3 | 3,422 | 1,576 | 4,998 |
 | `13` | 4 | 2,100 | 2,112 | 4,212 |

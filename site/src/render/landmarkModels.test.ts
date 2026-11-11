@@ -5,7 +5,7 @@ import { buildLandmark, landmarkExtent, treeExtent } from './landmarkModels';
 import { DETAIL, worldColours } from './worldVoxels';
 
 const counts = { projects: 6, clients: 0, partners: 0 };
-const worlds = ['lanternfish', '694157692', 'harbour', '7', '42'].map((seed) => generateWorld(seed, counts));
+const worlds = ['lighthouse', '694157692', 'harbour', '7', '42'].map((seed) => generateWorld(seed, counts));
 
 /** Every ¼ voxel a Landmark's model draws, in world grid coordinates. */
 const voxelsOf = (landmark: PlacedLandmark, world = worlds[0]!) => {

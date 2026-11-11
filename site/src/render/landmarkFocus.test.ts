@@ -3,7 +3,7 @@ import { generateWorld, LANDMARK_IDS, PLACED_LANDMARK_IDS, type ContentCounts } 
 import { landmarkFocus } from './landmarkFocus';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
-const worlds = ['lanternfish', '7', '42', 'harbour', '123456'].map((seed) => generateWorld(seed, counts));
+const worlds = ['lighthouse', '7', '42', 'harbour', '123456'].map((seed) => generateWorld(seed, counts));
 
 describe('landmarkFocus', () => {
   it('frames the Overview exactly as the World first appears', () => {

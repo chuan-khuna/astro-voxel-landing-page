@@ -16,7 +16,7 @@ describe('treeOrder', () => {
 
 describe('gardenTrees', () => {
   it('gives one tree per Project, up to the cap of 24', () => {
-    for (const seed of ['lanternfish', 'harbour', '42']) {
+    for (const seed of ['lighthouse', 'harbour', '42']) {
       for (const n of [1, 6, 23, 24, 25, 40]) {
         const trees = gardenTrees(worldFor(seed, n), ids(n));
         expect(trees, `${seed} ${n}`).toHaveLength(Math.min(n, 24));
@@ -25,7 +25,7 @@ describe('gardenTrees', () => {
   });
 
   it('handles 0 Projects: an empty Garden', () => {
-    expect(gardenTrees(worldFor('lanternfish', 0), [])).toEqual([]);
+    expect(gardenTrees(worldFor('lighthouse', 0), [])).toEqual([]);
   });
 
   it('pairs each tree with a Project in order by id, each on its own Garden cell', () => {
@@ -43,8 +43,8 @@ describe('gardenTrees', () => {
   });
 
   it('adding a Project keeps every earlier Project on the same tree index', () => {
-    const before = gardenTrees(worldFor('lanternfish', 5), ['b', 'c', 'd', 'e', 'f']);
-    const after = gardenTrees(worldFor('lanternfish', 6), ['b', 'c', 'd', 'e', 'f', 'g']);
+    const before = gardenTrees(worldFor('lighthouse', 5), ['b', 'c', 'd', 'e', 'f']);
+    const after = gardenTrees(worldFor('lighthouse', 6), ['b', 'c', 'd', 'e', 'f', 'g']);
     expect(after.slice(0, 5).map((t) => t.projectId)).toEqual(before.map((t) => t.projectId));
   });
 });

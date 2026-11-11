@@ -23,7 +23,7 @@ Spec: `.scratch/voxel-world-landing/spec.md`
 
 What's built (in `site/`):
 - Astro 7.4.5, @astrojs/mdx 8.1.2, three 0.187.0, vitest 5.1.0, @astrojs/check 0.9.12 and TypeScript 6.0.3, installed with bun under a 7-day minimum release age (`bunfig.toml` and `.npmrc`). Astro 7.4.10 and mdx 8.1.4 exist but are less than 7 days old. TypeScript 7 does not meet `@astrojs/check`'s peer range, so TypeScript is 6.
-- `src/data/site.ts`: the mock company "Lanternfish Data", the tagline, the brand colour and font, SEO defaults, the default Seed `lanternfish`, and the Landmark list.
+- `src/data/site.ts`: the mock company "Lighthouse Data", the tagline, the brand colour and font, SEO defaults, the default Seed `lighthouse`, and the Landmark list.
 - The `pages` collection (`src/content.config.ts`) holds the home hook in `src/content/pages/home.mdx`.
 - `src/world/`: the pure `generateWorld(seed, contentCounts)`. It makes one flat Isle with the five placed Landmarks (the Dock on the shore) and derives the Overview and House Interior views.
 - `src/render/mountWorld.ts`: `WebGPURenderer`, a true-isometric orthographic camera, instanced terrain columns, a sea plane and placeholder Landmark blocks. It renders on demand.
