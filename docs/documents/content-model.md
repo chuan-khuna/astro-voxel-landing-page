@@ -155,9 +155,11 @@ developer.
 ## What reaches the World
 
 The World generator gets only counts and stable ids from content, never the
-copy (`ContentCounts`: `projects`, `pinned`, `clients`, `partners`; see
-`world-generator.md`). `WorldPage.astro` counts the collections at build
-time. Services and Team Members do not change the World. Projects are
+copy (`ContentCounts`: `projects`, `pinned`, `clients`, `partners`, and
+`clientIds` and `partnerIds`, each in id order; see `world-generator.md`).
+`WorldPage.astro` counts the collections and lists the ids at build time. A
+boat's kind comes from its Client's id and a ship's from its Partner's, so
+renaming an id may change its kind; editing the copy never does. Services and Team Members do not change the World. Projects are
 taken in Garden order (`projectOrder`, above) and Clients by id, so adding
 one whose id sorts last adds a plant (while the Garden has room) or a boat
 without moving the others' items.

@@ -57,11 +57,17 @@ const { title, description, image } = Astro.props;
 const hasPanel = Astro.slots.has('panel');
 
 const projects = projectOrder(await getCollection('projects'));
-// The generator gets counts only: Projects and Pinned Projects for the Garden's plants, a boat per Client, a ship per Partner.
+// The generator gets counts and ids only: Projects and Pinned Projects for the Garden's plants, a boat per Client and a
+// ship per Partner, each in id order; a boat's or ship's kind comes from its owner's id.
+const idsOf = (entries: Array<{ id: string }>) => entries.map((e) => e.id).toSorted();
+const clientIds = idsOf(await getCollection('clients'));
+const partnerIds = idsOf(await getCollection('partners'));
 const counts: ContentCounts = {
   ...gardenCountsOf(projects),
-  clients: (await getCollection('clients')).length,
-  partners: (await getCollection('partners')).length,
+  clients: clientIds.length,
+  partners: partnerIds.length,
+  clientIds,
+  partnerIds,
 };
 
 // One hotspot link per placed Landmark; the World positions them over its model.

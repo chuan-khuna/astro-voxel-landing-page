@@ -85,8 +85,8 @@ layout สำรอง (safe layout) เป็นเกาะกลมเกา�
 | Block | ขนาด voxel | การแบ่ง | มีอะไรบ้าง | ที่มา |
 |---|---|---|---|---|
 | **terrain chunk** | 1 unit | chunk ละ 16×16×16 unit (16³ voxel) · ใช้ 3×3 ถึง 8×8 chunk ตามแนวราบ (ก่อน ticket 02: 2×2 ถึง 6×6) · สูง 1 chunk | เสาดินทุก cell ตั้งแต่ y = 0 ถึงความสูงของ cell · ผิวบนมีสีหญ้า ทราย หรือทางเดิน · ชั้นใต้ผิวมีสีหินเป็นแถบตามความสูง เห็นได้ที่หน้าผา | `worldVoxels.ts` |
-| **detail chunk** | ¼ unit | chunk ละ 16×16×16 unit (64³ voxel) · ใช้ grid เดียวกับ terrain chunk | ของที่อยู่กับที่ทั้งหมด: พื้นสะพาน · บันได · Station · ฐานและห้องของ House · ต้นไม้และดอกไม้ใน Garden · Dock, jetty และเสา · Mailbox · เรือ Client ที่จอดอยู่ | `worldVoxels.ts`, `landmarkModels.ts`, `vesselModels.ts` |
-| **ship mesh** | ¼ unit | ลำละ 1 mesh · grid 8×4×11 | เรือ Partner 1 ลำต่อ Partner · แล่นไปตามเส้นทางรอบเกาะ | `ships.ts` |
+| **detail chunk** | ¼ unit | chunk ละ 16×16×16 unit (64³ voxel) · ใช้ grid เดียวกับ terrain chunk | ของที่อยู่กับที่ทั้งหมด: พื้นสะพาน · บันได · Station · ฐานและห้องของ House · ต้นไม้และดอกไม้ใน Garden · Dock, jetty และเสา · Mailbox (เรือ Client ย้ายไปเป็น structure ⅛ ตั้งแต่ ticket 06) | `worldVoxels.ts`, `landmarkModels.ts` |
+| **เรือ (ticket 06)** | ⅛ unit | `InstancedMesh` แบบละ 1 mesh · Boat 3 แบบ (1×1) · Ship 3 แบบ (1×3) ต่อ Biome | เรือ Client จอดที่ Dock · เรือ Partner แล่นไปตามเส้นทางรอบเกาะ · แบบเรือมาจาก hash ของ id | `boats.ts`, `ships.ts`, `vesselModels.ts` |
 | **house lid mesh** | ⅛ unit (ตั้งแต่ ticket 01) | 1 mesh | หลังคาและผนังด้านหน้า 2 ด้าน (มีประตูและหน้าต่าง) · ยกขึ้นได้เมื่อเปิดดูห้อง | `house.ts` |
 | **House Interior scene** (ticket 04) | 1/16 unit | อีก scene · mesh ห้อง 1 + หัวและมือ 3 | ห้องของ Biome พร้อม Developer · โครงบ้าน (⅛) และพื้นหญ้าใต้บ้าน · จอโค้ด · แสงของตัวเอง | `interior.ts`, `interiorModel.ts` |
 

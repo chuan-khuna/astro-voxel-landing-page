@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BIOME_IDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_VARIANTS } from '@/world';
+import { BIOME_IDS, BOAT_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_VARIANTS, SHIP_KINDS } from '@/world';
 import { GROUND_DETAIL, INTERIOR, STRUCTURE } from '@/render/voxelTiers';
 import { STRUCTURES, STRUCTURE_FILES, variantsOf } from './index';
 import { parseStructure, structureVoxels, voxelAt, type Structure } from './parse';
@@ -297,6 +297,72 @@ describe('the House Interior rooms', () => {
   it('has a light for the Night: a lamp or a fire in every room', () => {
     for (const room of STRUCTURES.filter((s) => s.kind === 'room')) {
       expect([...structureVoxels(room)].some((v) => v.role === 'lamp' || v.role === 'fire'), room.name).toBe(true);
+    }
+  });
+});
+
+describe('the boats and ships', () => {
+  /** The box a structure's voxels fill, in ⅛ voxels: x across the beam, z bow to stern, y up. */
+  const box = (s: Structure) => {
+    const all = [...structureVoxels(s)];
+    const span = (axis: 'x' | 'y' | 'z') => Math.max(...all.map((v) => v[axis])) - Math.min(...all.map((v) => v[axis])) + 1;
+    return { beam: span('x'), length: span('z'), height: span('y'), voxels: all.length };
+  };
+  const boats = STRUCTURES.filter((s) => s.kind === 'boat');
+  const ships = STRUCTURES.filter((s) => s.kind === 'ship');
+
+  it('gives every Biome one boat per boat kind and one ship per ship kind, numbered from 1', () => {
+    for (const biome of BIOME_IDS) {
+      expect(variantsOf('boat', biome).map((s) => s.variant), biome).toEqual(Array.from({ length: BOAT_KINDS }, (_, i) => i + 1));
+      expect(variantsOf('ship', biome).map((s) => s.variant), biome).toEqual(Array.from({ length: SHIP_KINDS }, (_, i) => i + 1));
+    }
+  });
+
+  it('makes a boat 1×1, 6–8 long, 4–6 across and 4–8 tall, bow to +z, standing on the sea floor', () => {
+    for (const s of boats) {
+      const b = box(s);
+      expect(s.footprint, s.name).toEqual({ width: 1, depth: 1 });
+      expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
+      expect(b.length, s.name).toBeGreaterThanOrEqual(6);
+      expect(b.length, s.name).toBeLessThanOrEqual(8);
+      expect(b.beam, s.name).toBeGreaterThanOrEqual(4);
+      expect(b.beam, s.name).toBeLessThanOrEqual(6);
+      expect(b.height, s.name).toBeGreaterThanOrEqual(4);
+      expect(b.height, s.name).toBeLessThanOrEqual(8);
+    }
+  });
+
+  it('makes a ship 1×2 or 1×3, 16–24 long, 8 across and 20–32 tall', () => {
+    for (const s of ships) {
+      const b = box(s);
+      expect([2, 3], s.name).toContain(s.footprint.depth);
+      expect(s.footprint.width, s.name).toBe(1);
+      expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
+      expect(b.length, s.name).toBeGreaterThanOrEqual(16);
+      expect(b.beam, s.name).toBe(8);
+      expect(b.height, s.name).toBeGreaterThanOrEqual(20);
+      expect(b.height, s.name).toBeLessThanOrEqual(32);
+    }
+  });
+
+  it('makes every ship clearly larger than every boat: at least twice as long, three times as tall, and five times the voxels', () => {
+    const most = (key: 'length' | 'height' | 'voxels') => Math.max(...boats.map((s) => box(s)[key]));
+    for (const s of ships) {
+      const b = box(s);
+      expect(b.length, s.name).toBeGreaterThanOrEqual(2 * most('length'));
+      expect(b.height, s.name).toBeGreaterThanOrEqual(2.5 * most('height'));
+      expect(b.voxels, s.name).toBeGreaterThanOrEqual(5 * most('voxels'));
+    }
+  });
+
+  it('points the bow to +z: the hull narrows towards the bow, so the last row is narrower than the middle', () => {
+    for (const s of [...boats, ...ships]) {
+      const hull = [...structureVoxels(s)].filter((v) => v.y === 1);
+      const across = (z: number) => hull.filter((v) => v.z === z).length;
+      const zs = hull.map((v) => v.z);
+      const bow = Math.max(...zs);
+      const middle = Math.round((Math.min(...zs) + bow) / 2);
+      expect(across(bow), s.name).toBeLessThan(across(middle));
     }
   });
 });

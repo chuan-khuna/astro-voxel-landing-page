@@ -1,7 +1,8 @@
 /**
  * World to three.js objects: meshes the World's voxel grids into chunked
  * `BufferGeometry` with the soft-voxel material, plus the sea, the
- * Partners' sailing ships (`ships.ts`), the House's moving parts (`house.ts`:
+ * Partners' sailing ships (`ships.ts`) and the Clients' moored boats
+ * (`boats.ts`), both instanced, the House's moving parts (`house.ts`:
  * its lid and its lights), the Garden's plants (`garden.ts`, instanced) and
  * the buoys' lamps. The House Interior is a
  * scene of its own (`interior.ts`).
@@ -20,6 +21,7 @@ import { meshWorld, type MeshedWorld } from './worldVoxels';
 import { buildFleet, type Fleet } from './ships';
 import { buildHouse, type HouseParts } from './house';
 import { buildGardenPlants } from './garden';
+import { buildBoats } from './boats';
 
 /** Sea cells this close to land (Chebyshev) are shallow water. */
 const SHALLOW_REACH = 2;
@@ -71,10 +73,12 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
   group.add(lamps.group);
   const plants = buildGardenPlants(world);
   group.add(plants.group);
+  const boats = buildBoats(world);
+  group.add(boats.group);
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + house.triangles + plants.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles,
     ships,
     house,
     setTheme: (theme) => {
@@ -91,6 +95,7 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
       sea.dispose();
       lamps.dispose();
       plants.dispose();
+      boats.dispose();
     },
   };
 }

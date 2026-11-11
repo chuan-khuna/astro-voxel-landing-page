@@ -139,6 +139,7 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 - Client boats and Partner ships each have several kinds, styled per Biome.
 - The kind comes from a stable hash of the Client's or Partner's id, not from the Seed.
 - Partner ships are always clearly larger than Client boats.
+- Built in ticket 06: three boat kinds (a rowing boat, a sailing dinghy, a fishing boat; 1×1) and three ship kinds (a schooner, a steamer, a cargo trader; 1×3), each drawn per Biome (`boat/<biome>-<kind>`, `ship/<biome>-<kind>`), bow towards +z, standing on the sea floor. The site passes the Clients' and Partners' ids (`clientIds`, `partnerIds`) to `generateWorld`, which gives each boat and ship its `kind` (`vesselKind`: a salted FNV-1a hash of the id). Boats and ships are one `InstancedMesh` per structure; ships turn by any angle as they sail.
 
 **Isles**
 - Radii grow about 1.5×:

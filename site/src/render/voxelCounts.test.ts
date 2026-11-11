@@ -3,6 +3,7 @@ import { generateWorld } from '@/world';
 import { structureVoxels } from '@/structures/parse';
 import { countVoxels, VOXEL_KINDS } from './voxelCounts';
 import { plantStructure } from './gardenPlants';
+import { vesselStructure } from './vesselModels';
 import { worldToVoxels } from './worldVoxels';
 
 const counts = { projects: 6, pinned: 2, clients: 5, partners: 3 };
@@ -32,11 +33,11 @@ describe('countVoxels', () => {
     }
   });
 
-  it('counts each ship once per Partner, all alike', () => {
+  it('counts each boat and each ship as the structure of its kind', () => {
+    const biome = world.biome.id;
     expect(world.ships.length).toBe(counts.partners);
-    expect(tally.ships % counts.partners).toBe(0);
-    const twoShips = countVoxels(generateWorld('harbour', { ...counts, partners: 2 }));
-    expect(twoShips.ships).toBe((tally.ships / 3) * 2);
+    expect(tally.boats).toBe(world.boats.reduce((sum, b) => sum + voxelsIn(vesselStructure('boat', biome, b.kind)), 0));
+    expect(tally.ships).toBe(world.ships.reduce((sum, s) => sum + voxelsIn(vesselStructure('ship', biome, s.kind)), 0));
   });
 
   it('counts nothing for kinds the content leaves out', () => {
@@ -49,10 +50,10 @@ describe('countVoxels', () => {
 
   it('adds up to the voxels that are meshed, so no voxel counts twice', () => {
     const voxels = worldToVoxels(world);
-    // The ships, the Garden's plants and the House's lid are meshes of their own, outside the grids (the House Interior is a scene of its own).
+    // The boats, the ships, the Garden's plants and the House's lid are meshes of their own, outside the grids (the House Interior is a scene of its own).
     expect(tally.inGrids).toBe(voxels.terrain.count + voxels.detail.count + voxels.structure.count);
     expect(tally.total).toBe(VOXEL_KINDS.reduce((sum, kind) => sum + tally[kind], 0));
-    expect(tally.total).toBeGreaterThan(tally.inGrids + tally.ships + tally.plants);
+    expect(tally.total).toBeGreaterThan(tally.inGrids + tally.boats + tally.ships + tally.plants);
   });
 
   it('changes with the Seed', () => {

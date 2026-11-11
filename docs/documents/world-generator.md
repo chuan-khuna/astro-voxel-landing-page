@@ -12,8 +12,12 @@ the one piece of logic the tests target.
 ```ts
 import { generateWorld, type ContentCounts, type World } from '../world';
 
-const world: World = generateWorld(seed, { projects, clients, partners });
+const world: World = generateWorld(seed, { projects, pinned, clients, partners, clientIds, partnerIds });
 ```
+
+`pinned`, `clientIds` and `partnerIds` are optional. The ids (each list in
+id order) give each boat and ship its kind; without them, stand-ins
+(`client-1`, `partner-1`, …) are used.
 
 `generateWorld` is the single public function and the single test seam. It is:
 
@@ -27,7 +31,8 @@ const world: World = generateWorld(seed, { projects, clients, partners });
 `VIEW_LANDMARK_IDS`, `LANDMARK_IDS`), the Biome lists (`BIOME_IDS`,
 `BIOME_COLOUR_ROLES`), `MAX_SEED_LENGTH`, the Garden's layout
 (`GARDEN_SIZE` 5, `GARDEN_BED`, `GARDEN_HEIGHT`, `gardenCounts`) and the caps
-`MAX_FLOWERS` (6), `MAX_TREES` (3) and `MAX_BOATS` (12). The site data module and the
+`MAX_FLOWERS` (6), `MAX_TREES` (3) and `MAX_BOATS` (12), and the vessel kinds
+(`BOAT_KINDS` 3, `SHIP_KINDS` 3, `vesselKind`). The site data module and the
 `pages` collection schema type their Landmark ids against these, so a typo
 is a type or build error.
 
@@ -43,6 +48,7 @@ imports, so the generator stays pure.
 | `landmarks.ts` | Landmark footprints: placement, levelling, the occlusion check, the Garden's bed (its flowers and trees) and gate, and the Dock's berths (the moored boats). |
 | `ships.ts` | The Partners' sailing routes: loops through open sea. |
 | `buoys.ts` | The buoys: sea marks just off the Isles, nearest the Dock first. |
+| `vessels.ts` | Boat and ship kinds: `BOAT_KINDS`, `SHIP_KINDS`, `vesselKind(id, kinds)` (a stable hash of the id) and the stand-in ids. |
 | `terrain.ts` | Isle layout, noise heights, surface kinds, cliff strata. |
 | `noise.ts` | Seeded 2D simplex noise and FBM. |
 | `bridges.ts` | Bridges between Isles. |
@@ -75,8 +81,8 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `paths` | Walkable paths between Landmarks. For now one: Dock to House, as 4-connected cells over land and bridges. |
 | `stairs` | One per single-step height change along a path: the lower `cell`, its height `y`, and the `facing` the stairs climb towards. |
 | `landmarks` | The five placed Landmarks: id, Isle, `footprint` (`origin` cell, `width` along x, `depth` along z, and every `cells` entry it covers), ground height `y` (the whole footprint is at this height), `variant` (its Landmark Variant, 1 to `LANDMARK_VARIANTS[biome][id]`; see "Landmark Variants"), `door` (House and Garden only, else null: `south` or `east`, the way the House's door or the Garden's gate faces; see "House plot" and "The Garden"), `flowers` and `trees` (Garden only: one cell per flower and per tree, in Garden order; see "The Garden") and `jetty` (Dock only: its sea cells, from the shore outwards). |
-| `boats` | One per Client, up to 12 (`MAX_BOATS`), in Client order: the berth `cell` (a sea cell beside the jetty or off its tip; it may lie past the grid's edge, in the open sea) and the `facing` its bow points, out to sea along the jetty. |
-| `ships` | One per Partner, in Partner order: `cells`, a closed loop of sea cells (each an 8-neighbour of the one before, the last of the first) sailed in order, and `phase` (0–1), how far round it the ship starts. Cells may lie past the grid's edge. |
+| `boats` | One per Client, up to 12 (`MAX_BOATS`), in Client order: the berth `cell` (a sea cell beside the jetty or off its tip; it may lie past the grid's edge, in the open sea), the `facing` its bow points, out to sea along the jetty, and its `kind` (1 to `BOAT_KINDS`, from its Client's id; see "Boat and ship kinds"). |
+| `ships` | One per Partner, in Partner order: `cells`, a closed loop of sea cells (each an 8-neighbour of the one before, the last of the first) sailed in order, `phase` (0–1), how far round it the ship starts, and its `kind` (1 to `SHIP_KINDS`, from its Partner's id). Cells may lie past the grid's edge. |
 | `buoys` | Up to 4 (`MAX_BUOYS`) sea cells, each with a buoy (its lamp glows at Night; see `rendering-and-shading.md`). Inside the grid, clear of the ships, boats, jetty and bridges. |
 | `views` | The two derived Landmarks, as camera views (`target`, `radius`): `overview` and `house-interior`. |
 
@@ -232,8 +238,7 @@ runs, bow out to sea.
 A Dock candidate is kept only if it has a berth for every boat, so the
 boats are part of choosing the Dock. Nothing placed after the Dock goes to
 sea, so berths never clash with a later Landmark. Each Client keeps the
-same boat model in every World (one kind for now; a Client id, not the
-Seed, will pick a kind later).
+same kind of boat in every World (see "Boat and ship kinds").
 
 ### Ships
 
@@ -266,6 +271,19 @@ a chart that runs 6 cells past the grid's edge. A loop sails round a
 - **Fallbacks.** If a body's loop fails, the generator tries clearance 2,
   then the all-land body, then a ring just inside the chart's edge, which is
   always open. In 2,000 sampled Seeds the ring is never needed.
+
+### Boat and ship kinds
+
+Polish ticket 06. A boat's kind is its Client's, a ship's its Partner's:
+`vesselKind(id, kinds)` is `1 + hash(id) mod kinds` (`vessels.ts`: the
+Seed's FNV-1a hash with a fixed salt), so it never depends on the Seed, the
+Biome, the place in the list or the other Clients. Boat `i` takes
+`clientIds[i]`, ship `i` `partnerIds[i]`. There are `BOAT_KINDS` (3) boat
+kinds and `SHIP_KINDS` (3) ship kinds; the World's Biome only picks the
+style (the structure `boat/<biome>-<kind>` or `ship/<biome>-<kind>`; see
+`voxel-structures.md`). Kinds are added after the layout, so they never move
+it. The salt was picked so the three mock Partners get three different
+ships; any hash may make two Clients share a kind.
 
 ### Buoys
 
@@ -353,12 +371,12 @@ the same 200 Seeds keep their Variants with the largest content counts.
 
 ## Not yet built
 
-Later tickets: decoration, Data Card anchors, and boat and ship kinds
-(ASCII structures, ADR 0004). The site passes the sizes of the `projects`,
-`clients` and `partners` collections and how many Projects are pinned; it
-pairs flower `k` with the `k`-th Pinned Project by id and tree `k` with the
-next Projects in Garden order (`site/src/lib/gardenPlants.ts`; see
-`content-model.md`); the generator never sees ids.
+Later tickets: decoration and Data Card anchors. The site passes the sizes
+of the `projects`, `clients` and `partners` collections, how many Projects
+are pinned, and the Clients' and Partners' ids (for the boat and ship
+kinds); it pairs flower `k` with the `k`-th Pinned Project by id and tree
+`k` with the next Projects in Garden order (`site/src/lib/gardenPlants.ts`;
+see `content-model.md`); the generator never sees Project ids.
 
 ## Tests
 
@@ -409,6 +427,9 @@ Seeds, never snapshots:
   that goes round one cell of a connected Isle goes round all of it); over 80% of Worlds with a bridge of 5+ cells sail
   through a strait between two Isles; ships sharing a loop start at
   different phases;
+- boat and ship kinds: the same ids give the same kinds over 60 Seeds
+  covering every Biome; a Client keeps its kind when others leave; every
+  kind is used over 40 ids; kinds stay in range without ids;
 - buoys: at most 4, at sea inside the grid, 1–4 cells off the land, at
   least 2 cells from ship cells, the jetty, boats and bridges, 4 apart, the
   lamp in plain view (the ray march); over 90% of Worlds get two or more.

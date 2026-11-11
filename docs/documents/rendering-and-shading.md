@@ -23,10 +23,10 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, its room and developer, fire, building materials for the Landmark Variants, placeholder parts, boat and ship hulls and sail, the buoys' lamp) as OKLCH, `oklchToLinear`. The sky and lights are theme tokens (`data/theme.ts`). | no |
 | `voxelTiers.ts` | The voxel sizes of ADR 0006, as voxels per unit: `TERRAIN` 1, `GROUND_DETAIL` 4, `STRUCTURE` 8, `INTERIOR` 16. | no |
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
-| `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid, the ¼-unit detail grid and the ⅛-unit structure grid with a shared colour list. `drawDetail(world, grid, colours, drawn?)`: the detail grid's parts in order (bridges, stairs, each Landmark, boats, buoys), telling `drawn` after each. `meshWorld(world)`: the three grids meshed. | no |
+| `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid, the ¼-unit detail grid and the ⅛-unit structure grid with a shared colour list. `drawDetail(world, grid, colours, drawn?)`: the detail grid's parts in order (bridges, stairs, each Landmark, buoys), telling `drawn` after each. `meshWorld(world)`: the three grids meshed. | no |
 | `interiorModel.ts` | The House Interior's room, pure (see `voxel-structures.md`, "The House Interior rooms"): `furnishedRoom(biome)` (the room with the developer seated in it, 1/16 unit), `coarsen` (a structure at a coarser scale), `interiorPlacement` and `drawWorldRoom` (the room's place in the World, and the room at ⅛ unit in the structure grid), `developerBox`, `screenFace`, `roomLight`, `DEVELOPER_PARTS`, and `showsInterior` (when the Interior scene takes over). | no |
 | `structureModels.ts` | Structures placed in a World (see `voxel-structures.md`): `structureColour` (a colour role's id), `drawStructure` (a structure, or one part, at a placement, turned to its door), `landmarkStructure` and `landmarkPlacement` (a placed Landmark's Variant, and where and which way it stands), `houseStructure` and `housePlacement` (the same for the House), `drawStructures` (the structure grid's contents) and `houseWindowFaces` (the lit window faces). | no |
-| `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, plants, House room, boats, ships, buoys, bridges, stairs), the total and those in the three meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); plants are each Garden plant's structure voxels (`gardenPlantsOf`; instanced, outside the grids), the House room the House Interior's room at ⅛ unit in the structure grid (`drawWorldRoom`); the House Interior scene is not counted; the House's structure (base and lid, ⅛ unit) counts with the Landmarks; ships are `shipVoxels` × ships. About 2 ms. | no |
+| `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, plants, House room, boats, ships, buoys, bridges, stairs), the total and those in the three meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); plants are each Garden plant's structure voxels (`gardenPlantsOf`; instanced, outside the grids), the House room the House Interior's room at ⅛ unit in the structure grid (`drawWorldRoom`); the House Interior scene is not counted; the House's structure (base and lid, ⅛ unit) counts with the Landmarks; boats and ships are each one's structure voxels (instanced, outside the grids). About 2 ms. | no |
 | `frameMeter.ts` | `createFrameMeter()`: FPS and frame time from frame timestamps, smoothed (exponential, 0.1); a gap over 250 ms ends a burst and the next starts afresh; `'idle'` with no frame for 500 ms or only a lone frame. | no |
 | `landmarkModels.ts` | The ¼-unit parts of the Landmarks (the Dock's deck and jetty), and `landmarkExtent(world, landmark)`: the box a Landmark covers, measured from its ¼-unit parts, its Variant's structure and, for the Garden, its plants, and never smaller than its footprint (for the House, the House's 3×3 up to its roof). | no |
 | `gardenPlants.ts` | The Garden's plants (polish ticket 05): `plantStructure` (the Biome's tree; its flowers in turn), `gardenPlantsOf(world)` (every flower and tree with its cell and structure), `plantExtent` (a plant's box, for its link) and `plantedGarden(biome)` (a fence planted full, for the Model Gallery). | no |
@@ -34,7 +34,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `plantLinks.ts` | `plantLinkSize(kind, pxPerUnit)`: a plant link's size on screen, so no link covers another plant (see "Plant links"). | no |
 | `buoyModel.ts` | `drawBuoy(cell, grid, colours)`: a buoy in the detail grid; `buoyLamp(cell)`: its lamp's box, which glows at Night. | no |
 | `houseMotion.ts` | `ROOF_LIFT`, `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame) and `developerPose(seconds)` (typing and reading). | no |
-| `vesselModels.ts` | `drawBoat(boat, grid, colours)`: a Client's boat in its berth, drawn into the detail grid; `shipVoxels(colours)`: the Partner ship's own small grid, centred on `SHIP_ORIGIN`, bow towards +x. | no |
+| `vesselModels.ts` | The boats and ships (polish ticket 06): `vesselStructure` (a kind's structure in a Biome), `boatsOf(world)`, `boatPlacement` and `shipPlacement` (see "Boats and ships"). | no |
+| `boats.ts` | `buildBoats(world)`: one `InstancedMesh` per boat structure, one instance per moored boat. | yes |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
 | `guideModel.ts` | The Guide's model: `guideVoxels(colours)` (a 6×6×6 ¼-unit cube centred on its origin, side fins, an antenna, the bezel on +x), `GUIDE_SCREEN` (the screen's rectangle) and `GUIDE_FACES` (a 12 × 10 pixel-eye face per mood, and a blink). | no |
 | `guideMotion.ts` | `guideSpot(world, id)` (where the Guide floats beside a placed Landmark), `voxelFlights` and `flightPoint` (the assembly), `travelPoint` (flying between spots on the Tour), `hoverPose(seconds)` (the bob) and `blinking(seconds)`. | no |
@@ -48,7 +49,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, pure maths) and `mergeChunks`. | yes |
 | `house.ts` | `buildHouse(world)`: the House Variant's lid (⅛ unit) as a mesh and the windows' lights; `setOpening` lifts the lid, `setLights` lights the windows. | yes |
 | `interior.ts` | `buildInterior(world)`: the House Interior scene: the House's shell and ground, the room at 1/16 unit, the developer's head and hands as meshes, the screen's code shader, its own lights; `work(seconds)` animates the developer and the screen, `setTheme` lights it for Day or Night. | yes |
-| `ships.ts` | `buildFleet(world)`: one mesh per Partner ship, sharing one geometry, and `sail(seconds)` to move them along their loops. | yes |
+| `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops. | yes |
 | `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `setTheme` recolours the sea and lights the lamps and windows. | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
 | `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand and the render tier, sailing ships, opening the House and handing over to the House Interior scene, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
@@ -59,7 +60,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
 meshing run in the Web Worker. Only geometry upload, materials, the sea,
-the ship mesh, the House's lid, the House Interior scene and the Guide
+the instanced boats, ships and plants, the House's lid, the House Interior scene and the Guide
 (small grids) are built on the main thread.
 
 ## Voxel grids
@@ -71,8 +72,8 @@ each in its own integer voxel coordinates (voxel `(x, y, z)` spans world
 | Grid | Voxel size | Contents |
 |---|---|---|
 | terrain | 1 unit (`TERRAIN`) | Every land column from y = 0 to its height. The top voxel takes the surface colour (sand, grass, peak) or the path colour (the path's cells, and the House yard's cell in front of its door); buried voxels take their stratum's colour. |
-| detail | ¼ unit (`GROUND_DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Dock's deck and jetty (`landmarkModels.ts`), the Clients' moored boats and the buoys. |
-| structure | ⅛ unit (`STRUCTURE = 8` per unit) | Placed structures (`structureModels.ts`, `voxel-structures.md`): each Landmark's Variant: the House's base (its lid is a mesh of its own), the Station, the Mailbox, the things on the Dock's deck and the Garden's fence; and the House Interior's room coarsened to ⅛ unit (`drawWorldRoom`), seen while the lid lifts. The Garden's flowers and trees are ⅛-unit structures too, but instanced (`garden.ts`), not in this grid. Boats and ships move here as later tickets redraw them. |
+| detail | ¼ unit (`GROUND_DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Dock's deck and jetty (`landmarkModels.ts`) and the buoys. |
+| structure | ⅛ unit (`STRUCTURE = 8` per unit) | Placed structures (`structureModels.ts`, `voxel-structures.md`): each Landmark's Variant: the House's base (its lid is a mesh of its own), the Station, the Mailbox, the things on the Dock's deck and the Garden's fence; and the House Interior's room coarsened to ⅛ unit (`drawWorldRoom`), seen while the lid lifts. The Garden's flowers and trees are ⅛-unit structures too, but instanced (`garden.ts`), not in this grid, and so are the boats and ships (`boats.ts`, `ships.ts`). |
 
 The House Interior's tier (`INTERIOR`, 1/16 unit) belongs to its own scene
 (`interior.ts`; see "The House and its room").
@@ -193,42 +194,43 @@ shader rather than uniforms, and AO strength is applied when meshing.
 
 ## Boats and ships
 
-Simple code-built models (`vesselModels.ts`), one kind each for now: every
-Client gets the same boat and every Partner the same ship. Kinds drawn as
-ASCII structures come in a later feature (ADR 0004); a boat's kind will
-follow its Client's id, never the Seed.
+Polish ticket 06. Each Client's boat and each Partner's ship is a ⅛-unit
+structure (`voxel-structures.md`, "Boats and ships"): the structure of its
+kind in the World's Biome, the kind coming from its owner's id
+(`world-generator.md`, "Boat and ship kinds"), never the Seed. Every copy
+of one structure is one `InstancedMesh` (`structureInstances`), in the
+soft-voxel material in local space, so seams, bevel and jitter move and
+turn with the vessel.
 
-- **Boats** (Clients) are static, so `worldToVoxels` draws them into the
-  detail grid with the Landmarks: they are greedy-meshed with the rest, cast
-  shadows into the static shadow map, and cost nothing per frame. A boat is
-  4 ¼ voxels long and 3 wide (one voxel in from its berth cell's edge), two
-  ¼ voxels tall from the sea floor so it floats at the waterline: a muted
-  red hull round an open plank deck, a white bow cap and a white seat. Its
-  bow points the way its `facing` says, out along the jetty. About 53
-  triangles each.
-- **Ships** (Partners) are 8 long, 4 wide and 11 tall: a navy hull with a
-  white gunwale and raised bow, a plank deck, a cabin with a window and
-  roof at the stern, a mast with a square sail across the deck, and a
-  Biome-accent pennant. So a ship is twice a boat's length and more than
-  three times its height. `ships.ts` meshes it once (206 triangles), moves
-  the geometry so it turns about the middle of its waterline (whole ¼
-  voxels, so seams stay on voxel edges), and gives each Partner a mesh of
-  its own. Ships use `voxelMaterial(size, 'local')`, so the seams, bevel and
-  jitter sail with the ship instead of sliding over it. They receive
-  shadows but cast none: the static shadow map would leave a moving ship's
-  shadow behind.
+- `vesselModels.ts` (pure): `vesselStructure('boat' | 'ship', biome,
+  kind)`, `boatsOf(world)` (each boat with its structure), and the
+  placements: `boatPlacement(boat)` puts a boat's footprint middle on its
+  berth cell's middle, on the sea floor, its bow (drawn towards +z) turned
+  by whole quarter turns to its `facing`; `shipPlacement(pose)` puts a
+  ship's footprint middle on its path, its bow along its heading (heading
+  h is 1 − 2h/π quarter turns; `instanceMatrix` takes a fraction as an
+  exact angle).
+- **Boats** (`boats.ts`) are still: one `InstancedMesh` per boat structure,
+  one instance per moored boat. They cast shadows into the static shadow
+  map. A boat's first layer is under the sea (sea level 0.15), so it floats
+  at the waterline.
+- **Ships** (`ships.ts`): one `InstancedMesh` per ship structure, one
+  instance per Partner of that kind; `sail(seconds)` resets each
+  instance's placement every frame. They receive shadows but cast none:
+  the static shadow map would leave a moving ship's shadow behind.
 - **Sailing.** `shipMotion.ts` smooths a ship's loop of cells into a closed
   path through the cell centres (three rounds of Chaikin corner cutting)
   and gives the ship's position and heading any distance along it; the
   heading looks 0.35 units ahead and behind, so turns ease in. A ship
-  starts `phase × length` along its path and sails at 0.45 units a second.
-  Its bow (+x) is turned to the heading: `rotation.y = −heading`.
+  starts `phase × length` along its path and sails at 0.45 units a second,
+  turning about its footprint's middle (on the sea floor, under the bow-to-stern
+  middle of its waterline).
   `shipMotion.test.ts` checks the path's length and bounds, the heading on
   each side, wrapping both ways and that the heading never jumps.
-- `vesselModels.test.ts` checks that each boat stays in its berth cell from
-  the sea floor up and is longer along its facing, and that a ship is at
-  least twice a boat's length, wider and more than twice its height,
-  centred on its origin.
+- `vesselModels.test.ts` checks that each kind maps to its Biome's
+  structure, that a boat stays in its berth cell with its bow along its
+  facing, that a World's boats take their Clients' kinds, and that a ship
+  sails bow first along its heading with its middle on the path.
 
 ## Buoys
 
@@ -765,10 +767,15 @@ replaced the ¼-unit Garden with its ⅛-unit fence and instanced plants: with
 the site's six Projects (three pinned: three flowers, three trees)
 `data-triangles` reads 13,732 (`42`), 14,538 (`harbour`), 14,978
 (`lighthouse`), 16,696 (`lanternfish`) and 19,730 (`seed-2`), about 3,000–3,500
-more than before, mostly the fence and the trees' crowns. Decoration (a later
-ticket) will add most of the remaining triangles.
+more than before, mostly the fence and the trees' crowns. Polish ticket 06
+replaced the ¼-unit boat and ship with ⅛-unit kinds (instanced): with the
+site's six Clients and three Partners `data-triangles` reads 16,870 (`42`),
+17,662 (`harbour`), 18,100 (`lighthouse`), 19,810 (`lanternfish`) and
+22,998 (`seed-2`), about 3,100–3,300 more, mostly the ships' sails and
+cabins. Decoration (a later ticket) will add most of the remaining
+triangles.
 
 ## Not yet built
 
-Animation of water and plants, boat and ship kinds, the reduced-decoration tier,
-and structures for boats and ships.
+Animation of water and plants (and boats and ships rocking on the swell), and
+the reduced-decoration tier.

@@ -5,9 +5,9 @@
  *   the top voxel takes the surface (or path) colour, buried voxels their
  *   stratum's colour, so cliffs show layered bands.
  * - `detail`: ¼-unit voxels (`GROUND_DETAIL`) for what is built on the
- *   terrain and not yet a structure: bridge decks, stairs, the Garden and
- *   the Dock's deck and jetty (`landmarkModels.ts`), the Clients' moored
- *   boats and the buoys.
+ *   terrain and not yet a structure: bridge decks, stairs, the Dock's deck
+ *   and jetty (`landmarkModels.ts`) and the buoys. The Clients' boats are
+ *   instanced structures (`boats.ts`), not in any grid.
  * - `structure`: ⅛-unit voxels (`STRUCTURE`) for placed structures
  *   (`structureModels.ts`): the House's base, the Station, the Mailbox and
  *   the Dock's things; and the House Interior's room at ⅛ unit
@@ -17,7 +17,6 @@
  */
 import { houseYard, type BiomeColourRole, type Oklch, type PlacedLandmark, type World } from '@/world';
 import { buildLandmark } from './landmarkModels';
-import { drawBoat } from './vesselModels';
 import { drawBuoy } from './buoyModel';
 import { meshVoxels, VoxelGrid, type ChunkMesh } from './mesher';
 import { FIXED_COLOURS, LOOK, oklchToLinear, shiftLightness, type FixedColour, type Rgb } from './palette';
@@ -153,13 +152,13 @@ export function worldToVoxels(world: World): WorldVoxels {
 }
 
 /** What `drawDetail` has just drawn: a group of parts, or one Landmark. */
-export type DetailPart = { kind: 'bridges' | 'stairs' | 'boats' | 'buoys' } | { kind: 'landmark'; landmark: PlacedLandmark };
+export type DetailPart = { kind: 'bridges' | 'stairs' | 'buoys' } | { kind: 'landmark'; landmark: PlacedLandmark };
 
 /**
  * Draw everything built on the terrain into the ¼-unit detail grid: bridge
- * decks, stairs, the Landmark models, the moored boats and the buoys, in
- * that order. `drawn` is told after each part (the render stats overlay
- * counts voxels by kind this way).
+ * decks, stairs, the Landmark models and the buoys, in that order. `drawn`
+ * is told after each part (the render stats overlay counts voxels by kind
+ * this way).
  */
 export function drawDetail(world: World, grid: VoxelGrid, colours: WorldColours, drawn?: (part: DetailPart) => void): void {
   addBridges(world, grid, colours);
@@ -170,8 +169,6 @@ export function drawDetail(world: World, grid: VoxelGrid, colours: WorldColours,
     buildLandmark(landmark, grid, colours);
     drawn?.({ kind: 'landmark', landmark });
   }
-  for (const boat of world.boats) drawBoat(boat, grid, colours);
-  drawn?.({ kind: 'boats' });
   for (const buoy of world.buoys) drawBuoy(buoy, grid, colours);
   drawn?.({ kind: 'buoys' });
 }

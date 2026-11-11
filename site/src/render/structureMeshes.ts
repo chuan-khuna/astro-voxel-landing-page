@@ -19,7 +19,11 @@ import { drawStructure } from './structureModels';
 import { voxelMaterial } from './voxelMaterial';
 import type { WorldColours } from './worldVoxels';
 
-/** Where one copy goes, in world units, and how many quarter turns (about +y) it makes. */
+/**
+ * Where one copy goes, in world units, and how many quarter turns (about +y)
+ * it makes. Whole turns keep the seams on voxel edges; a sailing ship takes
+ * any fraction (its heading).
+ */
 export interface InstancePlacement {
   x: number;
   y: number;
@@ -41,8 +45,10 @@ interface Point {
  */
 export function instanceMatrix(placement: InstancePlacement, pivot: Point): number[] {
   const quarter = ((placement.turns % 4) + 4) % 4;
-  const c = [1, 0, -1, 0][quarter]!;
-  const s = [0, 1, 0, -1][quarter]!;
+  // Whole quarter turns are exact; a fraction (a ship's heading) takes its cosine and sine.
+  const whole = Number.isInteger(quarter);
+  const c = whole ? [1, 0, -1, 0][quarter]! : Math.cos((quarter * Math.PI) / 2);
+  const s = whole ? [0, 1, 0, -1][quarter]! : Math.sin((quarter * Math.PI) / 2);
   // Rotated pivot: R · pivot, with R = [[c, 0, s], [0, 1, 0], [-s, 0, c]].
   const rx = c * pivot.x + s * pivot.z;
   const rz = -s * pivot.x + c * pivot.z;

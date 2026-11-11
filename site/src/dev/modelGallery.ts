@@ -7,7 +7,8 @@
  * (`structureMeshes.ts`), its lid (if it has one) a second one that lifts.
  * A House Interior room shows furnished, the developer at their computer
  * (`furnishedRoom`), at its own 1/16 unit; a Garden fence shows planted
- * full, six flowers and three trees (`plantedGarden`). Renders on demand. Dev only
+ * full, six flowers and three trees (`plantedGarden`); boats and ships float on
+ * a patch of their Biome's sea, as in the World. Renders on demand. Dev only
  * (`/dev/models`).
  */
 import * as THREE from 'three/webgpu';
@@ -16,12 +17,13 @@ import { BIOME_IDS } from '@/world';
 import { STRUCTURES, type Structure } from '@/structures';
 import { furnishedRoom } from '@/render/interiorModel';
 import { plantedGarden } from '@/render/gardenPlants';
-import { THEME_TOKENS } from '@/data/theme';
+import { seaColour, THEME_TOKENS } from '@/data/theme';
 import type { Theme } from '@/lib/theme';
 import { LOOK, oklchToLinear } from '@/render/palette';
 import { structureInstances, type InstancePlacement } from '@/render/structureMeshes';
 import { voxelMaterial } from '@/render/voxelMaterial';
 import { worldColours } from '@/render/worldVoxels';
+import { SEA_LEVEL } from '@/render/worldMeshes';
 import { GROUND_DETAIL, STRUCTURE } from '@/render/voxelTiers';
 import type { Oklch } from '@/world';
 
@@ -29,6 +31,8 @@ import type { Oklch } from '@/world';
 const SPACING = 6;
 /** Cells between the House Interior's rooms (2×2, and low): closer, so each shows larger. */
 const ROOM_SPACING = 4;
+/** Cells between the boats (1×1, and low): closer, so each shows larger. */
+const BOAT_SPACING = 3.5;
 /** Cells between the Gardens (5×5 with their ground): wider, so their ground patches never touch. */
 const GARDEN_SPACING = 8;
 /** Rows (in SPACING) between one row and the next: a row step is shallower on screen than a column step, so it needs more room. */
@@ -64,6 +68,7 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
 
   let turns = 0;
   let lifted = false;
+  let theme: Theme = 'day';
   let shown: Array<{ structure: Structure; at: THREE.Vector3; base: ReturnType<typeof structureInstances>; lid?: ReturnType<typeof structureInstances> }> = [];
   const ground = new THREE.Group();
   scene.add(ground);
@@ -153,16 +158,24 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
 
   /** A Biome's colours for a structure (a shared one shows in the tropical Biome's). */
   const coloursOf = (s: Structure) => worldColours({ biome: BIOMES[s.biome ?? 'tropical'] });
-  /** A patch of a Biome's grass under a model, one cell wider each side than its footprint. */
+  /** Boats and ships stand on the sea floor, their first layer under the water. */
+  const afloat = (s: Structure) => s.kind === 'boat' || s.kind === 'ship';
+  /**
+   * A patch of a Biome's grass under a model, one cell wider each side than
+   * its footprint; for a boat or ship, a patch of its Biome's shallow sea
+   * (in the theme's shade) whose top is the sea level, as in the World.
+   */
   const groundPatch = (s: Structure, colours: ReturnType<typeof coloursOf>, at: THREE.Vector3) => {
     const w = s.footprint.width + 2;
     const d = s.footprint.depth + 2;
     const geometry = new THREE.BoxGeometry(w, 1, d);
-    const [r, g, b] = colours.table.colours[colours.biome('grass')]!;
+    const [r, g, b] = afloat(s)
+      ? oklchToLinear(seaColour(BIOMES[s.biome ?? 'tropical'], 'waterShallow', theme))
+      : colours.table.colours[colours.biome('grass')]!;
     const colour = new Float32Array(geometry.attributes.position!.count * 3);
     for (let i = 0; i < colour.length; i += 3) colour.set([r, g, b], i);
     geometry.setAttribute('color', new THREE.BufferAttribute(colour, 3));
-    geometry.translate(at.x, at.y - 0.5, at.z);
+    geometry.translate(at.x, at.y - 0.5 + (afloat(s) ? SEA_LEVEL : 0), at.z);
     const mesh = new THREE.Mesh(geometry, groundMaterial);
     mesh.receiveShadow = true;
     ground.add(mesh);
@@ -204,8 +217,8 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
       const columns = BIOME_IDS.map((biome) => list.filter((s) => s.biome === biome));
       columns.push(list.filter((s) => s.biome === null));
       const used = columns.filter((column) => column.length > 0);
-      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'garden' ? GARDEN_SPACING : SPACING;
-      const margin = kind === 'room' ? 2.5 : 4;
+      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'boat' ? BOAT_SPACING : kind === 'garden' ? GARDEN_SPACING : SPACING;
+      const margin = kind === 'room' || kind === 'boat' ? 2 : 4;
       const rows = Math.max(1, ...used.map((column) => column.length));
       used.forEach((column, c) => {
         column.forEach((s, r) => {
@@ -253,9 +266,12 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
       for (const { at, lid } of shown) lid?.setPlacements([placementOf(at, lifted ? LID_LIFT : 0)]);
       render();
     },
-    setTheme(theme: Theme) {
+    setTheme(next: Theme) {
+      theme = next;
       applyTheme(theme);
-      render();
+      // The sea under boats and ships darkens at Night: redraw its patches.
+      if (kindShown === 'boat' || kindShown === 'ship') gallery.show(kindShown);
+      else render();
     },
     /** Voxel size of the models, for reference. */
     voxel: 1 / STRUCTURE,

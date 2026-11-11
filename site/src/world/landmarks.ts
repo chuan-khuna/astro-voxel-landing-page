@@ -2,6 +2,9 @@ import type { Rng } from './prng';
 import { surfaceOf } from './terrain';
 import type { BiomeId, Boat, Bridge, Cell, Facing, Footprint, Isle, PlacedLandmark, PlacedLandmarkId, Terrain } from './types';
 
+/** A berth: a boat before its Client gives it a kind (`generateWorld`). */
+type Berth = Omit<Boat, 'kind'>;
+
 /** The Garden's side, in cells: a 3×3 bed inside a fence one cell wide. */
 export const GARDEN_SIZE = 5;
 /** Most Pinned Projects that bloom as flowers, in the bed's front two rows (3×2). */
@@ -93,7 +96,7 @@ interface Candidate {
 export interface Placement {
   landmarks: PlacedLandmark[];
   /** The Clients' boats, moored round the Dock's jetty. */
-  boats: Boat[];
+  boats: Berth[];
   /** The terrain with every footprint levelled. */
   terrain: Terrain;
 }
@@ -377,7 +380,7 @@ export function placeLandmarks(
     );
   // Its berths: sea cells beside the jetty and off its tip, nearest first,
   // clear of bridges and in plain view at sea level. The Dock needs one per boat.
-  const berthsOf = (candidate: Candidate): Boat[] => {
+  const berthsOf = (candidate: Candidate): Berth[] => {
     const { jetty, footprint } = candidate;
     const first = jetty[0]!;
     const dx = Math.sign(jetty[1]!.x - first.x);
@@ -396,7 +399,7 @@ export function placeLandmarks(
       }
     }
     found.sort((a, b) => a.ring - b.ring || a.along - b.along || Math.abs(a.side) - Math.abs(b.side) || a.side - b.side);
-    const berths: Boat[] = [];
+    const berths: Berth[] = [];
     for (const { cell } of found) {
       if (berths.length === boatCount) break;
       if (inView([cell], 0, footprint, candidate.y, jetty)) berths.push({ cell, facing });

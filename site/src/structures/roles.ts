@@ -61,6 +61,11 @@ export const STRUCTURE_ROLES = {
   canvas: { fixed: 'sail' },
   /** A lamp's glass. */
   lamp: { fixed: 'lamp' },
+  // Boats and ships: painted hulls (wood hulls use `bamboo`, `timber`; iron ones `slate`).
+  hullRed: { fixed: 'hullRed' },
+  hullRedDark: { fixed: 'hullRed', dl: -0.08 },
+  hullNavy: { fixed: 'hullNavy' },
+  hullNavyDark: { fixed: 'hullNavy', dl: -0.07 },
   // Plants.
   foliage: { biome: 'foliage' },
   foliageLight: { biome: 'foliage', dl: 0.05 },

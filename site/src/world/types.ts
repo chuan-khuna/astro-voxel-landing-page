@@ -6,13 +6,17 @@
  * (1 unit). y is height in terrain voxels; 0 is the sea floor / sea level.
  */
 
-/** What the generator needs from content: counts only, never the copy. */
+/** What the generator needs from content: counts and stable ids only, never the copy. */
 export interface ContentCounts {
   projects: number;
   /** How many of the Projects are Pinned Projects (default 0): they take the Garden's places first, as flowers. */
   pinned?: number;
   clients: number;
   partners: number;
+  /** The Clients' ids, in Client order (by id): each boat's kind comes from its Client's id. Stand-ins (`client-<n>`) fill any gap. */
+  clientIds?: readonly string[];
+  /** The Partners' ids, in id order (the Dock's list sorts Partners by tier first; the order only decides which loop each ship sails): each ship's kind comes from its Partner's id. Stand-ins (`partner-<n>`) fill any gap. */
+  partnerIds?: readonly string[];
 }
 
 /** The five Landmarks that are places in the World. */
@@ -206,6 +210,8 @@ export interface PlacedLandmark {
 export interface Boat {
   cell: Cell;
   facing: Facing;
+  /** Its kind, 1 to `BOAT_KINDS`, from its Client's id (`vesselKind`): the same in every World. */
+  kind: number;
 }
 
 /**
@@ -219,6 +225,8 @@ export interface Boat {
 export interface ShipRoute {
   cells: Cell[];
   phase: number;
+  /** The ship's kind, 1 to `SHIP_KINDS`, from its Partner's id (`vesselKind`): the same in every World. */
+  kind: number;
 }
 
 /** A camera view: what to look at and how much of the World to fit. */
@@ -243,7 +251,7 @@ export interface World {
   landmarks: PlacedLandmark[];
   /** One boat per Client, in Client order, up to `MAX_BOATS`. */
   boats: Boat[];
-  /** One sailing ship per Partner, in Partner order. */
+  /** One sailing ship per Partner, in the order of `partnerIds` (by id). */
   ships: ShipRoute[];
   /** Buoys: sea cells, each with a buoy whose lamp glows at Night. Clear of the ships, boats, jetty and bridges. */
   buoys: Cell[];

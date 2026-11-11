@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, GARDEN_HEIGHT, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, GARDEN_HEIGHT, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -713,6 +713,41 @@ describe('generateWorld', { timeout: 20_000 }, () => {
         expect(generateWorld(seed, { ...counts, partners }).ships, `${seed} ${partners}`).toHaveLength(partners);
       }
     }
+  });
+
+  it('gives each Client its boat kind and each Partner its ship kind from its id, the same in every World', () => {
+    const clientIds = ['copperleaf-grocers', 'harbourside-health', 'isles-ferry-line', 'meridian-ledger', 'northbank-paper', 'port-meridian-authority'];
+    const partnerIds = ['cumulus-cloudworks', 'quarry-lakehouse', 'tessellate'];
+    const ids = { ...counts, clients: clientIds.length, partners: partnerIds.length, clientIds, partnerIds };
+    const first = generateWorld(sampledSeeds[0]!, ids);
+    const boatKinds = first.boats.map((b) => b.kind);
+    const shipKinds = first.ships.map((s) => s.kind);
+    const biomes = new Set<string>();
+    for (const seed of sampledSeeds.slice(0, 60)) {
+      const world = generateWorld(seed, ids);
+      biomes.add(world.biome.id);
+      expect(world.boats.map((b) => b.kind), seed).toEqual(boatKinds);
+      expect(world.ships.map((s) => s.kind), seed).toEqual(shipKinds);
+    }
+    expect([...biomes].sort()).toEqual([...BIOME_IDS].sort());
+    // A Client keeps its kind when others join or leave: the kind follows the id, not the place in the list.
+    const fewer = generateWorld(sampledSeeds[0]!, { ...ids, clients: 3, clientIds: clientIds.slice(3) });
+    expect(fewer.boats.map((b) => b.kind)).toEqual(boatKinds.slice(3));
+    expect(boatKinds.every((k) => k >= 1 && k <= BOAT_KINDS)).toBe(true);
+    expect(shipKinds.every((k) => k >= 1 && k <= SHIP_KINDS)).toBe(true);
+  });
+
+  it('spreads kinds: over many ids, every boat kind and every ship kind is used', () => {
+    const many = Array.from({ length: 40 }, (_, i) => `client-${i}`);
+    const world = generateWorld('harbour', { ...counts, clients: 12, partners: 40, clientIds: many, partnerIds: many });
+    expect(new Set(world.boats.map((b) => b.kind)).size).toBe(BOAT_KINDS);
+    expect(new Set(world.ships.map((s) => s.kind)).size).toBe(SHIP_KINDS);
+  });
+
+  it('still gives every boat and ship a kind without ids (counts only)', () => {
+    const world = generateWorld('harbour', counts);
+    expect(world.boats.every((b) => b.kind >= 1 && b.kind <= BOAT_KINDS)).toBe(true);
+    expect(world.ships.every((s) => s.kind >= 1 && s.kind <= SHIP_KINDS)).toBe(true);
   });
 
   /** Is the point inside the loop through these cells' centres? Ray casting along +x. */

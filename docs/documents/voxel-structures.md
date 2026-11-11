@@ -7,8 +7,8 @@ or repeated with instancing, and how to review structures in the Model
 Gallery.
 
 - Files: `site/src/structures/<kind>/<biome>-<variant>.structure` (`house`,
-  `station`, `mailbox`, `dock`; `room` and `developer` for the House
-  Interior)
+  `station`, `mailbox`, `dock`, `garden`; `tree` and `flower`; `boat` and
+  `ship`; `room` and `developer` for the House Interior)
 - Code: `site/src/structures/` (parser, roles, registry, Vite plugin),
   `site/src/render/structureModels.ts` (placing), `structureMeshes.ts`
   (instancing), `interiorModel.ts` (the House Interior's room), `site/src/dev/` and `site/src/integrations/modelGallery.ts`
@@ -17,7 +17,7 @@ Gallery.
   `docs/adr/0006-voxel-resolution-tiers.md`
 - Tests: `structures/parse.test.ts`, `structures/structures.test.ts`,
   `render/structureModels.test.ts`, `render/structureMeshes.test.ts`,
-  `render/interiorModel.test.ts`
+  `render/interiorModel.test.ts`, `render/vesselModels.test.ts`
 
 ## The format
 
@@ -46,12 +46,12 @@ layers 2-7
 
 | Field | Meaning |
 |---|---|
-| `kind` | What the structure is: a Landmark (`house`, `station`, `mailbox`, `dock`, `garden`: the Garden's fence), a Garden plant (`tree`, `flower`), a House Interior `room` or the `developer`; later boats, ships, Decoration, creatures. |
+| `kind` | What the structure is: a Landmark (`house`, `station`, `mailbox`, `dock`, `garden`: the Garden's fence), a Garden plant (`tree`, `flower`), a Client's `boat` or a Partner's `ship`, a House Interior `room` or the `developer`; later Decoration, creatures. |
 | `biome` | The Biome whose style it is (`tropical`, `northern`, `autumn`, `volcanic`), or `any` for one shared by every Biome. |
-| `variant` | Its Variant number within that kind and Biome, from 1 with no gaps. |
+| `variant` | Its Variant number within that kind and Biome, from 1 with no gaps. For a boat or ship it is the vessel's kind. |
 | `footprint` | Its footprint in cells, `<width>x<depth>`; each cell is `scale` voxels (8 by default), so every layer is `scale × width` characters wide and `scale × depth` rows deep. |
 | `door` | The face its door is on, `+x`, `-x`, `+z` or `-z`, or `none`. Draw doors on `+z` (south): a placement turns the structure to face its Landmark's way. |
-| `anchor` | The voxel corner (x, y, z) that stands on the footprint's min corner, on the ground. `0 0 0` for anything that stands on its footprint; the Dock's things use `0 -2 0`, so their first layer stands on the Dock's ¼-unit deck; a boat's anchor will sit at its waterline. |
+| `anchor` | The voxel corner (x, y, z) that stands on the footprint's min corner, on the ground. `0 0 0` for anything that stands on its footprint; the Dock's things use `0 -2 0`, so their first layer stands on the Dock's ¼-unit deck. Boats and ships use `0 0 0` and stand on the sea floor, their first layer under the water. |
 | `interior` | Optional: a box of voxels (min x y z, then max x y z, max exclusive) that must stay empty, for a room. |
 | `scale` | Optional: voxels a unit, `8` (the default, ⅛ unit) or `16` (1/16 unit: the House Interior's rooms and the developer). |
 | `developer` | Optional, a room's: the voxel (x y z) where the seated developer's anchor goes. |
@@ -80,6 +80,7 @@ the terrain:
 | Walls | `wall`, `wallShade`, `bamboo`, `bambooDark`, `timber`, `timberDark`, `brick`, `brickDark`, `mortar`, `stone`, `stoneDark` |
 | Roofs | `roof`, `thatch`, `thatchDark`, `shingle`, `shingleDark`, `tile`, `tileDark`, `slate`, `slateDark`, `snow` |
 | Openings and trim | `door`, `doorWood`, `window`, `frame`, `trim`, `accent` (the Biome's accent), `metal`, `metalDark`, `flag` (a mailbox's red flag), `canvas` (sail, awning, rope), `lamp` |
+| Hulls | `hullRed`, `hullRedDark`, `hullNavy`, `hullNavyDark` (painted hulls; wooden and iron hulls use `bamboo`, `timber`, `slate` and their dark shades) |
 | Plants | `foliage`, `foliageLight`, `foliageDark` (the Biome's foliage), `leafGold` (autumn leaves), `flower`, `flowerLight`, and for the Garden's flowers `stem`, `stemLight`, `stemDark` (one green in every Biome), `petalWhite`, `petalYellow`, `petalOrange`, `petalRed`, `petalBlue`, `petalBlueLight` and `pollen` |
 | House Interior | `screen` (the computer's screen, which glows with code), `fire` (a hearth or brazier), `desk`, `chair`, and the developer's `skin`, `hair`, `shirt`, `trousers`, `shoe` |
 
@@ -154,16 +155,18 @@ greedy-meshed once with it, with the soft-voxel material at ⅛ unit.
 ## Repeated structures
 
 `render/structureMeshes.ts` draws structures that repeat (the Garden's
-flowers and trees; later Decoration, boats, ships): `structureInstances(structure,
+flowers and trees, the boats and ships; later Decoration): `structureInstances(structure,
 colours, placements, { part?, pivot? })` meshes the structure once
 (`structureGeometry`) and draws every copy as one `InstancedMesh`, in the
 soft-voxel material in local space. A placement is a point in world units
 and a number of quarter turns about a pivot (by default the middle of the
 footprint, on the ground); `instanceMatrix` builds its transform (one
 quarter turn takes +z to +x). Copies move by whole voxels and turn by
-quarter turns, so their seams stay on voxel edges. The Model Gallery uses
-it for every model, and the World for the Garden's plants (`render/garden.ts`,
-see "The Garden" below).
+quarter turns, so their seams stay on voxel edges; a sailing ship turns by
+any fraction (its heading), its seams turning with it. The Model Gallery
+uses it for every model, and the World for the Garden's plants
+(`render/garden.ts`, see "The Garden" below) and the boats and ships
+(`render/boats.ts`, `render/ships.ts`; see "Boats and ships").
 
 ## The Landmark Variants
 
@@ -294,6 +297,45 @@ fence's size, empty bed and gate, the trees' height and 6×6 crown and the
 flowers' height and bloom. The fence is the one structure that does not
 fill its whole footprint (its bed is empty).
 
+## Boats and ships
+
+Polish ticket 06. Each Client's boat and each Partner's ship comes in a
+kind that follows its owner's id (`world-generator.md`, "Boat and ship
+kinds"), styled per Biome: `boat/<biome>-<kind>` (3 kinds) and
+`ship/<biome>-<kind>` (3 kinds), 24 files. `BOAT_KINDS` and `SHIP_KINDS`
+(`world/vessels.ts`) are the counts; a data test holds the files to them.
+They were drawn with a throwaway generator script (a hull helper: a beam
+per row, a narrower keel, a deck and a gunwale) and committed as plain
+ASCII; edit the files directly. Every one is drawn with its bow towards +z
+(`door: none`), standing on the sea floor (anchor `0 0 0`), its first layer
+under the water.
+
+- **Boats** (1×1, 8×8): 6–8 long, 4–6 across, 4–8 tall.
+  1. A rowing boat: two thwarts, a bow post, oars in their rowlocks.
+  2. A sailing dinghy: a mast forward of the middle, a triangular sail on
+     a boom, a pennant.
+  3. A fishing boat: a wheelhouse at the stern with a window to the bow, a
+     short mast forward.
+- **Ships** (1×3, 8×24): 23–24 long, 8 across, 20–29 tall.
+  1. A two-masted schooner: square sails on both masts, a jib to the
+     bowsprit, a low cabin aft.
+  2. A steamer: two decks of cabins with rows of windows, the bridge on
+     top, a banded funnel, a mast at the bow.
+  3. A cargo trader: the bridge house at the stern with an antenna light,
+     stacks of crates forward, a crane over them.
+
+| Biome | Boats | Ships |
+|---|---|---|
+| tropical | bamboo hulls, pink gunwales; the rowing boat is a canoe with an outrigger float; a thatched wheelhouse | white hulls with a pink gunwale, bamboo cabins, thatched roofs, a pink funnel |
+| northern | red hulls, white gunwales, snow on the seats and the wheelhouse | red hulls with a white gunwale, timber cabins under snow, a black funnel with a red band, snow on the crates |
+| autumn | timber hulls, green gunwales, a gold sail, a tiled wheelhouse | navy hulls with a gold gunwale, white cabins, tiled roofs, a red funnel |
+| volcanic | iron (slate) hulls, ember gunwales, a red sail, a lantern at the stern | slate hulls with an ember gunwale, stone cabins, red sails, an ember glowing in the funnel |
+
+`structures.test.ts` checks that every Biome has one boat per boat kind
+and one ship per ship kind, numbered from 1; each boat's and ship's size;
+that every ship is at least twice as long as any boat, 2.5 times as tall
+and five times the voxels; and that each hull narrows towards its bow (+z).
+
 ## The House Interior rooms
 
 One room per Biome (polish ticket 04), drawn at 1/16 unit (`scale: 16`,
@@ -370,7 +412,9 @@ turn; **Lift lids** lifts the House lids to show the interior; a House
 Interior room (kind `room`) shows furnished, the developer at the
 computer, at its own 1/16 unit; a Garden fence (kind `garden`) shows
 planted full, six flowers and three trees, as a World lays them out
-(`plantedGarden`); **Night**
+(`plantedGarden`); boats and ships float on a patch of their Biome's
+shallow sea (darker at Night), its top at sea level as in the World, the
+boats packed closer so each shows larger; **Night**
 switches the light, and the page's own colours follow (the site's theme
 tokens and fonts). On a phone the buttons show icons only (their names stay
 as tooltips and for screen readers). It renders on demand and on resize.

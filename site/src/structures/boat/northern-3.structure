@@ -1,0 +1,80 @@
+# Boat, northern, kind 3: a fishing boat: a wheelhouse at the stern with a window to the bow, a short mast forward; a red hull, white trim, snow on top.
+# The bow points +z. It stands on the sea floor: layer 0 is under the water.
+kind: boat
+biome: northern
+variant: 3
+footprint: 1x1
+door: none
+anchor: 0 0 0
+key:
+  D deck
+  G window
+  H hullRed
+  M post
+  R snow
+  T wall
+  W wall
+  n snow
+layer 0
+..HHHH..
+..HHHH..
+..HHHH..
+..HHHH..
+..HHHH..
+..HHHH..
+...HH...
+........
+layer 1
+.HHHHHH.
+.HDDDDH.
+.HDDDDH.
+.HDDDDH.
+.HDDDDH.
+.HDDDDH.
+..HDDH..
+...HH...
+layer 2
+.TTTTTT.
+.TWWWWT.
+.TWWWWT.
+.TWWWWT.
+.T....T.
+.T.MD.T.
+..T..T..
+...TT...
+layer 3
+........
+..WWWW..
+..WWWW..
+..WWWW..
+........
+...M....
+........
+........
+layer 4
+........
+..WWWW..
+..WWWW..
+..WGGW..
+........
+...M....
+........
+........
+layer 5
+..RRRR..
+..RRRR..
+..RRRR..
+..RRRR..
+........
+...M....
+........
+........
+layer 6
+........
+..nnnn..
+..nnnn..
+........
+........
+...T....
+........
+........

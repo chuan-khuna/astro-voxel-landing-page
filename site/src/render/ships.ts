@@ -1,18 +1,17 @@
 /**
- * The Partners' ships as three.js meshes: one shared ship geometry with the
- * soft-voxel material in local space (so the seams sail with the ship), one
- * mesh per Partner, each moved along its loop by `sail(seconds)`.
+ * The Partners' ships as three.js objects: one `InstancedMesh` per ship
+ * structure (a kind in the World's Biome, `vesselModels.ts`), one instance
+ * per Partner of that kind, each moved along its loop by `sail(seconds)`.
  *
  * Ships cast no shadow: the sun's shadow map is static and would leave a
  * moving ship's shadow behind.
  */
 import * as THREE from 'three/webgpu';
-import type { World } from '../world';
-import { meshVoxels, triangleCount } from './mesher';
-import { LOOK } from './palette';
+import type { World } from '@/world';
+import type { Structure } from '@/structures';
 import { sailingPath, shipPose, type SailingPath } from './shipMotion';
-import { shipVoxels, SHIP_ORIGIN } from './vesselModels';
-import { voxelMaterial } from './voxelMaterial';
+import { structureInstances } from './structureMeshes';
+import { shipPlacement, vesselStructure } from './vesselModels';
 import { worldColours } from './worldVoxels';
 
 /** Sailing speed, in world units (cells) per second: slow, ambient. */
@@ -37,53 +36,36 @@ export function buildFleet(world: World): Fleet {
   }
 
   const colours = worldColours(world);
-  const grid = shipVoxels(colours);
-  const [chunk] = meshVoxels(grid, {
-    colours: colours.table.colours,
-    aoStrength: LOOK.aoStrength,
-    chunkSize: 64,
-    solidOutside: (_x, y) => y < 0,
-  });
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(chunk!.positions, 3));
-  geometry.setAttribute('normal', new THREE.BufferAttribute(chunk!.normals, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(chunk!.colours, 3));
-  geometry.setIndex(new THREE.BufferAttribute(chunk!.indices, 1));
-  // Turn about the middle of the waterline: whole ¼ voxels, so the seams stay on the voxel edges.
-  geometry.translate(-SHIP_ORIGIN.x * grid.size, -SHIP_ORIGIN.y * grid.size, -SHIP_ORIGIN.z * grid.size);
-  geometry.computeBoundingSphere();
-  const material = voxelMaterial(grid.size, 'local');
-
   const paths = new Map<World['ships'][number]['cells'], SailingPath>();
-  const ships = world.ships.map((route) => {
+  const byStructure = new Map<Structure, Array<{ path: SailingPath; start: number }>>();
+  for (const route of world.ships) {
     if (!paths.has(route.cells)) paths.set(route.cells, sailingPath(route.cells));
     const path = paths.get(route.cells)!;
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.name = 'ship';
-    mesh.castShadow = false;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-    return { mesh, path, start: route.phase * path.length };
-  });
+    const structure = vesselStructure('ship', world.biome.id, route.kind);
+    const ships = byStructure.get(structure) ?? [];
+    ships.push({ path, start: route.phase * path.length });
+    byStructure.set(structure, ships);
+  }
 
-  const sail = (seconds: number) => {
-    for (const { mesh, path, start } of ships) {
-      const pose = shipPose(path, start + seconds * SHIP_SPEED);
-      mesh.position.set(pose.x, 0, pose.z);
-      // The bow is +x; a turn about y by a takes +x to (cos a, −sin a).
-      mesh.rotation.y = -pose.heading;
-    }
-  };
-  sail(0);
+  const placementsAt = (ships: Array<{ path: SailingPath; start: number }>, seconds: number) =>
+    ships.map(({ path, start }) => shipPlacement(shipPose(path, start + seconds * SHIP_SPEED)));
+  const kinds = [...byStructure].map(([structure, ships]) => {
+    const instances = structureInstances(structure, colours, placementsAt(ships, 0));
+    instances.mesh.name = 'ships';
+    instances.mesh.castShadow = false;
+    group.add(instances.mesh);
+    return { ships, instances };
+  });
 
   return {
     group,
-    count: ships.length,
-    triangles: triangleCount([chunk!]) * ships.length,
-    sail,
+    count: world.ships.length,
+    triangles: kinds.reduce((sum, k) => sum + k.instances.triangles, 0),
+    sail: (seconds) => {
+      for (const { ships, instances } of kinds) instances.setPlacements(placementsAt(ships, seconds));
+    },
     dispose: () => {
-      geometry.dispose();
-      material.dispose();
+      for (const { instances } of kinds) instances.dispose();
     },
   };
 }

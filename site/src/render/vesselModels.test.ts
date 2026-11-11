@@ -1,61 +1,73 @@
 import { describe, expect, it } from 'vitest';
-import { generateWorld } from '@/world';
-import { VoxelGrid } from './mesher';
-import { drawBoat, shipVoxels, SHIP_ORIGIN } from './vesselModels';
-import { worldColours } from './worldVoxels';
-import { GROUND_DETAIL } from './voxelTiers';
+import { BIOME_IDS, BOAT_KINDS, SHIP_KINDS, generateWorld, type Facing } from '@/world';
+import { structureVoxels, type Structure } from '@/structures/parse';
+import { instanceMatrix, type InstancePlacement } from './structureMeshes';
+import { boatPlacement, boatsOf, shipPlacement, vesselStructure } from './vesselModels';
 
-const world = generateWorld('harbour', { projects: 6, clients: 12, partners: 3 });
-const colours = worldColours(world);
-
-/** The ¼-voxel box a grid's voxels fill. */
-const extent = (grid: VoxelGrid) => {
-  const all = [...grid.voxels()];
-  const span = (axis: 'x' | 'y' | 'z') => Math.max(...all.map((v) => v[axis])) - Math.min(...all.map((v) => v[axis])) + 1;
-  return { x: span('x'), y: span('y'), z: span('z'), min: Math.min(...all.map((v) => v.y)) };
+/** Where a structure voxel's middle lands in the World under a placement (pivot: footprint middle on the ground). */
+const placed = (s: Structure, placement: InstancePlacement) => {
+  const pivot = { x: s.size.x / s.scale / 2, y: 0, z: s.size.z / s.scale / 2 };
+  const m = instanceMatrix(placement, pivot);
+  return (v: { x: number; y: number; z: number }) => {
+    const [x, y, z] = [(v.x + 0.5) / s.scale, (v.y + 0.5) / s.scale, (v.z + 0.5) / s.scale];
+    return { x: m[0]! * x + m[4]! * y + m[8]! * z + m[12]!, y: m[1]! * x + m[5]! * y + m[9]! * z + m[13]!, z: m[2]! * x + m[6]! * y + m[10]! * z + m[14]! };
+  };
+};
+/** The middle of the voxels in a structure's frontmost (bow) row and of all its voxels, placed. */
+const bowAndMiddle = (s: Structure, placement: InstancePlacement) => {
+  const all = [...structureVoxels(s)];
+  const bowZ = Math.max(...all.map((v) => v.z));
+  const at = placed(s, placement);
+  const mean = (vs: typeof all) => {
+    const ps = vs.map(at);
+    return { x: ps.reduce((a, p) => a + p.x, 0) / ps.length, z: ps.reduce((a, p) => a + p.z, 0) / ps.length };
+  };
+  return { bow: mean(all.filter((v) => v.z === bowZ)), middle: mean(all) };
 };
 
 describe('vessel models', () => {
-  it('draws each boat inside its own cell, floating from the sea floor up', () => {
-    for (const boat of world.boats) {
-      const grid = new VoxelGrid(1 / GROUND_DETAIL);
-      drawBoat(boat, grid, colours);
-      expect(grid.count).toBeGreaterThan(0);
-      for (const v of grid.voxels()) {
-        expect(Math.floor(v.x / GROUND_DETAIL)).toBe(boat.cell.x);
-        expect(Math.floor(v.z / GROUND_DETAIL)).toBe(boat.cell.z);
-        expect(v.y).toBeGreaterThanOrEqual(0);
+  it('takes each boat and ship from its kind in the World’s Biome', () => {
+    for (const biome of BIOME_IDS) {
+      for (let kind = 1; kind <= BOAT_KINDS; kind++) expect(vesselStructure('boat', biome, kind)).toMatchObject({ kind: 'boat', biome, variant: kind });
+      for (let kind = 1; kind <= SHIP_KINDS; kind++) expect(vesselStructure('ship', biome, kind)).toMatchObject({ kind: 'ship', biome, variant: kind });
+    }
+  });
+
+  it('moors each boat in its berth, its bow pointing along its facing and out of its cell nowhere', () => {
+    const towards: Record<Facing, [number, number]> = { east: [1, 0], west: [-1, 0], south: [0, 1], north: [0, -1] };
+    for (const facing of ['east', 'west', 'south', 'north'] as const) {
+      const boat = { cell: { x: 5, z: 9 }, facing, kind: 1 };
+      for (const biome of BIOME_IDS) {
+        const s = vesselStructure('boat', biome, 2);
+        const placement = boatPlacement(boat);
+        const { bow, middle } = bowAndMiddle(s, placement);
+        const [dx, dz] = towards[facing];
+        expect((bow.x - middle.x) * dx + (bow.z - middle.z) * dz, `${biome} ${facing}`).toBeGreaterThan(0.2);
+        for (const v of [...structureVoxels(s)].map(placed(s, placement))) {
+          expect(Math.floor(v.x)).toBe(5);
+          expect(Math.floor(v.z)).toBe(9);
+        }
       }
     }
   });
 
-  it('points each boat along its facing: longer that way than across', () => {
-    for (const boat of world.boats) {
-      const grid = new VoxelGrid(1 / GROUND_DETAIL);
-      drawBoat(boat, grid, colours);
-      const { x, z } = extent(grid);
-      if (boat.facing === 'east' || boat.facing === 'west') expect(x).toBeGreaterThan(z);
-      else expect(z).toBeGreaterThan(x);
+  it('gives every boat in a World its Client’s kind', () => {
+    const world = generateWorld('harbour', { projects: 4, clients: 6, partners: 3 });
+    const boats = boatsOf(world);
+    expect(boats.map((b) => b.structure.variant)).toEqual(world.boats.map((b) => b.kind));
+    expect(boats.every((b) => b.structure.biome === world.biome.id)).toBe(true);
+  });
+
+  it('sails a ship bow first along its heading, its middle on the path', () => {
+    for (const heading of [0, Math.PI / 2, Math.PI, -Math.PI / 2, 0.7, 2.5]) {
+      const s = vesselStructure('ship', 'northern', 1);
+      const placement = shipPlacement({ x: 10, z: 4, heading });
+      const { bow, middle } = bowAndMiddle(s, placement);
+      const along = (bow.x - middle.x) * Math.cos(heading) + (bow.z - middle.z) * Math.sin(heading);
+      const across = -(bow.x - middle.x) * Math.sin(heading) + (bow.z - middle.z) * Math.cos(heading);
+      expect(along, `${heading}`).toBeGreaterThan(0.8);
+      expect(Math.abs(across), `${heading}`).toBeLessThan(0.2);
+      expect(placement).toMatchObject({ x: 10, y: 0, z: 4 });
     }
-  });
-
-  it('makes a ship larger than a boat every way: longer, wider and taller', () => {
-    const boat = new VoxelGrid(1 / GROUND_DETAIL);
-    drawBoat({ cell: { x: 0, z: 0 }, facing: 'east' }, boat, colours);
-    const ship = extent(shipVoxels(colours));
-    const small = extent(boat);
-    expect(ship.x).toBeGreaterThanOrEqual(small.x * 2);
-    expect(ship.z).toBeGreaterThan(small.z);
-    expect(ship.y).toBeGreaterThan(small.y * 2);
-    expect(ship.min).toBe(0);
-  });
-
-  it('centres the ship on its origin, bow towards +x', () => {
-    const ship = shipVoxels(colours);
-    const all = [...ship.voxels()];
-    const xs = all.map((v) => v.x + 0.5 - SHIP_ORIGIN.x);
-    const zs = all.map((v) => v.z + 0.5 - SHIP_ORIGIN.z);
-    expect(Math.min(...xs) + Math.max(...xs)).toBeCloseTo(0, 5);
-    expect(Math.min(...zs) + Math.max(...zs)).toBeCloseTo(0, 5);
   });
 });

@@ -4,6 +4,7 @@ import { findPath, stairsAlong } from './paths';
 import { createRng } from './prng';
 import { LANDMARK_VARIANTS, houseYard, placeLandmarks } from './landmarks';
 import { sailingRoutes } from './ships';
+import { BOAT_KINDS, SHIP_KINDS, vesselIds, vesselKind } from './vessels';
 import { placeBuoys } from './buoys';
 import { buildStrata, buildTerrain } from './terrain';
 import { site } from '@/data/site';
@@ -56,12 +57,14 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
     if (!bridges) continue;
     const placement = placeLandmarks(rng, built.terrain, isles, bridges, { projects: counts.projects, pinned: counts.pinned ?? 0, boats: counts.clients });
     if (!placement) continue;
-    const { boats, terrain } = placement;
+    const { terrain } = placement;
+    const boats = withKinds(placement.boats, counts.clientIds, 'client', BOAT_KINDS);
     const found = dockToHouse(terrain, bridges, placement.landmarks);
     if (!found) continue;
     const landmarks = pickVariants(seed, biome.id, found.landmarks);
     const { route } = found;
-    const ships = sailingRoutes(terrain, isles, bridges, [...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)], counts.partners);
+    const routes = sailingRoutes(terrain, isles, bridges, [...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)], counts.partners);
+    const ships = withKinds(routes, counts.partnerIds, 'partner', SHIP_KINDS);
     return {
       seed,
       attempts: attempt + 1,
@@ -112,6 +115,15 @@ function dockToHouse(
     if (route) return { route, landmarks: landmarks.map((l) => (l === house ? { ...l, door } : l)) };
   }
   return null;
+}
+
+/**
+ * Give each boat (or ship) the kind of its Client (or Partner), in order:
+ * from the id alone, never the Seed, so it keeps its kind in every World.
+ */
+function withKinds<T>(vessels: T[], ids: readonly string[] | undefined, prefix: string, kinds: number): Array<T & { kind: number }> {
+  const owners = vesselIds(vessels.length, ids, prefix);
+  return vessels.map((v, i) => ({ ...v, kind: vesselKind(owners[i]!, kinds) }));
 }
 
 /**

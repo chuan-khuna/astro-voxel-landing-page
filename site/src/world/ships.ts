@@ -1,5 +1,8 @@
 import type { Bridge, Cell, Isle, ShipRoute, Terrain } from './types';
 
+/** A loop, before its Partner gives the ship a kind (`generateWorld`). */
+type Loop = Omit<ShipRoute, 'kind'>;
+
 /** How far past the terrain grid's edge ships may sail, in cells. */
 const SEA_PAD = 6;
 /** A ship's cell keeps at least this many cells (Chebyshev) from anything it could hit. */
@@ -42,7 +45,7 @@ interface Body {
  * No randomness: the loops follow from the layout. `obstacles` are sea cells
  * a ship must keep clear of (the jetty and the moored boats).
  */
-export function sailingRoutes(terrain: Terrain, isles: Isle[], bridges: Bridge[], obstacles: Cell[], count: number): ShipRoute[] {
+export function sailingRoutes(terrain: Terrain, isles: Isle[], bridges: Bridge[], obstacles: Cell[], count: number): Loop[] {
   if (count <= 0) return [];
   const sea = seaChart(terrain, bridges, obstacles);
 
