@@ -27,13 +27,16 @@
  *   House's windows and the buoys' lamps glow. Nothing moves, so the shadow
  *   map is kept; one frame is rendered.
  * - DPR is capped at 1.5 on touch devices and 2 elsewhere.
+ * - `onFrame(listener)` hears about every frame that renders anyway (its
+ *   time, triangles and draw calls), for the render stats overlay; it never
+ *   asks for a frame. `backend` says WebGPU or WebGL 2.
  */
 import * as THREE from 'three/webgpu';
-import type { LandmarkId, World } from '../world';
+import type { LandmarkId, World } from '@/world';
 import { LOOK, oklchToLinear } from './palette';
-import { THEME_TOKENS } from '../data/theme';
-import type { Theme } from '../lib/theme';
-import type { Oklch } from '../world';
+import { THEME_TOKENS } from '@/data/theme';
+import type { Theme } from '@/lib/theme';
+import type { Oklch } from '@/world';
 import { createCameraRig, type CameraRig } from './cameraRig';
 import { createLandmarkHotspots } from './landmarkHotspots';
 import { createDataCards } from './dataCards';
@@ -89,7 +92,24 @@ export interface WorldView {
   setInterior(open: boolean, ms: number): void;
   /** Show the World by Day or by Night. Kept across `show`. */
   setTheme(theme: Theme): void;
+  /**
+   * Hear about each frame after it renders (the render stats overlay).
+   * Never causes a frame: only frames that render anyway are reported.
+   * Returns a function that stops listening.
+   */
+  onFrame(listener: (frame: FrameInfo) => void): () => void;
+  /** The renderer's backend: WebGPU, or the WebGL 2 fallback. */
+  readonly backend: 'webgpu' | 'webgl2';
   dispose(): void;
+}
+
+/** One rendered frame, as `onFrame` reports it. */
+export interface FrameInfo {
+  /** The frame's `requestAnimationFrame` time, ms. */
+  now: number;
+  /** Triangles and draw calls in this frame (the shadow map's pass included when it rendered). */
+  triangles: number;
+  drawCalls: number;
 }
 
 
@@ -175,6 +195,7 @@ export async function mountWorld(
   const moving = () => sailing() || lifting() || working();
   /** The time of the last frame while something moved (0 when nothing did). */
   let lastTick = 0;
+  const frameListeners = new Set<(frame: FrameInfo) => void>();
   const requestRender = () => {
     if (frame) return;
     frame = requestAnimationFrame((now) => {
@@ -203,6 +224,11 @@ export async function mountWorld(
       cards.place(camera, rig.state, viewCentre);
       renderer.render(scene, camera);
       idleRenderer();
+      if (frameListeners.size > 0) {
+        // `render()` restarts three's animation loop, which resets the counts first: they are this frame's.
+        const info = { now, triangles: renderer.info.render.triangles, drawCalls: renderer.info.render.drawCalls };
+        for (const listener of frameListeners) listener(info);
+      }
       canvas.dataset.frames = String(++frames);
       const { target, zoom } = rig.state;
       canvas.dataset.camera = `${target.x.toFixed(2)} ${target.z.toFixed(2)} ${zoom.toFixed(3)}`;
@@ -301,7 +327,8 @@ export async function mountWorld(
   const observer = new ResizeObserver(resize);
   observer.observe(canvas);
   resize();
-  canvas.dataset.backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl2';
+  const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl2';
+  canvas.dataset.backend = backend;
 
 
   const focusState = (id: LandmarkId, at: ScreenOffset = { x: 0, y: 0 }) => {
@@ -328,6 +355,11 @@ export async function mountWorld(
       objects?.setTheme(theme);
       requestRender();
     },
+    onFrame: (listener) => {
+      frameListeners.add(listener);
+      return () => frameListeners.delete(listener);
+    },
+    backend,
     setViewCentre: (at) => {
       viewCentre = at;
       lookAtViewCentre();
@@ -335,6 +367,7 @@ export async function mountWorld(
     },
     dispose: () => {
       cancelAnimationFrame(frame);
+      frameListeners.clear();
       stillness.removeEventListener('change', wake);
       document.removeEventListener('visibilitychange', wake);
       rig.dispose();

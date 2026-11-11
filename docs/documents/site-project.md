@@ -48,6 +48,7 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/world/` | The World generator. See `world-generator.md`. |
 | `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`), camera rig (pan, zoom and flights), Landmark focus and hotspots. See `rendering-and-shading.md`. |
 | `src/lib/theme.ts` | Which theme shows: `ThemeChoice` (`auto`, `day`, `night`), `parseThemeChoice` (a stored value; Auto for anything else), `resolveTheme(choice, prefersDark)`, `nextThemeChoice` (Auto → Day → Night → Auto) and `themeBootScript`, the inline `<head>` script. Tested in `theme.test.ts` (the boot script runs against a fake page). |
+| `src/lib/renderStats.ts` | The render stats overlay's rules: `statsAvailable(dev, url)` (in `astro dev`, or with `?stats`), `parseStatsOn` (the stored on or off) and `withStats` (keep `?stats` on a route link). Tested in `renderStats.test.ts`. See "Render stats". |
 | `src/lib/seedUrl.ts` | The Seed in the URL: `seedFromUrl`, `rollSeed` (numeric) and `withSeed` (keep the Seed on a route link). Tested in `seedUrl.test.ts`. |
 | `src/lib/gardenTrees.ts` | `treeOrder(projects)`: Projects sorted by id (tree order). `gardenTrees(world, projectIds)`: the World's tree cells, each paired with its Project (tree `k` is the `k`-th Project by id; none beyond the cap). Tested in `gardenTrees.test.ts`. |
 | `src/lib/contactDetails.ts` | `contactDetails(company)`: the Contact panel's details, from `site.company`: email, phone, address, then each social, each with a label, the text shown and a link (none for the address). Tested in `contactDetails.test.ts`. |
@@ -304,7 +305,39 @@ route on every `astro:after-swap`:
   `aria-busy` while a World is loading.
 - **Seed across routes:** after each World is shown and after each page
   swap, every `a[data-seed-link]` is rewritten with `withSeed`, e.g.
-  `/garden?seed=1234`. The default Seed is left out of links.
+  `/garden?seed=1234`. The default Seed is left out of links. With
+  `?stats` in the URL, `withStats` keeps it on them too.
+
+### Render stats
+
+A developer's overlay (ticket 20), available only in `astro dev` or with
+`?stats` in the URL (`statsAvailable`). Otherwise the page script never
+imports it, so production pages carry no toggle, no card and no stats
+styles (its CSS is imported `?inline` and added by the module itself; a
+plain CSS import would be hoisted onto every page).
+
+- **Toggle:** an icon button (bars) right after the dice, inside the
+  persisted bottom-left card, with `aria-label="Render stats"` and
+  `aria-pressed`. Its state is kept in `localStorage` (`render-stats`:
+  `on` or `off`, wrapped in try/catch), so it survives route changes,
+  reloads and Seed rolls. With nothing stored it starts on with `?stats`
+  and off in dev.
+- **Card:** inside the persisted World frame, so it lies under the HUD: a
+  panel or sheet is never covered by it. It sits below the Landmark menu bar
+  (`.hud-tools`), at the right; left of a side panel on desktop; on phones
+  below the menu button. Its height stops above any floating card below it
+  (the dice card, a sheet), leaving out rows that do not fit whole. It has
+  `pointer-events: none`. Same card tokens as the HUD, so it follows Day
+  and Night; monospace, tabular figures.
+- **What it shows:** FPS and frame time (`frameMeter.ts`; `idle` when no
+  frame has rendered for 0.5 s or only a lone on-demand frame did),
+  triangles and draw calls of the last frame (the renderer's info), the
+  backend (WebGPU or WebGL 2), the Seed and Biome, the generate time (from
+  the worker; `cached` on a cache hit) and retries (`attempts - 1`), and
+  voxels in total and by kind (`countVoxels`, once per World shown, only
+  while the card is on).
+- **Cost:** it never requests a frame. `view.onFrame` reports frames that
+  render anyway; the text is rewritten every 250 ms while the card is on.
 
 ## Projects
 
@@ -412,4 +445,5 @@ has a mesher with culling, baked AO and greedy merging, a TSL material for
 seams, bevel and colour jitter, a static sun shadow map, and frames only on
 demand: while the camera moves, while the Partners' ships sail and while
 the House is open (the developer at work) or its lid moves (never under
-reduced motion). See `rendering-and-shading.md`.
+reduced motion). `onFrame` reports each frame (time, triangles, draw calls)
+to the render stats overlay without asking for any. See `rendering-and-shading.md`.

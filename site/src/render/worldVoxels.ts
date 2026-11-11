@@ -10,7 +10,7 @@
  *
  * Both grids index one shared colour list.
  */
-import type { BiomeColourRole, Oklch, World } from '../world';
+import type { BiomeColourRole, Oklch, PlacedLandmark, World } from '@/world';
 import { buildLandmark } from './landmarkModels';
 import { drawBoat } from './vesselModels';
 import { drawBuoy } from './buoyModel';
@@ -118,13 +118,33 @@ export function worldToVoxels(world: World): WorldVoxels {
   };
 
   const detail = new VoxelGrid(1 / DETAIL);
-  addBridges(world, detail, colours);
-  addStairs(world, detail, colours);
-  for (const landmark of world.landmarks) buildLandmark(landmark, detail, colours);
-  for (const boat of world.boats) drawBoat(boat, detail, colours);
-  for (const buoy of world.buoys) drawBuoy(buoy, detail, colours);
+  drawDetail(world, detail, colours);
 
   return { terrain, detail, colours: colours.table.colours, terrainSolid };
+}
+
+/** What `drawDetail` has just drawn: a group of parts, or one Landmark. */
+export type DetailPart = { kind: 'bridges' | 'stairs' | 'boats' | 'buoys' } | { kind: 'landmark'; landmark: PlacedLandmark };
+
+/**
+ * Draw everything built on the terrain into the ¼-unit detail grid: bridge
+ * decks, stairs, the Landmark models, the moored boats and the buoys, in
+ * that order. `drawn` is told after each part (the render stats overlay
+ * counts voxels by kind this way).
+ */
+export function drawDetail(world: World, grid: VoxelGrid, colours: WorldColours, drawn?: (part: DetailPart) => void): void {
+  addBridges(world, grid, colours);
+  drawn?.({ kind: 'bridges' });
+  addStairs(world, grid, colours);
+  drawn?.({ kind: 'stairs' });
+  for (const landmark of world.landmarks) {
+    buildLandmark(landmark, grid, colours);
+    drawn?.({ kind: 'landmark', landmark });
+  }
+  for (const boat of world.boats) drawBoat(boat, grid, colours);
+  drawn?.({ kind: 'boats' });
+  for (const buoy of world.buoys) drawBuoy(buoy, grid, colours);
+  drawn?.({ kind: 'buoys' });
 }
 
 /** A plank deck per bridge cell, one ¼ voxel thick, its top level with both ends. */

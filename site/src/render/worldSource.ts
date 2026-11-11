@@ -5,7 +5,7 @@
  *
  * If a Worker cannot start, it generates on the main thread instead.
  */
-import { generateWorld, type ContentCounts, type World } from '../world';
+import { generateWorld, type ContentCounts, type World } from '@/world';
 import { meshWorld, type MeshedWorld } from './worldVoxels';
 
 export interface WorldRequest {
@@ -15,7 +15,7 @@ export interface WorldRequest {
 }
 
 export type WorldResponse =
-  | { id: number; world: World; meshed: MeshedWorld; ms: number; error?: undefined }
+  | { id: number; world: World; meshed: MeshedWorld; ms: number; generateMs: number; error?: undefined }
   | { id: number; error: string };
 
 export interface LoadedWorld {
@@ -23,6 +23,8 @@ export interface LoadedWorld {
   meshed: MeshedWorld;
   /** Time to generate and mesh, in ms (worker time; 0 when served from the cache). */
   ms: number;
+  /** Time to generate alone, in ms, when the World was built (kept on a cache hit). */
+  generateMs: number;
 }
 
 /** Worlds kept in the cache; the oldest is dropped beyond this. */
@@ -47,7 +49,7 @@ export function createWorldSource(): WorldSource {
       if (!request) return;
       pending.delete(response.id);
       if (response.error !== undefined) request.reject(new Error(response.error));
-      else request.resolve({ world: response.world, meshed: response.meshed, ms: response.ms });
+      else request.resolve({ world: response.world, meshed: response.meshed, ms: response.ms, generateMs: response.generateMs });
     };
     worker.onerror = (event) => {
       for (const request of pending.values()) request.reject(new Error(`World worker failed: ${event.message}`));
@@ -61,7 +63,8 @@ export function createWorldSource(): WorldSource {
     if (!worker) {
       const started = performance.now();
       const world = generateWorld(seed, counts);
-      return Promise.resolve({ world, meshed: meshWorld(world), ms: performance.now() - started });
+      const generateMs = performance.now() - started;
+      return Promise.resolve({ world, meshed: meshWorld(world), ms: performance.now() - started, generateMs });
     }
     const id = nextId++;
     return new Promise((resolve, reject) => {

@@ -281,6 +281,13 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - **Fonts.** Jersey 20 for body text and Jersey 15 for headings (h1–h3, card titles, the company name), self-hosted from Fontsource with `font-display: swap` and a system fallback stack. The stacks live in the site data module. Body text is 20px (Jersey 20's pixel grid) and never below 16px; headings use multiples of 15px. All text meets WCAG AA.
 - **Done (ticket 19).** The layout switch is `<html data-world="live">`, set before first paint when the browser has WebGPU or WebGL 2 and dropped if the World fails to mount. The free part is `freeCentre` in `site/src/render/freeArea.ts`; the pan bounds hold the ground at `CameraLimits.at`. Brand-coloured text uses `--brand-ink` (the brand colour darkened) for AA.
 
+**Render stats overlay** (for developers; requested on 2026-11-11, ticket 20)
+- Only in `astro dev`, or in any build with `?stats` in the URL. Otherwise no toggle, no card, and the overlay's code and styles never load: production pages are unchanged.
+- A toggle (an icon button with `aria-label` and `aria-pressed`) sits right after the dice in the bottom-left card. Its on or off is kept per browser in `localStorage`; with nothing stored it is on with `?stats` and off in dev. `?stats` stays on route links and Seed rolls, like `?seed=`.
+- A card at the top right, below the Landmark menu bar (below the menu button on phones), shows FPS and frame time (`idle` when nothing renders), triangles and draw calls of the last frame, the backend, the Seed and Biome, the generate time and retries, and voxels in total and by kind (terrain, Landmarks, trees, House room, boats, ships, buoys, bridges, stairs).
+- It never asks for a frame: it reads frames that render anyway and rewrites its text at most 4 times a second. Voxels are counted once per World shown. It lies under the HUD (a panel or sheet is never covered; it moves left of a side panel and leaves out rows that would reach a sheet) and lets the pointer through.
+- **Done (ticket 20).** `lib/renderStats.ts` (when it is available, `withStats`), `render/frameMeter.ts` (FPS smoothing and idle), `render/voxelCounts.ts` (`countVoxels`), `render/statsOverlay.ts` (toggle and card) and `WorldView.onFrame`/`backend` in `mountWorld`.
+
 **Overlay UI**
 - **Section pages** open as a floating card on desktop and a bottom sheet on mobile (see Layout above).
 - **Landmark menu.** An HTML Landmark menu is always present and keyboard-reachable.

@@ -12,16 +12,20 @@
  * client router moves the same canvas, renderer, meshes and camera into each
  * new page; only the panel and the rest of the page are swapped. The script
  * runs once and follows the route on every `astro:after-swap`.
+ *
+ * In `astro dev`, or with `?stats` in the URL, the script also loads the
+ * render stats overlay (`render/statsOverlay.ts`): a toggle after the dice
+ * and a stats card. Otherwise none of it loads.
  */
 import Base from './Base.astro';
-import LandmarkMenu from '../components/LandmarkMenu.astro';
-import Logo from '../components/Logo.astro';
-import ThemeToggle from '../components/ThemeToggle.astro';
+import LandmarkMenu from '@/components/LandmarkMenu.astro';
+import Logo from '@/components/Logo.astro';
+import ThemeToggle from '@/components/ThemeToggle.astro';
 import { getCollection } from 'astro:content';
-import { site, landmarksInStoryOrder, type DataCardMetric } from '../data/site';
-import { MAX_TREES, PLACED_LANDMARK_IDS } from '../world';
-import type { ContentCounts, LandmarkId } from '../world';
-import { treeOrder } from '../lib/gardenTrees';
+import { site, landmarksInStoryOrder, type DataCardMetric } from '@/data/site';
+import { MAX_TREES, PLACED_LANDMARK_IDS } from '@/world';
+import type { ContentCounts, LandmarkId } from '@/world';
+import { treeOrder } from '@/lib/gardenTrees';
 
 interface Props {
   title?: string;
@@ -162,14 +166,16 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
 
 <script>
   import { navigate } from 'astro:transitions/client';
-  import { mountWorld, type ScreenOffset, type WorldView } from '../render/mountWorld';
-  import { freeCentre as freeCentreOf } from '../render/freeArea';
-  import { createWorldSource } from '../render/worldSource';
-  import type { CameraState } from '../render/cameraMath';
-  import { rollSeed, seedFromUrl, withSeed, SEED_PARAM } from '../lib/seedUrl';
-  import { landmarkForPath, routeView } from '../lib/landmarkRoutes';
-  import type { ContentCounts, LandmarkId } from '../world';
-  import type { Theme } from '../lib/theme';
+  import { mountWorld, type ScreenOffset, type WorldView } from '@/render/mountWorld';
+  import { freeCentre as freeCentreOf } from '@/render/freeArea';
+  import { createWorldSource } from '@/render/worldSource';
+  import type { CameraState } from '@/render/cameraMath';
+  import { rollSeed, seedFromUrl, withSeed, SEED_PARAM } from '@/lib/seedUrl';
+  import { landmarkForPath, routeView } from '@/lib/landmarkRoutes';
+  import { STATS_PARAM, statsAvailable, withStats } from '@/lib/renderStats';
+  import type { StatsOverlay } from '@/render/statsOverlay';
+  import type { ContentCounts, LandmarkId } from '@/world';
+  import type { Theme } from '@/lib/theme';
 
   /** How long a camera flight to a Landmark takes; a cut under reduced motion. */
   const FLIGHT_MS = 900;
@@ -203,16 +209,22 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     let worldState: CameraState | null = null;
     /** The World's Seed as generated (an over-long Seed falls back to the default). */
     let linkSeed = defaultSeed;
+    /** Render stats: only in dev or with `?stats`, decided once per visit (links keep `?stats`). */
+    const stats = statsAvailable(import.meta.env.DEV, new URL(location.href));
+    let overlay: StatsOverlay | null = null;
+    /** The World on show, for the stats overlay when it loads. */
+    let shown: Parameters<StatsOverlay['show']> | null = null;
 
     const currentTheme = (): Theme => (document.documentElement.dataset.theme === 'night' ? 'night' : 'day');
     const currentSeed = () => seedFromUrl(new URL(location.href)) ?? defaultSeed;
     const routeLandmark = () => landmarkForPath(location.pathname) ?? 'overview';
     const flightMs = () => (reducedMotion.matches ? 0 : FLIGHT_MS);
 
-    /** Keep the Seed on links to other routes (e.g. `/garden?seed=1234`). */
+    /** Keep the Seed on links to other routes (e.g. `/garden?seed=1234`), and `?stats` when stats are on. */
     const keepSeedOnLinks = () => {
       for (const link of document.querySelectorAll<HTMLAnchorElement>('a[data-seed-link]')) {
-        link.setAttribute('href', withSeed(link.getAttribute('href') ?? '/', linkSeed, defaultSeed, location.href));
+        const href = withSeed(link.getAttribute('href') ?? '/', linkSeed, defaultSeed, location.href);
+        link.setAttribute('href', stats && new URL(location.href).searchParams.has(STATS_PARAM) ? withStats(href, location.href) : href);
       }
     };
 
@@ -271,7 +283,7 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
       shownSeed = seed;
       frame.setAttribute('aria-busy', 'true');
       try {
-        const { world, meshed, ms } = await source.load(seed, counts);
+        const { world, meshed, ms, generateMs } = await source.load(seed, counts);
         if (request !== latest) return;
         let view: WorldView;
         if (!mounting) {
@@ -293,6 +305,8 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
         linkSeed = world.seed;
         keepSeedOnLinks();
         if (status) status.textContent = `Seed ${world.seed}`;
+        shown = [{ world, generateMs, cached: ms === 0 }, view];
+        overlay?.show(...shown);
       } catch (error: unknown) {
         console.error('World render failed', error);
         // No World to show: fall back to the normal page that scrolls.
@@ -343,6 +357,12 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     markCurrentLink();
     void showSeed(currentSeed());
+    if (stats && dice) {
+      void import('@/render/statsOverlay').then(({ createStatsOverlay }) => {
+        overlay = createStatsOverlay({ dice, frame });
+        if (shown) overlay.show(...shown);
+      });
+    }
   }
 </script>
 

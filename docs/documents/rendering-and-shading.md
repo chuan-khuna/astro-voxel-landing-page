@@ -9,7 +9,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 - Theme tokens: `site/src/data/theme.ts` (see "Day and Night")
 - Tests: `site/src/render/mesher.test.ts`, `cameraMath.test.ts`,
   `landmarkModels.test.ts`, `houseModel.test.ts`, `houseMotion.test.ts`,
-  `buoyModel.test.ts` and `dataCardMath.test.ts` (a few behavioural checks; the World generator
+  `buoyModel.test.ts`, `dataCardMath.test.ts`, `frameMeter.test.ts` and
+  `voxelCounts.test.ts` (a few behavioural checks; the World generator
   stays the main test seam)
 
 ## Code layout
@@ -18,7 +19,9 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 |---|---|---|
 | `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, its room and developer, placeholder parts, boat and ship hulls and sail, the buoys' lamp) as OKLCH, `oklchToLinear`. The sky and lights are theme tokens (`data/theme.ts`). | no |
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
-| `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid and the ¼-unit detail grid with a shared colour list. `meshWorld(world)`: both grids meshed. | no |
+| `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid and the ¼-unit detail grid with a shared colour list. `drawDetail(world, grid, colours, drawn?)`: the detail grid's parts in order (bridges, stairs, each Landmark, boats, buoys), telling `drawn` after each. `meshWorld(world)`: both grids meshed. | no |
+| `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, trees, House room, boats, ships, buoys, bridges, stairs), the total and those in the two meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); trees are the voxels in each tree's box (`treeExtent`), the House room those in `HOUSE_INTERIOR` plus the developer's moving parts; the lid counts with the Landmarks; ships are `shipVoxels` × ships. About 2 ms. | no |
+| `frameMeter.ts` | `createFrameMeter()`: FPS and frame time from frame timestamps, smoothed (exponential, 0.1); a gap over 250 ms ends a burst and the next starts afresh; `'idle'` with no frame for 500 ms or only a lone frame. | no |
 | `landmarkModels.ts` | The ¼-unit Landmark models (the Station's and the House's are real models; the rest are placeholders), each filling its footprint, and `landmarkExtent(landmark)`: the box a Landmark covers, measured from what its model draws and never smaller than its footprint. | no |
 | `buoyModel.ts` | `drawBuoy(cell, grid, colours)`: a buoy in the detail grid; `buoyLamp(cell)`: its lamp's box, which glows at Night. | no |
 | `houseModel.ts` | The House in parts: `drawHouseBase` (stays), `drawHouseLid` (lifts), `drawHouseRoom` (desk, computer, chair, plant, the developer's seated body) in `HOUSE_INTERIOR`, the developer's moving parts (`DEVELOPER_PARTS`, `drawDeveloperPart`), the `SCREEN` rectangle, the windows (`HOUSE_WINDOWS`) and `developerExtent` (the developer's box, for their link). | no |
@@ -34,7 +37,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `house.ts` | `buildHouse(world)`: the lid and the developer's head and hands as meshes, and the screen's code shader; the windows' lights; `setOpening` lifts the lid, `work(seconds)` animates the room, `setLights` lights the windows. | yes |
 | `ships.ts` | `buildFleet(world)`: one mesh per Partner ship, sharing one geometry, and `sail(seconds)` to move them along their loops. | yes |
 | `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `setTheme` recolours the sea and lights the lamps and windows. | yes |
-| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, opening the House, Day and Night, swapping Worlds. | yes |
+| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, opening the House, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
+| `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it. | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
 | `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, the Garden's tree links over their trees and, while the House is open, the developer's link over the developer. | yes |
@@ -260,13 +264,14 @@ along x) on sea cells within 2 cells of land. Both are opaque
 
 ## World Web Worker and cache
 
-`createWorldSource().load(seed, counts)` returns `{ world, meshed, ms }`:
+`createWorldSource().load(seed, counts)` returns `{ world, meshed, ms, generateMs }`:
 
 - It posts `{ id, seed, counts }` to `world.worker.ts`, which runs
   `generateWorld` and `meshWorld` and posts back the World and its
   `MeshedWorld` (chunk typed arrays). The mesh buffers are transferred, not
   copied. `ms` is the worker's generate-plus-mesh time (about 15–55 ms per
-  Seed in headless Chrome, far inside the 1 s budget).
+  Seed in headless Chrome, far inside the 1 s budget). `generateMs` is the
+  generate time alone; a cache hit keeps it.
 - Results are cached per Seed and content counts (the promise is cached, so
   two requests for one Seed share one build). The cache keeps the 16 most
   recently used Worlds; a cache hit reports `ms: 0`.
@@ -277,7 +282,7 @@ along x) on sea cells within 2 cells of land. Both are opaque
 ## Scene runtime
 
 `mountWorld(canvas, world, meshed?, ui?)` returns a `WorldView`
-`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), setViewCentre(at), setInterior(open, ms), setTheme(theme), dispose() }`. `ui` is
+`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), setViewCentre(at), setInterior(open, ms), setTheme(theme), onFrame(listener), backend, dispose() }`. `ui` is
 `{ frame, hotspots, cards?, theme? }`: the element round the canvas that takes pan and zoom
 input, the Landmark hotspot links inside it, the Data Cards and the theme of the first frame (default: the canvas's
 parent, no hotspots, no cards, Day). `setViewCentre(at)` says where the visitor
@@ -330,6 +335,12 @@ camera to a Landmark (see "Landmark focus and flights").
   frame through the internal `renderer._animation`, guarded in case it
   disappears, so an idle page schedules no `requestAnimationFrame` at all.
   Other animation should request frames only while it moves, like the ships.
+- **Frame reports:** `onFrame(listener)` (returns an unsubscribe) is told
+  after each frame renders: its `requestAnimationFrame` time, triangles and
+  draw calls from `renderer.info.render`. Those counts are the frame's own:
+  `render()` restarts three's animation loop, which resets them first. It
+  never requests a frame, and with no listener nothing is read. `backend`
+  is `webgpu` or `webgl2`. The render stats overlay uses both.
 - The canvas gets `data-seed` (the Seed actually used, after the default
   fallback), `data-triangles` (voxel triangle count), `data-backend`
   (`webgpu` or `webgl2`), `data-frames` (frames rendered so far),
