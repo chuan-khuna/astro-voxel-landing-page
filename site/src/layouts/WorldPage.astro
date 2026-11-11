@@ -1,7 +1,8 @@
 ---
 /**
- * Every page of the site: the World with its hotspots and dice button, the
- * Landmark menu, and (on a section page) the section's panel over the World.
+ * Every page of the site: the World with its hotspots, Data Cards and dice
+ * button, the Landmark menu, and (on a section page) the section's panel
+ * over the World.
  *
  * The World's frame and its controls carry `transition:persist`, so the
  * client router moves the same canvas, renderer, meshes and camera into each
@@ -11,9 +12,9 @@
 import Base from './Base.astro';
 import LandmarkMenu from '../components/LandmarkMenu.astro';
 import { getCollection } from 'astro:content';
-import { site } from '../data/site';
+import { site, landmarksInStoryOrder, type DataCardMetric } from '../data/site';
 import { MAX_TREES, PLACED_LANDMARK_IDS } from '../world';
-import type { ContentCounts } from '../world';
+import type { ContentCounts, LandmarkId } from '../world';
 import { treeOrder } from '../lib/gardenTrees';
 
 interface Props {
@@ -31,6 +32,12 @@ const counts: ContentCounts = { projects: projects.length, clients: 0, partners:
 const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly string[]).includes(l.id));
 // One link per Garden tree, right after the Garden's own link: a tree per Project, in order by id, up to the cap.
 const treeLinks = projects.slice(0, MAX_TREES);
+// One Data Card per Landmark with a metric in site data, in Story Order; the World lays each over its Landmark.
+const metrics: Partial<Record<LandmarkId, DataCardMetric>> = site.dataCards;
+const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
+  const metric = metrics[landmark.id];
+  return metric ? [{ id: landmark.id, metric }] : [];
+});
 ---
 
 <Base title={title} description={description}>
@@ -57,6 +64,15 @@ const treeLinks = projects.slice(0, MAX_TREES);
           aria-label={`A generated World for ${site.company.name}. Drag to pan, scroll or pinch to zoom.`}
           data-default-seed={site.defaultSeed}
           data-counts={JSON.stringify(counts)}></canvas>
+        <ul class="data-cards" aria-label={`${site.company.name} in figures`}>
+          {
+            dataCards.map(({ id, metric }) => (
+              <li class="data-card" data-card={id} hidden>
+                <span class="data-card-value">{metric.value}</span> <span class="data-card-label">{metric.label}</span>
+              </li>
+            ))
+          }
+        </ul>
         {
           hotspots.map((landmark) => (
             <>
@@ -120,6 +136,7 @@ const treeLinks = projects.slice(0, MAX_TREES);
   const status = document.querySelector<HTMLElement>('#world-status');
   if (canvas && frame) {
     const hotspots = [...frame.querySelectorAll<HTMLElement>('[data-hotspot]')];
+    const cards = [...frame.querySelectorAll<HTMLElement>('[data-card]')];
     const defaultSeed = canvas.dataset.defaultSeed ?? '';
     const counts = JSON.parse(canvas.dataset.counts ?? '{}') as ContentCounts;
     const source = createWorldSource();
@@ -177,6 +194,8 @@ const treeLinks = projects.slice(0, MAX_TREES);
     /** Move the camera for the route now showing: to its Landmark, or back to where the World was left. */
     const followRoute = (view: WorldView, ms: number) => {
       const id = routeLandmark();
+      // The Data Card shown is the one nearest where the visitor looks: beside the panel, if any.
+      view.setViewCentre(freeCentre());
       if (id === 'overview') {
         // A section opened directly has no earlier view of the World: go to the Overview.
         if (worldState) void view.camera.flyTo(worldState, ms);
@@ -198,7 +217,7 @@ const treeLinks = projects.slice(0, MAX_TREES);
         if (request !== latest) return;
         let view: WorldView;
         if (!mounting) {
-          mounting = mountWorld(canvas, world, meshed, { frame, hotspots });
+          mounting = mountWorld(canvas, world, meshed, { frame, hotspots, cards });
           view = await mounting;
         } else {
           view = await mounting;
@@ -322,6 +341,57 @@ const treeLinks = projects.slice(0, MAX_TREES);
     width: 100%;
     height: 100%;
   }
+  /* Data Cards: laid on the isometric plane by a matrix3d from the camera; never take the pointer. */
+  .data-cards {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    pointer-events: none;
+  }
+  .data-card {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    max-width: 11rem;
+    padding: 0.35rem 0.6rem 0.4rem;
+    border-left: 3px solid var(--brand);
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--paper) 92%, transparent);
+    box-shadow: 0 4px 14px oklch(0.2 0.02 250 / 0.16);
+    color: var(--ink);
+    line-height: 1.2;
+    transform-origin: 0 0;
+    opacity: 0;
+    transition: opacity 200ms;
+  }
+  .data-card[data-near] {
+    opacity: 1;
+  }
+  .data-card-value {
+    color: var(--brand);
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .data-card-label {
+    font-size: 0.8rem;
+  }
+  @media (max-width: 47.99rem) {
+    .data-card {
+      max-width: 8.5rem;
+      padding: 0.25rem 0.45rem 0.3rem;
+    }
+    .data-card-value {
+      font-size: 0.95rem;
+    }
+    .data-card-label {
+      font-size: 0.7rem;
+    }
+  }
   .hotspot {
     position: absolute;
     top: 0;
@@ -370,7 +440,8 @@ const treeLinks = projects.slice(0, MAX_TREES);
     outline-offset: 1px;
   }
   @media (prefers-reduced-motion: reduce) {
-    .hotspot-label {
+    .hotspot-label,
+    .data-card {
       transition: none;
     }
   }

@@ -9,7 +9,10 @@
  *   nothing renders while idle. Each frame bumps `canvas.dataset.frames` and
  *   writes `canvas.dataset.camera` (target x, z and zoom), for checks.
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
- *   Landmark hotspots (`landmarkHotspots.ts`) follow the camera.
+ *   Landmark hotspots (`landmarkHotspots.ts`) and Data Cards (`dataCards.ts`)
+ *   follow the camera.
+ * - `setViewCentre(at)` says where the visitor looks (beside a panel), for
+ *   choosing the Data Card.
  * - `focus(landmark)` flies (or cuts) the camera to a Landmark
  *   (`landmarkFocus.ts`), optionally off centre to leave room for a panel.
  * - `show(world)` swaps in another World (a new Seed) and disposes the old one.
@@ -20,6 +23,7 @@ import type { LandmarkId, World } from '../world';
 import { FIXED_COLOURS, LOOK, oklchToLinear, type FixedColour } from './palette';
 import { createCameraRig, type CameraRig } from './cameraRig';
 import { createLandmarkHotspots } from './landmarkHotspots';
+import { createDataCards } from './dataCards';
 import { landmarkFocus } from './landmarkFocus';
 import { stateShowing, type CameraState } from './cameraMath';
 import { buildWorldObjects, type WorldObjects } from './worldMeshes';
@@ -55,6 +59,12 @@ export interface WorldView {
    * (y down): the middle of the part a panel leaves free. Resolves on landing.
    */
   focus(id: LandmarkId, options: { at?: ScreenOffset; ms: number }): Promise<void>;
+  /**
+   * Where the visitor looks, in CSS px from the frame's centre (y down): the
+   * middle of the part a section panel leaves free, or 0 with no panel. The
+   * Data Card shown is the one of the near Landmark seen closest to it.
+   */
+  setViewCentre(at: ScreenOffset): void;
   dispose(): void;
 }
 
@@ -69,6 +79,8 @@ export interface WorldFrame {
   frame: HTMLElement;
   /** Hotspot links over the canvas, each with `data-hotspot="<placed landmark id>"`. */
   hotspots: HTMLElement[];
+  /** Data Cards over the canvas, each with `data-card="<placed landmark id>"`. */
+  cards?: HTMLElement[];
 }
 
 /** Closest zoom: about this many world units from the centre to the edge of the frame. */
@@ -115,7 +127,10 @@ export async function mountWorld(
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
+      // The overlays project through the camera's matrices: bring them up to date first.
+      camera.updateMatrixWorld();
       hotspots.place(camera);
+      cards.place(camera, rig.state, viewCentre);
       renderer.render(scene, camera);
       idleRenderer();
       canvas.dataset.frames = String(++frames);
@@ -125,6 +140,8 @@ export async function mountWorld(
   };
   const rig = createCameraRig({ element: ui.frame, camera, onChange: requestRender });
   const hotspots = createLandmarkHotspots(ui.frame, ui.hotspots, (target) => rig.jumpTo({ target, zoom: rig.state.zoom }));
+  const cards = createDataCards(ui.frame, ui.cards ?? []);
+  let viewCentre: ScreenOffset = { x: 0, y: 0 };
 
   const frameCamera = () => {
     const w = canvas.clientWidth;
@@ -171,6 +188,7 @@ export async function mountWorld(
     radius = next.views.overview.radius;
     frameCamera();
     hotspots.setWorld(next);
+    cards.setWorld(next);
     rig.reset(
       {
         minX: Math.min(...next.isles.map((i) => i.bounds.minX)),
@@ -207,6 +225,10 @@ export async function mountWorld(
     camera: rig,
     focusState,
     focus: (id, { at, ms }) => rig.flyTo(focusState(id, at), ms),
+    setViewCentre: (at) => {
+      viewCentre = at;
+      requestRender();
+    },
     dispose: () => {
       cancelAnimationFrame(frame);
       rig.dispose();

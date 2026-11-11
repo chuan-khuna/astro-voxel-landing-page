@@ -264,6 +264,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - Data Cards are HTML elements positioned with a CSS `matrix3d` derived from the camera, so they tilt to the isometric plane.
 - They show only near their Landmark.
 - They are real text, and their metrics come from site data.
+- **Done (ticket 09).** Metrics are `site.dataCards` in `site/src/data/site.ts`, keyed to a placed Landmark id. Each card keeps its CSS size on screen (crisp text at any zoom); only its tilt (upright, text along the World's −z axis) and position follow the camera. One card shows at a time: the Landmark the camera is near (zoom above the Overview and at least 0.7 × the Landmark's close-up, Landmark within the middle of the frame round where the visitor looks, beside a panel if one is open). It stands over its Landmark, or hangs under it when the top of the frame would cut it off. The `services` collection (`title`, `summary`, `icon` from `pipeline`/`model`/`chart`/`platform`, `order`) is listed on `/services`; the Station has its real voxel model.
 
 **Overlay UI**
 - **Section pages** open as a side panel on desktop and a bottom sheet on mobile.

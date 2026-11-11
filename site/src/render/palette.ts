@@ -53,11 +53,12 @@ export const FIXED_COLOURS = {
   glass: oklch(0.34, 0.035, 245),
   bougainvillea: oklch(0.6, 0.1, 352),
   bougainLight: oklch(0.69, 0.085, 348),
-  // Placeholder Landmark parts.
+  // Landmark parts (Station, Garden, Dock, Mailbox).
   trunk: oklch(0.46, 0.035, 60),
   plank: oklch(0.62, 0.045, 62),
   metal: oklch(0.62, 0.02, 250),
   metalDark: oklch(0.48, 0.02, 250),
+  concrete: oklch(0.76, 0.012, 80),
   // Sky and light (approved in ticket 01).
   sky: oklch(0.93, 0.02, 230),
   sunLight: oklch(0.98, 0.025, 85),

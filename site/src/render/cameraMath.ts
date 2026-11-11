@@ -107,3 +107,15 @@ export function flightState(from: CameraState, to: CameraState, t: number): Came
     zoom: Math.exp(Math.log(from.zoom) + (Math.log(to.zoom) - Math.log(from.zoom)) * k),
   };
 }
+
+/**
+ * Where a World point is seen: frame units from the screen centre, y up
+ * (the inverse of `stateShowing`). A raised point is seen where the view ray
+ * through it meets the ground.
+ */
+export function screenOffsetOf(state: CameraState, point: WorldPoint): { x: number; y: number } {
+  // The ground offset from the target, then `screenToGround` inverted.
+  const dx = point.x - point.y - state.target.x;
+  const dz = point.z - point.y - state.target.z;
+  return { x: ((dx - dz) / Math.SQRT2) * state.zoom, y: (-(dx + dz) / Math.sqrt(6)) * state.zoom };
+}

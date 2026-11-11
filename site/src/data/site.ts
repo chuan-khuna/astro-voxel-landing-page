@@ -1,9 +1,9 @@
 /**
- * The site data module: company identity, the default Seed and the Landmark
- * list. All mock data for a fictional company. Edit here; nothing of this is
- * hardcoded anywhere else in the site.
+ * The site data module: company identity, the default Seed, the Landmark
+ * list and the Data Card metrics. All mock data for a fictional company.
+ * Edit here; nothing of this is hardcoded anywhere else in the site.
  */
-import type { BiomeId, LandmarkId } from '../world';
+import type { BiomeId, LandmarkId, PlacedLandmarkId } from '../world';
 
 export interface Landmark {
   id: LandmarkId;
@@ -14,6 +14,27 @@ export interface Landmark {
   /** Position in the Story Order, from 1. Fixed; never depends on the Seed. */
   storyOrder: number;
 }
+
+/** One company metric for a Data Card: a short figure and what it counts. */
+export interface DataCardMetric {
+  /** The figure, as shown, e.g. `140+`. */
+  value: string;
+  /** What it counts, e.g. `pipelines running in production`. */
+  label: string;
+}
+
+/**
+ * Data Card metrics, keyed to the id of the Landmark each card floats beside
+ * (a placed Landmark: a card needs a place in the World). A Landmark with no
+ * entry has no card. Mock figures for the fictional company.
+ */
+const dataCards: Partial<Record<PlacedLandmarkId, DataCardMetric>> = {
+  station: { value: '140+', label: 'pipelines running in production' },
+  house: { value: '12 years', label: 'building data systems' },
+  garden: { value: '60+', label: 'projects shipped' },
+  dock: { value: '9 in 10', label: 'clients come back for more' },
+  mailbox: { value: '1 day', label: 'to answer every email' },
+};
 
 const landmarks: Landmark[] = [
   { id: 'overview', route: '/', label: 'Overview', storyOrder: 1 },
@@ -55,6 +76,8 @@ export const site = {
   brandBiome: 'tropical' satisfies BiomeId as BiomeId,
   /** The Landmark list: id, route, label and Story Order. */
   landmarks,
+  /** Data Card metrics, keyed to a Landmark id. */
+  dataCards,
 };
 
 /** The Landmark list sorted by Story Order. */

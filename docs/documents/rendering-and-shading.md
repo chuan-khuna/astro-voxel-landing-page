@@ -6,8 +6,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 
 - Code: `site/src/render/`
 - Decision: `docs/adr/0002-webgpu-renderer-with-tsl.md`
-- Tests: `site/src/render/mesher.test.ts`, `cameraMath.test.ts` and
-  `landmarkModels.test.ts` (a few behavioural checks; the World generator
+- Tests: `site/src/render/mesher.test.ts`, `cameraMath.test.ts`,
+  `landmarkModels.test.ts` and `dataCardMath.test.ts` (a few behavioural checks; the World generator
   stays the main test seam)
 
 ## Code layout
@@ -17,8 +17,9 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, placeholder parts, sky, lights) as OKLCH, `oklchToLinear`. | no |
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid and the ¼-unit detail grid with a shared colour list. `meshWorld(world)`: both grids meshed. | no |
-| `landmarkModels.ts` | The ¼-unit Landmark models (placeholders for now), each filling its footprint, and `landmarkExtent(landmark)`: the box a Landmark covers, measured from what its model draws and never smaller than its footprint. | no |
-| `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`, `stateShowing` (the state that shows a point at a screen offset) and `flightState` (one moment of an eased flight). | no |
+| `landmarkModels.ts` | The ¼-unit Landmark models (the Station's is its real model; the rest are placeholders), each filling its footprint, and `landmarkExtent(landmark)`: the box a Landmark covers, measured from what its model draws and never smaller than its footprint. | no |
+| `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`, `stateShowing` (the state that shows a point at a screen offset), `screenOffsetOf` (where a point is seen; its inverse) and `flightState` (one moment of an eased flight). | no |
+| `dataCardMath.ts` | Data Card maths: `nearestDataCard` (which card shows), `dataCardAnchors` (where a card stands or hangs), `dataCardTransform` and `placeDataCard` (the CSS `matrix3d`). | no |
 | `landmarkFocus.ts` | `landmarkFocus(world, id)`: the point to look at and the zoom for each of the seven Landmarks. | no |
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
@@ -26,6 +27,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, as a `THREE.Group`. | yes |
 | `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, swapping Worlds. | yes |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it. | yes |
+| `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
 | `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, and the Garden's tree links over their trees. | yes |
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
@@ -55,11 +57,11 @@ with its origin at the min corner of the Landmark's footprint (see
 above the ground. Each model gets its footprint's size in ¼ voxels
 (`4 × width` by `4 × depth`), its ground height, and, in local ¼ voxels, the
 Garden's tree cells and the Dock's jetty cells, and fills that footprint.
-Models are simple placeholders:
+The Station has its real model (ticket 09); the others are simple placeholders:
 
-| Landmark | Placeholder |
+| Landmark | Model |
 |---|---|
-| Station (2×2) | a paved pad, a low hut and a grey mast with an accent light |
+| Station (2×2) | the data station: a concrete pad; a metal control hut with a blue door and windows on the two faces the camera sees, a flat roof and a dish on it; a thin lattice mast at the back corner topped by an accent light (17 ¼ voxels up); two server cabinets with accent status lights and a data tank in the front yard. Tall parts stand at the back, so nothing hides the door. |
 | House (3×3) | a whitewashed block on a plinth, blue door, windows, flat roof and blue dome |
 | Garden | one tree per tree cell, each filling its cell (trunk, 4×4 canopy); a flower in every other cell |
 | Dock (2×1) | a plank platform on the land cells; a plank deck level with the ground over each jetty cell, on posts down to the sea floor |
@@ -153,9 +155,11 @@ along x) on sea cells within 2 cells of land. Both are opaque
 
 `mountWorld(canvas, world, meshed?, ui?)` returns a `WorldView`
 `{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), dispose() }`. `ui` is
-`{ frame, hotspots }`: the element round the canvas that takes pan and zoom
-input, and the Landmark hotspot links inside it (default: the canvas's
-parent, no hotspots). `camera` is the camera rig (below); `focus` flies the
+`{ frame, hotspots, cards? }`: the element round the canvas that takes pan and zoom
+input, the Landmark hotspot links inside it, and the Data Cards (default: the canvas's
+parent, no hotspots, no cards). `setViewCentre(at)` says where the visitor
+looks (CSS px from the frame's centre: the middle of the part a section
+panel leaves free), which picks the Data Card shown. `camera` is the camera rig (below); `focus` flies the
 camera to a Landmark (see "Landmark focus and flights").
 
 - **Renderer:** `WebGPURenderer` (`three/webgpu`), falling back to WebGL 2 by
@@ -178,7 +182,8 @@ camera to a Landmark (see "Landmark focus and flights").
   requests one frame. The renderer, scene, lights and camera are kept.
 - **Render on demand:** `requestRender()` schedules at most one frame. Mount,
   `show`, canvas resizes and camera moves request frames; nothing renders
-  while idle. Each frame first re-places the hotspots, then renders.
+  while idle. Each frame first updates the camera's matrices, re-places the hotspots
+  and the Data Cards, then renders.
   three's `render()` also starts the renderer's internal animation loop,
   which would then tick `requestAnimationFrame` forever (it only advances
   node time, which nothing here uses); `mountWorld` stops it after each
@@ -258,6 +263,46 @@ on the isometric axis above the target.
   page marks the open Project's tree link with `aria-current="page"` (an
   outline).
 
+### Data Cards
+
+The page's Data Cards (see `site-project.md`, "Data Cards") are HTML laid
+over the canvas by `dataCards.ts` on every frame, with the pure maths in
+`dataCardMath.ts` (tested in `dataCardMath.test.ts` against a real three.js
+camera):
+
+- **Which card shows: `nearestDataCard(state, cards, half, centre)`.** A
+  card's Landmark is near when the zoom is above 1 (never at the Overview)
+  and at least 0.7 × the Landmark's own close-up zoom (`landmarkFocus`),
+  and the Landmark is seen within 0.6 of the frame's half width and height
+  of `centre`. Of the near Landmarks, the one seen closest to `centre` shows;
+  at most one card shows, so neighbours' cards never pile up. `centre` is
+  the view centre the page sets: beside a side panel the Landmark sits in
+  the middle of the free part, and that is what counts, not the frame's
+  centre. The shown card gets `data-near` (opacity 1); the others fade out
+  where they were. Cards are hidden until a World is shown and reset on a
+  new World.
+- **The tilt: `dataCardTransform(viewProjection, frame, anchor, card, pin)`.**
+  A CSS `matrix3d` (column-major, like three's `Matrix4.elements`) built
+  as frame-px-from-clip × projection × view × World-from-card-px. The card
+  is upright in the World with its text along the World's −z axis, so on
+  screen it rises 30° to the right and its sides stay vertical, skewed
+  like the voxels round it. It keeps its own CSS size on screen at any zoom
+  (one card px is one screen px along each edge), so the text stays real,
+  crisp and readable; only the tilt and the position follow the camera.
+  Depth is flattened, and z passes through so the matrix stays invertible
+  (CSS does not draw an element under a non-invertible transform). The
+  card has `transform-origin: 0 0` at the frame's top left. `pin` is
+  `bottom` (the card stands on its anchor) or `top` (it hangs from it).
+- **Where: `dataCardAnchors(landmark)`.** Both anchors are over the middle
+  of the footprint. On the isometric screen a point's height goes with
+  `2y − x − z`, so from the model's box (`landmarkExtent`) the `above`
+  anchor is just over the box's highest screen point (its top back corner)
+  and the `below` anchor just under its lowest (bottom front), each with a
+  0.4-unit gap. `placeDataCard` stands the card on `above`, unless its top
+  right corner (its highest) would leave the top of the frame; then it
+  hangs from `below`. The Station is tall, so in its close-up its card
+  usually hangs below it; on a phone it can touch the frame's bottom edge.
+
 ### Landmark focus and flights
 
 - **`landmarkFocus(world, id)`** (pure, tested in `landmarkFocus.test.ts`)
@@ -294,13 +339,13 @@ below that today (counts for the voxel meshes; the sea adds a few hundred):
 
 | Seed | Isles | Terrain | Detail | Total |
 |---|---|---|---|---|
-| default (`lanternfish`) | 2 | 1,330 | 1,208 | 2,538 |
-| `2` | 3 | 1,956 | 1,558 | 3,514 |
-| `3` | 3 | 3,422 | 1,336 | 4,758 |
-| `13` | 4 | 2,100 | 1,872 | 3,972 |
+| default (`lanternfish`) | 2 | 1,330 | 1,448 | 2,778 |
+| `2` | 3 | 1,956 | 1,798 | 3,754 |
+| `3` | 3 | 3,422 | 1,576 | 4,998 |
+| `13` | 4 | 2,100 | 2,112 | 4,212 |
 
 Counts are with no Projects. Highest
-over Seeds `0`–`299`: 5,370; with 24 trees in the Garden, 7,432. Meshing takes about 15–25 ms per World.
+over Seeds `0`–`299`: 5,610; with 24 trees in the Garden, 7,672 (the Station's model, ticket 09, adds 240). Meshing takes about 15–25 ms per World.
 `mesher.test.ts` checks the budget on 40 sampled Seeds, including 4-Isle
 ones. Real tree models, boats, ships and decoration (later tickets) will add most of the
 remaining triangles.
@@ -308,4 +353,4 @@ remaining triangles.
 ## Not yet built
 
 Day/Night lighting, animation (water, trees, ships), the reduced-decoration tier,
-real Landmark models, and the Guide's dissolve and re-form on a new Seed.
+real models for the House, Garden, Dock and Mailbox, and the Guide's dissolve and re-form on a new Seed.

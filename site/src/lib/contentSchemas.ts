@@ -24,3 +24,18 @@ export const projectSchema = z.object({
 });
 
 export type ProjectData = z.infer<typeof projectSchema>;
+
+/** Icons a Service can show at the Station (drawn by `ServiceList.astro`). */
+export const SERVICE_ICONS = ['pipeline', 'model', 'chart', 'platform'] as const;
+
+/** A Service: a capability the company sells, shown at the Station. The MDX body says more. */
+export const serviceSchema = z.object({
+  title: z.string().min(1),
+  /** One sentence under the title. */
+  summary: z.string().min(1),
+  icon: z.enum(SERVICE_ICONS),
+  /** Position in the Station's list, from 1. */
+  order: z.number().int().min(1),
+});
+
+export type ServiceData = z.infer<typeof serviceSchema>;

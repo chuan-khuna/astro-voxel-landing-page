@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { clampState, flightState, panBy, stateShowing, zoomAt, type CameraLimits, type CameraState } from './cameraMath';
+import { clampState, flightState, panBy, screenOffsetOf, stateShowing, zoomAt, type CameraLimits, type CameraState } from './cameraMath';
 
 const limits: CameraLimits = { minX: 0, maxX: 40, minZ: 0, maxZ: 30, minZoom: 1, maxZoom: 6 };
 const start: CameraState = { target: { x: 20, z: 15 }, zoom: 2 };
@@ -127,5 +127,21 @@ describe('flightState', () => {
     const firstStep = flightState(from, to, 0.05).target.x - from.target.x;
     const middleStep = flightState(from, to, 0.525).target.x - flightState(from, to, 0.475).target.x;
     expect(firstStep).toBeLessThan(middleStep / 4);
+  });
+});
+
+describe('screenOffsetOf', () => {
+  it('is where a World point is seen, in frame units from the screen centre (y up), the offset stateShowing takes', () => {
+    const state: CameraState = { target: { x: 17, z: 13 }, zoom: 2.5 };
+    for (const p of [
+      { x: 20, y: 0, z: 9 },
+      { x: 14, y: 3, z: 16 },
+      { x: 17, y: 1.5, z: 13 },
+    ]) {
+      const seen = pointOnScreen(state, p.x, p.y, p.z);
+      const offset = screenOffsetOf(state, p);
+      expect(offset.x).toBeCloseTo(seen.x, 6);
+      expect(offset.y).toBeCloseTo(seen.y, 6);
+    }
   });
 });

@@ -1,7 +1,7 @@
 /**
- * Landmark models in ¼-unit voxels. These are simple placeholders, one per
- * placed Landmark, so the render path for ¼-unit models is in place; the
- * real models replace them in later tickets by changing only this module.
+ * Landmark models in ¼-unit voxels, one per placed Landmark. The Station's
+ * is its real model (ticket 09); the others are simple placeholders, which
+ * real models replace in later tickets by changing only this module.
  *
  * Each model fills its Landmark's footprint. It is drawn into the detail
  * grid with its origin at the min corner of the footprint's origin cell, on
@@ -43,16 +43,39 @@ type Model = (draw: Draw, colours: WorldColours, shape: Shape) => void;
 const TREE_HEIGHT = 8;
 
 const MODELS: Record<PlacedLandmarkId, Model> = {
-  /** A paved pad with a low hut and a grey mast topped by an accent light. */
-  station: ({ box }, { fixed, biome }, { w, d }) => {
-    box(0, 0, 0, w, 1, d, fixed('metalDark'));
-    box(1, 1, 1, w - 1, 5, d - 1, fixed('metal'));
-    box(1, 5, 1, w - 1, 6, d - 1, fixed('metalDark'));
-    const mx = Math.floor(w / 2) - 1;
-    const mz = Math.floor(d / 2) - 1;
-    box(mx, 6, mz, mx + 2, 16, mz + 2, fixed('metal'));
-    box(mx - 1, 12, mz - 1, mx + 3, 13, mz + 3, fixed('metalDark'));
-    box(mx, 16, mz, mx + 2, 17, mz + 2, biome('accent'));
+  /**
+   * The data station (2×2, so 8×8 here): a concrete pad; a metal control hut
+   * with a blue door and windows on the faces the camera sees, a flat roof
+   * and a dish on it; a lattice mast at the back topped by an accent light;
+   * and, in the front yard, two server cabinets with status lights and a
+   * data tank. Taller parts stand at the back (low x and z) so they never
+   * hide the hut's door.
+   */
+  station: ({ box, set }, { fixed, biome }, { w, d }) => {
+    box(0, 0, 0, w, 1, d, fixed('concrete'));
+    // The hut, its roof overhanging on the back and the sides.
+    box(1, 1, 1, 6, 6, 5, fixed('metal'));
+    box(0, 6, 0, 7, 7, 6, fixed('metalDark'));
+    box(2, 1, 4, 4, 5, 5, fixed('blueDoor'));
+    box(4, 3, 4, 5, 5, 5, fixed('glass'));
+    box(5, 3, 2, 6, 5, 4, fixed('glass'));
+    // A dish on the roof, its feed in the middle.
+    box(4, 7, 3, 5, 8, 4, fixed('metal'));
+    box(3, 8, 2, 6, 9, 5, fixed('whitewash'));
+    box(4, 9, 3, 5, 10, 4, fixed('metalDark'));
+    // The mast: a thin post through the roof's back corner, a crossbar and the accent light.
+    box(1, 7, 1, 2, 16, 2, fixed('metal'));
+    box(0, 12, 1, 3, 13, 2, fixed('metalDark'));
+    box(1, 12, 0, 2, 13, 3, fixed('metalDark'));
+    box(1, 16, 1, 2, 17, 2, biome('accent'));
+    // Server cabinets in the front yard, each with a status light.
+    for (const x of [1, 4]) {
+      box(x, 1, 6, x + 2, 4, 7, fixed('metalDark'));
+      set(x, 3, 6, biome('accent'));
+    }
+    // A data tank in the front corner.
+    box(w - 2, 1, d - 3, w, 4, d - 1, fixed('whitewash'));
+    box(w - 2, 4, d - 3, w, 5, d - 1, fixed('metal'));
   },
   /** A whitewashed block on a plinth, with a blue door, windows, a flat roof and a blue dome. */
   house: ({ box, set }, { fixed }, { w, d }) => {

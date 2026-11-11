@@ -1,0 +1,80 @@
+---
+/**
+ * The Station's list of every Service, in `order` (then by id): its icon,
+ * title, summary and the MDX body.
+ */
+import { getCollection, render } from 'astro:content';
+import type { SERVICE_ICONS } from '../lib/contentSchemas';
+
+type Icon = (typeof SERVICE_ICONS)[number];
+
+/** One 24×24 line drawing per icon name, stroked in the brand colour. */
+const ICONS: Record<Icon, string> = {
+  // Three stages joined by a pipe.
+  pipeline: 'M3 7h4v10H3zM10 7h4v10h-4zM17 7h4v10h-4zM7 12h3M14 12h3',
+  // A small network: inputs joined to one output.
+  model: 'M5 5a1.5 1.5 0 1 0 0 .1M5 19a1.5 1.5 0 1 0 0 .1M19 12a1.5 1.5 0 1 0 0 .1M6.5 6l11 5.3M6.5 18l11-5.3',
+  // A bar chart on an axis.
+  chart: 'M4 4v16h16M8 16v-4M12 16V8M16 16v-6',
+  // Stacked layers.
+  platform: 'M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4',
+};
+
+const services = (await getCollection('services')).toSorted((a, b) => a.data.order - b.data.order || a.id.localeCompare(b.id));
+const rendered = await Promise.all(services.map(async (service) => ({ service, Content: (await render(service)).Content })));
+---
+
+{
+  rendered.length === 0 ? (
+    <p>No Services yet.</p>
+  ) : (
+    <ul class="services" aria-label="Services">
+      {rendered.map(({ service, Content }) => (
+        <li>
+          <svg class="icon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">
+            <path d={ICONS[service.data.icon]} fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <div>
+            <h2>{service.data.title}</h2>
+            <p class="summary">{service.data.summary}</p>
+            <div class="body">
+              <Content />
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+<style>
+  .services {
+    display: grid;
+    gap: 1.1rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .services li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.75rem;
+  }
+  .icon {
+    color: var(--brand);
+    margin-top: 0.1rem;
+  }
+  h2 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+  .summary {
+    margin: 0.2rem 0 0;
+    font-weight: 500;
+  }
+  .body :global(p) {
+    margin: 0.35rem 0 0;
+    font-size: 0.925rem;
+    opacity: 0.85;
+  }
+</style>

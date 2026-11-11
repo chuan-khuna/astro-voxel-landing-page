@@ -62,7 +62,7 @@ describe('landmarkExtent', () => {
 
   it('measures the box the Station draws, in world units', () => {
     const station = worlds[0]!.landmarks.find((l) => l.id === 'station')!;
-    // A 2×2 pad with a mast 17 quarter-voxels tall.
+    // A 2×2 pad, and the mast's light at the top, 17 quarter voxels up.
     expect(landmarkExtent(station)).toEqual({ min: { x: 0, y: 0, z: 0 }, max: { x: 2, y: 4.25, z: 2 } });
   });
 });

@@ -35,10 +35,11 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 
 | Path | What it holds |
 |---|---|
-| `src/data/site.ts` | The site data module: company identity, brand colour and font, SEO defaults, default Seed, brand Biome (the Biome the default Seed always gets), and the Landmark list (id, route, label, Story Order). `landmarksInStoryOrder` is the sorted list. |
-| `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id and an optional meta `description`) and `projects` (MDX, schema `projectSchema`). |
-| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema` (see "Projects" below). Tested in `contentSchemas.test.ts`. |
+| `src/data/site.ts` | The site data module: company identity, brand colour and font, SEO defaults, default Seed, brand Biome (the Biome the default Seed always gets), the Landmark list (id, route, label, Story Order) and the Data Card metrics (`dataCards`, keyed to a placed Landmark id). `landmarksInStoryOrder` is the sorted list. |
+| `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id and an optional meta `description`) `projects` (MDX, schema `projectSchema`) and `services` (MDX, schema `serviceSchema`). |
+| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema` and `serviceSchema` (see "Projects" and "Services" below). Tested in `contentSchemas.test.ts`. |
 | `src/content/projects/` | One MDX file per Project; the file name is its id and URL slug, the body its case study. Six mock Projects. |
+| `src/content/services/` | One MDX file per Service; the body says more about it. Four mock Services. |
 | `src/content/pages/` | `home.mdx` (the home hook) and one intro per section, found by its `landmark`: `services.mdx` (station), `about.mdx` (house), `team.mdx` (house-interior), `garden.mdx`, `dock.mdx`, `contact.mdx` (mailbox). |
 | `src/world/` | The World generator. See `world-generator.md`. |
 | `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`), camera rig (pan, zoom and flights), Landmark focus and hotspots. See `rendering-and-shading.md`. |
@@ -47,15 +48,16 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/lib/landmarkRoutes.ts` | `landmarkForPath(pathname)`: the Landmark a route belongs to, from the Landmark list. A trailing slash and `index.html` are ignored, `/garden/<slug>` belongs to the Garden, and any other route gives `null`. Tested in `landmarkRoutes.test.ts`. |
 | `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order. Its links carry `data-seed-link`, so they keep a rolled Seed; the current section's link has `aria-current="page"`. |
 | `src/components/SectionPanel.astro` | A section's panel over the World: heading, close link and the intro copy. |
+| `src/components/ServiceList.astro` | The Station's list of every Service in `order`: icon, title, summary and body. |
 | `src/components/ProjectList.astro` | The Garden's list of every Project in tree order: title (a link to its page), Client, year and summary. |
 | `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), and Astro's `<ClientRouter />`. |
-| `src/layouts/WorldPage.astro` | Every page: hero, the World frame with Landmark hotspots and the Garden's tree links, dice button, Landmark menu, an optional `panel` slot over the World, and the client script that runs the World across routes. |
+| `src/layouts/WorldPage.astro` | Every page: hero, the World frame with Landmark hotspots, the Garden's tree links and the Data Cards, dice button, Landmark menu, an optional `panel` slot over the World, and the client script that runs the World across routes. |
 | `src/pages/index.astro` | The home page: the World and the home hook. |
-| `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Garden's page also lists every Project. |
+| `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project. |
 | `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. |
 
-Company identity, the default Seed and the Landmark list live only in
-`src/data/site.ts`. Landmark ids are typed against the generator's id lists.
+Company identity, the default Seed, the Landmark list and the Data Card
+metrics live only in `src/data/site.ts`. Landmark ids are typed against the generator's id lists.
 
 ## Pages and routes
 
@@ -70,6 +72,8 @@ Partner counts are 0 until those collections exist.
   the title is `<section> · <company>`, and the description comes from the
   `pages` entry. The Contact panel also lists the email, phone, address and
   socials from site data.
+- **Services (`/services`):** the intro copy, then every Service in `order`
+  (then by id): an icon, the title, the summary and the body.
 - **Garden (`/garden`):** the intro copy, then every Project in tree order
   (by id), each linking to its page. Projects beyond the Garden's 24 trees
   are listed too.
@@ -195,6 +199,38 @@ a stable order by id (`treeOrder`), so tree `k` is the `k`-th Project by
 id, and a new Project whose id sorts last adds a tree without moving the
 others' Projects (it may still change the World's layout; see
 `world-generator.md`).
+
+## Services
+
+A Service is one MDX file in `src/content/services/`; adding a file adds it
+to the Station's list on `/services`. The schema (`serviceSchema`):
+
+| Field | Type |
+|---|---|
+| `title` | non-empty string |
+| `summary` | non-empty string: one sentence under the title |
+| `icon` | `pipeline`, `model`, `chart` or `platform`: a line icon drawn by `ServiceList.astro` |
+| `order` | whole number from 1: the place in the list (ties go by id) |
+
+Services do not change the World and have no pages of their own.
+
+## Data Cards
+
+A Data Card floats beside a Landmark in the World and shows one company
+metric. The metrics live in `site.dataCards` in `src/data/site.ts`, keyed to
+a placed Landmark id (`station`, `house`, `garden`, `dock`, `mailbox`), each
+a `value` (`140+`) and a `label` (`pipelines running in production`). A
+Landmark with no entry has no card. Mock figures for now.
+
+`WorldPage.astro` renders them as real text, a list (`ul.data-cards`,
+labelled `<company> in figures`) of `li.data-card[data-card]` inside the
+World's frame, in Story Order. They stay `hidden` until a World is shown, so
+they are absent without JS. Once shown, the list is in the accessibility
+tree whether or not a card is on screen; visually only one card shows at a
+time, the one of the Landmark the camera is near (see
+`rendering-and-shading.md`, "Data Cards"). Cards never take the pointer, so
+panning and hotspots work through them. They fade in and out (200 ms; no
+fade under reduced motion), and are smaller on screens under 48rem.
 
 ## Rendering
 

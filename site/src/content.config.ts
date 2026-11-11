@@ -2,7 +2,7 @@ import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { LANDMARK_IDS } from './world';
-import { projectSchema } from './lib/contentSchemas';
+import { projectSchema, serviceSchema } from './lib/contentSchemas';
 
 /**
  * `pages`: copy that is not a content item of its own: the home hook and
@@ -29,4 +29,13 @@ const projects = defineCollection({
   schema: projectSchema,
 });
 
-export const collections = { pages, projects };
+/**
+ * `services`: one MDX file per Service, shown at the Station (`/services`) in
+ * `order`; the body says more about it.
+ */
+const services = defineCollection({
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/services' }),
+  schema: serviceSchema,
+});
+
+export const collections = { pages, projects, services };
