@@ -44,15 +44,101 @@ export interface Isle {
 }
 
 /**
+ * What the top voxel of a column is made of. `sea` for sea cells; `sand` for
+ * low land at the water's edge; `peak` for the high ground of a tall Isle;
+ * `grass` elsewhere.
+ */
+export type SurfaceKind = 'sea' | 'sand' | 'grass' | 'peak';
+
+/**
  * The World's height grid, row-major (`index = z * width + x`).
- * `heights[i]` is the top of the land column in voxels (0 = sea);
- * `isle[i]` is the Isle id owning the cell, or -1 for sea.
+ * `heights[i]` is the top of the land column in whole voxels (0 = sea);
+ * `isle[i]` is the Isle id owning the cell, or -1 for sea;
+ * `surface[i]` is what the column's top voxel is made of.
  */
 export interface Terrain {
   width: number;
   depth: number;
   heights: number[];
   isle: number[];
+  surface: SurfaceKind[];
+}
+
+/**
+ * The rock layer of a voxel below a column's top, by absolute height:
+ * `strata[y]` is the layer of every buried voxel at height `y` (0 is the
+ * voxel just above the sea floor). Shared by every column, so cliffs show
+ * the same layered cross-section all round the World.
+ */
+export type StratumKind = 'soil' | 'rock' | 'rockDark';
+
+/**
+ * A straight bridge over the sea between two Isles. `cells` are the sea
+ * cells it spans, in order from the `from` Isle to the `to` Isle; the land
+ * cells at both ends have height `y`, and so does the deck.
+ */
+export interface Bridge {
+  from: number;
+  to: number;
+  cells: Cell[];
+  y: number;
+}
+
+/**
+ * A walkable path between two placed Landmarks: 4-connected cells from the
+ * `from` Landmark's cell to the `to` Landmark's cell, crossing land and
+ * bridges. Each step changes height by at most one voxel.
+ */
+export interface Path {
+  from: PlacedLandmarkId;
+  to: PlacedLandmarkId;
+  cells: Cell[];
+}
+
+/** Compass direction on the grid: north is -z, east is +x. */
+export type Facing = 'north' | 'east' | 'south' | 'west';
+
+/**
+ * Stairs on the lower cell of a single-step height change along a Path.
+ * `y` is the lower cell's height; the stairs climb towards `facing`.
+ */
+export interface Stair {
+  cell: Cell;
+  y: number;
+  facing: Facing;
+}
+
+export const BIOME_IDS = ['tropical', 'northern', 'autumn', 'volcanic'] as const;
+export type BiomeId = (typeof BIOME_IDS)[number];
+
+/** An OKLCH colour: lightness 0–1, chroma, hue in degrees. */
+export interface Oklch {
+  l: number;
+  c: number;
+  h: number;
+}
+
+/** The colour roles every Biome fills. */
+export const BIOME_COLOUR_ROLES = [
+  'sand',
+  'grass',
+  'peak',
+  'foliage',
+  'soil',
+  'rock',
+  'rockDark',
+  'path',
+  'bridge',
+  'waterShallow',
+  'waterDeep',
+  'accent',
+] as const;
+export type BiomeColourRole = (typeof BIOME_COLOUR_ROLES)[number];
+
+/** A muted, hand-tuned colour set for the whole World. Every chroma is at most 0.10. */
+export interface Biome {
+  id: BiomeId;
+  colours: Record<BiomeColourRole, Oklch>;
 }
 
 export interface PlacedLandmark {
@@ -73,9 +159,17 @@ export interface View {
 }
 
 export interface World {
+  /** The Seed actually used: the given Seed, or the default Seed if it fell back. */
   seed: string;
+  /** How many layouts were tried; 1 means the first layout kept every rule. */
+  attempts: number;
+  biome: Biome;
   terrain: Terrain;
+  strata: StratumKind[];
   isles: Isle[];
+  bridges: Bridge[];
+  paths: Path[];
+  stairs: Stair[];
   landmarks: PlacedLandmark[];
   views: Record<ViewLandmarkId, View>;
 }

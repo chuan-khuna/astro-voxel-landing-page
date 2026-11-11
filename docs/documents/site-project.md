@@ -35,7 +35,7 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 
 | Path | What it holds |
 |---|---|
-| `src/data/site.ts` | The site data module: company identity, brand colour and font, SEO defaults, default Seed, and the Landmark list (id, route, label, Story Order). `landmarksInStoryOrder` is the sorted list. |
+| `src/data/site.ts` | The site data module: company identity, brand colour and font, SEO defaults, default Seed, brand Biome (the Biome the default Seed always gets), and the Landmark list (id, route, label, Story Order). `landmarksInStoryOrder` is the sorted list. |
 | `src/content.config.ts` | Content collections. Only `pages` for now (MDX): `title` and an optional `landmark` id. |
 | `src/content/pages/home.mdx` | The home hook copy. |
 | `src/world/` | The World generator. See `world-generator.md`. |
@@ -64,10 +64,18 @@ routes arrive in ticket 07.
 
 - `WebGPURenderer` from `three/webgpu`; it falls back to WebGL 2 by itself.
 - An orthographic camera on the true isometric axis (1, 1, 1), framed on the
-  Overview view so the whole Isle fits at any aspect ratio.
-- Terrain is one instanced box per land cell, over a flat sea plane.
-- Each placed Landmark is a plain coloured placeholder block. Its colour and
-  height are set in the render module.
+  Overview view so every Isle fits at any aspect ratio.
+- Terrain is one instanced box per visible voxel (voxels hidden on all four
+  sides are skipped). The top voxel takes the cell's surface colour (sand,
+  grass or peak) or the path colour on a path cell; buried voxels take
+  their stratum's colour, so cliffs show layered bands. A faint per-voxel
+  lightness change keeps single voxels readable.
+- Bridges are plank decks level with their ends; stairs are two steps on the
+  lower cell, rising towards the higher one.
+- Water is a wide deep-water plane, with shallow-water tiles within 2 cells
+  of land.
+- Every terrain, bridge, path and water colour comes from the World's Biome:
+  OKLCH converted to linear sRGB in the render module (`oklchColour`). The
+  sky and the Landmark placeholder blocks are fixed colours.
 - Node materials only (`MeshLambertNodeMaterial`), lit by a hemisphere light and one directional light.
 - Frames render on demand: once on mount, then again only when the canvas resizes.
-- Colours are fixed placeholders until Biomes (ticket 03) arrive.

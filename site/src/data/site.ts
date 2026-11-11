@@ -3,7 +3,7 @@
  * list. All mock data for a fictional company. Edit here; nothing of this is
  * hardcoded anywhere else in the site.
  */
-import type { LandmarkId } from '../world';
+import type { BiomeId, LandmarkId } from '../world';
 
 export interface Landmark {
   id: LandmarkId;
@@ -46,8 +46,13 @@ export const site = {
     title: 'Lanternfish Data: data and AI engineering',
     description: 'A data and AI studio, told as a walk across a small generated World.',
   },
-  /** The Seed visitors see first. */
+  /** The Seed visitors see first. Also used for an empty or too-long Seed. */
   defaultSeed: 'lanternfish',
+  /**
+   * The brand's main Biome. The default Seed always gets it, whatever the
+   * Seed string is; every other Seed picks its Biome from the Seed.
+   */
+  brandBiome: 'tropical' satisfies BiomeId as BiomeId,
   /** The Landmark list: id, route, label and Story Order. */
   landmarks,
 };

@@ -4,5 +4,6 @@
  * test seam.
  */
 export { generateWorld } from './generateWorld';
-export { LANDMARK_IDS, PLACED_LANDMARK_IDS, VIEW_LANDMARK_IDS } from './types';
+export { BIOME_COLOUR_ROLES, BIOME_IDS, LANDMARK_IDS, PLACED_LANDMARK_IDS, VIEW_LANDMARK_IDS } from './types';
+export { MAX_SEED_LENGTH } from './generateWorld';
 export type * from './types';
