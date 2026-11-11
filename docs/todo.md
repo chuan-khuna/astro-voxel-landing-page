@@ -28,6 +28,11 @@ Things the agents went ahead on without waiting for the user, while the user was
 - [ ] **Landmarks can hide each other.** On Seed `lanternfish` the House partly hides the Mailbox. Placement only checks terrain and bridges. Suggested fix: add Landmark-on-Landmark occlusion to polish 02 (bigger Isles).
 - [ ] **Garden trees merge into a hedge (08)** and are about 13×15px to tap on phones. Fixed by design in polish 05.
 - [ ] **Phone Data Cards:** the House's "12 years" card hangs over the House base in close-up, and the Station's can cross the bottom edge by about 4px.
+- [ ] **Phone Tour (15):**
+  - "Roll a new World" wraps to two lines once the Tour button (and the stats toggle) sit beside it.
+  - Some Tour steps are framed far out.
+  - At the Mailbox step the Guide's bubble can cover the Mailbox.
+- [ ] **No Pause in the Tour (15).** The ticket asked for pause; the Tour is step-by-step and never plays by itself, so there is nothing to pause.
 - [ ] **Code-built models to port.** The Station (09), Mailbox (12), boats and ships (10) and the House room (11) are still code-built and will need porting to ASCII structures in the polish feature.
 
 ## Housekeeping
