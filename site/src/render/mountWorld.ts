@@ -5,8 +5,9 @@
  * - `WebGPURenderer` with the automatic WebGL 2 fallback.
  * - One directional light (the sun) whose shadow map renders only when the
  *   World changes, plus a hemisphere sky light.
- * - Frames render only on request (mount, resize, a new World, a camera move);
- *   nothing renders while idle. Each frame bumps `canvas.dataset.frames` and
+ * - Frames render only on request (mount, resize, a new World, a camera move),
+ *   and every frame while the Partners' ships sail; with no ships, under
+ *   reduced motion or on a hidden page nothing renders while idle. Each frame bumps `canvas.dataset.frames` and
  *   writes `canvas.dataset.camera` (target x, z and zoom), for checks.
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
  *   Landmark hotspots (`landmarkHotspots.ts`) and Data Cards (`dataCards.ts`)
@@ -122,10 +123,25 @@ export async function mountWorld(
   // Render on demand: a request schedules at most one frame.
   let frame = 0;
   let frames = 0;
+  // Ships sail while the page is visible and the visitor has not asked for reduced motion:
+  // then every frame asks for the next. Otherwise they keep still where they are.
+  const stillness = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const sailing = () => !!objects && objects.ships.count > 0 && !stillness.matches && document.visibilityState === 'visible';
+  /** Seconds sailed so far, and the time of the last sailing frame (0 when not sailing). */
+  let sailed = 0;
+  let lastTick = 0;
   const requestRender = () => {
     if (frame) return;
-    frame = requestAnimationFrame(() => {
+    frame = requestAnimationFrame((now) => {
       frame = 0;
+      if (sailing()) {
+        // At most a tenth of a second a frame, so ships never leap after a pause.
+        if (lastTick) sailed += Math.min(0.1, (now - lastTick) / 1000);
+        lastTick = now;
+        objects!.ships.sail(sailed);
+      } else {
+        lastTick = 0;
+      }
       // The overlays project through the camera's matrices: bring them up to date first.
       camera.updateMatrixWorld();
       hotspots.place(camera);
@@ -135,8 +151,12 @@ export async function mountWorld(
       canvas.dataset.frames = String(++frames);
       const { target, zoom } = rig.state;
       canvas.dataset.camera = `${target.x.toFixed(2)} ${target.z.toFixed(2)} ${zoom.toFixed(3)}`;
+      if (sailing()) requestRender();
     });
   };
+  const wake = () => requestRender();
+  stillness.addEventListener('change', wake);
+  document.addEventListener('visibilitychange', wake);
   const rig = createCameraRig({ element: ui.frame, camera, onChange: requestRender });
   const hotspots = createLandmarkHotspots(ui.frame, ui.hotspots, (target) => rig.jumpTo({ target, zoom: rig.state.zoom }));
   const cards = createDataCards(ui.frame, ui.cards ?? []);
@@ -242,6 +262,8 @@ export async function mountWorld(
     },
     dispose: () => {
       cancelAnimationFrame(frame);
+      stillness.removeEventListener('change', wake);
+      document.removeEventListener('visibilitychange', wake);
       rig.dispose();
       hotspots.dispose();
       observer.disconnect();

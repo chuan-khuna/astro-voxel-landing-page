@@ -14,25 +14,28 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 
 | File | What it does | three.js? |
 |---|---|---|
-| `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, placeholder parts, sky, lights) as OKLCH, `oklchToLinear`. | no |
+| `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, placeholder parts, boat and ship hulls and sail, sky, lights) as OKLCH, `oklchToLinear`. | no |
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid and the ¼-unit detail grid with a shared colour list. `meshWorld(world)`: both grids meshed. | no |
 | `landmarkModels.ts` | The ¼-unit Landmark models (the Station's is its real model; the rest are placeholders), each filling its footprint, and `landmarkExtent(landmark)`: the box a Landmark covers, measured from what its model draws and never smaller than its footprint. | no |
+| `vesselModels.ts` | `drawBoat(boat, grid, colours)`: a Client's boat in its berth, drawn into the detail grid; `shipVoxels(colours)`: the Partner ship's own small grid, centred on `SHIP_ORIGIN`, bow towards +x. | no |
+| `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
 | `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`, `stateShowing` (the state that shows a point at a screen offset), `screenOffsetOf` (where a point is seen; its inverse) and `flightState` (one moment of an eased flight). | no |
 | `dataCardMath.ts` | Data Card maths: `nearestDataCard` (which card shows), `dataCardAnchors` (where a card stands or hangs), `dataCardTransform` and `placeDataCard` (the CSS `matrix3d`). | no |
 | `landmarkFocus.ts` | `landmarkFocus(world, id)`: the point to look at and the zoom for each of the seven Landmarks. | no |
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
-| `voxelMaterial.ts` | `voxelMaterial(voxelSize)`: the TSL node material. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, as a `THREE.Group`. | yes |
-| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, swapping Worlds. | yes |
+| `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?)`: the TSL node material, in world space or (for ships) the mesh's own space. | yes |
+| `ships.ts` | `buildFleet(world)`: one mesh per Partner ship, sharing one geometry, and `sail(seconds)` to move them along their loops. | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea and the ships, as a `THREE.Group`. | yes |
+| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, swapping Worlds. | yes |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it. | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
 | `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, and the Garden's tree links over their trees. | yes |
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
-meshing run in the Web Worker. Only geometry upload, materials and the sea
-are built on the main thread.
+meshing run in the Web Worker. Only geometry upload, materials, the sea and
+the ship mesh (one small grid) are built on the main thread.
 
 ## Voxel grids
 
@@ -42,7 +45,7 @@ spans world `[x·size, (x+1)·size)`):
 | Grid | Voxel size | Contents |
 |---|---|---|
 | terrain | 1 unit | Every land column from y = 0 to its height. The top voxel takes the surface colour (sand, grass, peak) or the path colour; buried voxels take their stratum's colour. |
-| detail | ¼ unit (`DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), and the Landmark models, each filling its footprint. |
+| detail | ¼ unit (`DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Landmark models, each filling its footprint, and the Clients' moored boats. |
 
 Colours: each grid voxel holds a colour id into one shared list
 (`ColourTable`). Biome colours come from `world.biome`; the House, sky and
@@ -110,7 +113,10 @@ non-empty chunk:
 Because all of this is from world position, a merged 8 × 8 quad still looks
 like 64 voxels. Meshes must not be rotated or scaled (the geometry normal is
 used as the world normal). Terrain uses `voxelMaterial(1)`, detail
-`voxelMaterial(0.25)`.
+`voxelMaterial(0.25)`. `voxelMaterial(0.25, 'local')` (the ships) works from
+`positionLocal` and `normalLocal` instead and turns the bent normal into
+view space with `transformNormalToView`, so a mesh may move and turn (not
+scale) and keep its seams.
 
 ### Approved settings
 
@@ -128,6 +134,45 @@ From ticket 01, in `LOOK` (`palette.ts`):
 
 Unlike the prototype, the shading values are constants compiled into the
 shader rather than uniforms, and AO strength is applied when meshing.
+
+## Boats and ships
+
+Simple code-built models (`vesselModels.ts`), one kind each for now: every
+Client gets the same boat and every Partner the same ship. Kinds drawn as
+ASCII structures come in a later feature (ADR 0004); a boat's kind will
+follow its Client's id, never the Seed.
+
+- **Boats** (Clients) are static, so `worldToVoxels` draws them into the
+  detail grid with the Landmarks: they are greedy-meshed with the rest, cast
+  shadows into the static shadow map, and cost nothing per frame. A boat is
+  4 ¼ voxels long and 3 wide (one voxel in from its berth cell's edge), two
+  ¼ voxels tall from the sea floor so it floats at the waterline: a muted
+  red hull round an open plank deck, a white bow cap and a white seat. Its
+  bow points the way its `facing` says, out along the jetty. About 53
+  triangles each.
+- **Ships** (Partners) are 8 long, 4 wide and 11 tall: a navy hull with a
+  white gunwale and raised bow, a plank deck, a cabin with a window and
+  roof at the stern, a mast with a square sail across the deck, and a
+  Biome-accent pennant. So a ship is twice a boat's length and more than
+  three times its height. `ships.ts` meshes it once (206 triangles), moves
+  the geometry so it turns about the middle of its waterline (whole ¼
+  voxels, so seams stay on voxel edges), and gives each Partner a mesh of
+  its own. Ships use `voxelMaterial(size, 'local')`, so the seams, bevel and
+  jitter sail with the ship instead of sliding over it. They receive
+  shadows but cast none: the static shadow map would leave a moving ship's
+  shadow behind.
+- **Sailing.** `shipMotion.ts` smooths a ship's loop of cells into a closed
+  path through the cell centres (three rounds of Chaikin corner cutting)
+  and gives the ship's position and heading any distance along it; the
+  heading looks 0.35 units ahead and behind, so turns ease in. A ship
+  starts `phase × length` along its path and sails at 0.45 units a second.
+  Its bow (+x) is turned to the heading: `rotation.y = −heading`.
+  `shipMotion.test.ts` checks the path's length and bounds, the heading on
+  each side, wrapping both ways and that the heading never jumps.
+- `vesselModels.test.ts` checks that each boat stays in its berth cell from
+  the sea floor up and is longer along its facing, and that a ship is at
+  least twice a boat's length, wider and more than twice its height,
+  centred on its origin.
 
 ## Sea
 
@@ -182,15 +227,21 @@ camera to a Landmark (see "Landmark focus and flights").
   cuts it to the Overview, moves the hotspots onto the new Landmarks, and
   requests one frame. The renderer, scene, lights and camera are kept.
 - **Render on demand:** `requestRender()` schedules at most one frame. Mount,
-  `show`, canvas resizes and camera moves request frames; nothing renders
-  while idle. Each frame first updates the camera's matrices, re-places the hotspots
+  `show`, canvas resizes and camera moves request frames. While the World
+  has ships, the page is visible and the visitor has not asked for reduced
+  motion, every frame first moves the ships (`sail(seconds)`) and then asks
+  for the next, so ships sail at the display's frame rate; seconds sailed
+  advance at most 0.1 s a frame, so ships never leap after a pause. With no
+  ships, under `prefers-reduced-motion: reduce` (ships keep still where they
+  are) or on a hidden page, nothing renders while idle; a change to either
+  setting requests a frame. Each frame first updates the camera's matrices, re-places the hotspots
   and the Data Cards, then renders.
   three's `render()` also starts the renderer's internal animation loop,
   which would then tick `requestAnimationFrame` forever (it only advances
   node time, which nothing here uses); `mountWorld` stops it after each
   frame through the internal `renderer._animation`, guarded in case it
   disappears, so an idle page schedules no `requestAnimationFrame` at all.
-  Later animation should request frames only while it moves.
+  Other animation should request frames only while it moves, like the ships.
 - The canvas gets `data-seed` (the Seed actually used, after the default
   fallback), `data-triangles` (voxel triangle count), `data-backend`
   (`webgpu` or `webgl2`), `data-frames` (frames rendered so far) and
@@ -355,10 +406,13 @@ below that today (counts for the voxel meshes; the sea adds a few hundred):
 Counts are with no Projects. Highest
 over Seeds `0`–`299`: 5,610; with 24 trees in the Garden, 7,672 (the Station's model, ticket 09, adds 240). Meshing takes about 15–25 ms per World.
 `mesher.test.ts` checks the budget on 40 sampled Seeds, including 4-Isle
-ones. Real tree models, boats, ships and decoration (later tickets) will add most of the
+ones. Boats (ticket 10) add about 53 triangles each, so 12 boats about 640
+(highest over Seeds `0`–`299` with 24 trees and 12 boats: 8,320); each
+ship adds 206, outside the voxel chunks (`data-triangles` counts them).
+Real tree models and decoration (later tickets) will add most of the
 remaining triangles.
 
 ## Not yet built
 
-Day/Night lighting, animation (water, trees, ships), the reduced-decoration tier,
+Day/Night lighting, animation of water and trees, boat and ship kinds, the reduced-decoration tier,
 real models for the House, Garden, Dock and Mailbox, and the Guide's dissolve and re-form on a new Seed.

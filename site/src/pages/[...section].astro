@@ -4,8 +4,8 @@
  * from the Landmark list in the site data module: `/services`, `/about`,
  * `/about/team`, `/garden`, `/dock`, `/contact`. Each shows its intro copy
  * from the `pages` collection in a panel over the World; the Station's also
- * lists every Service, and the Garden's every Project (each Project's page
- * is `garden/[slug].astro`).
+ * lists every Service, the Garden's every Project (each Project's page is
+ * `garden/[slug].astro`) and the Dock's every Client and Partner.
  */
 import type { GetStaticPaths } from 'astro';
 import { getCollection, render } from 'astro:content';
@@ -13,6 +13,7 @@ import WorldPage from '../layouts/WorldPage.astro';
 import SectionPanel from '../components/SectionPanel.astro';
 import ProjectList from '../components/ProjectList.astro';
 import ServiceList from '../components/ServiceList.astro';
+import DockList from '../components/DockList.astro';
 import { site } from '../data/site';
 
 export const getStaticPaths = (async () => {
@@ -36,6 +37,7 @@ const { company } = site;
     <Content />
     {landmark.id === 'station' && <ServiceList />}
     {landmark.id === 'garden' && <ProjectList route={landmark.route} />}
+    {landmark.id === 'dock' && <DockList />}
     {
       landmark.id === 'mailbox' && (
         <dl class="contact">

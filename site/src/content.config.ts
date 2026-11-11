@@ -2,7 +2,7 @@ import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { LANDMARK_IDS } from './world';
-import { projectSchema, serviceSchema } from './lib/contentSchemas';
+import { clientSchema, partnerSchema, projectSchema, serviceSchema } from './lib/contentSchemas';
 
 /**
  * `pages`: copy that is not a content item of its own: the home hook and
@@ -38,4 +38,22 @@ const services = defineCollection({
   schema: serviceSchema,
 });
 
-export const collections = { pages, projects, services };
+/**
+ * `clients`: one YAML file per Client. Each is one boat moored at the Dock,
+ * in order by id (the file name), up to the Dock's cap; all are listed on `/dock`.
+ */
+const clients = defineCollection({
+  loader: glob({ pattern: '**/*.yaml', base: './src/content/clients' }),
+  schema: clientSchema,
+});
+
+/**
+ * `partners`: one YAML file per Partner (fictional names in the mock data).
+ * Each is one ship sailing between the Isles; all are listed on `/dock`.
+ */
+const partners = defineCollection({
+  loader: glob({ pattern: '**/*.yaml', base: './src/content/partners' }),
+  schema: partnerSchema,
+});
+
+export const collections = { pages, projects, services, clients, partners };

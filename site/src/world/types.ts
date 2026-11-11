@@ -171,6 +171,29 @@ export interface PlacedLandmark {
   jetty: Cell[];
 }
 
+/**
+ * A Client's boat, moored at the Dock: a sea cell beside the jetty (or just
+ * beyond it), the bow pointing out to sea along the jetty. A berth may lie
+ * past the terrain grid's edge, in the open sea around it.
+ */
+export interface Boat {
+  cell: Cell;
+  facing: Facing;
+}
+
+/**
+ * A Partner's ship and the loop it sails: `cells` are sea cells, each an
+ * 8-neighbour of the one before and the last of the first, sailed in order
+ * and round again. Every cell keeps clear of land, bridges, the jetty and
+ * the moored boats. Cells may lie past the terrain grid's edge. `phase`
+ * (0–1) is how far round the loop the ship starts, so ships sharing a loop
+ * keep apart.
+ */
+export interface ShipRoute {
+  cells: Cell[];
+  phase: number;
+}
+
 /** A camera view: what to look at and how much of the World to fit. */
 export interface View {
   target: Vec3;
@@ -191,5 +214,9 @@ export interface World {
   paths: Path[];
   stairs: Stair[];
   landmarks: PlacedLandmark[];
+  /** One boat per Client, in Client order, up to `MAX_BOATS`. */
+  boats: Boat[];
+  /** One sailing ship per Partner, in Partner order. */
+  ships: ShipRoute[];
   views: Record<ViewLandmarkId, View>;
 }

@@ -1,9 +1,13 @@
 import type { Rng } from './prng';
 import { surfaceOf } from './terrain';
-import type { Bridge, Cell, Footprint, Isle, PlacedLandmark, PlacedLandmarkId, Terrain } from './types';
+import type { Boat, Bridge, Cell, Facing, Footprint, Isle, PlacedLandmark, PlacedLandmarkId, Terrain } from './types';
 
 /** Most trees the Garden shows; Projects beyond the cap stay on their pages only. */
 export const MAX_TREES = 24;
+/** Most boats moored at the Dock; Clients beyond the cap stay on the Dock's page only. */
+export const MAX_BOATS = 12;
+/** Boats moor at most this many cells (Chebyshev) from the jetty. */
+const BERTH_REACH = 2;
 /** Footprints differing by more than this many voxels in height are never levelled. */
 const MAX_LEVELLING = 2;
 /** The Mailbox stands within this many cells of the House if it can. */
@@ -27,6 +31,8 @@ interface Candidate {
 
 export interface Placement {
   landmarks: PlacedLandmark[];
+  /** The Clients' boats, moored round the Dock's jetty. */
+  boats: Boat[];
   /** The terrain with every footprint levelled. */
   terrain: Terrain;
 }
@@ -52,8 +58,10 @@ export function placeLandmarks(
   source: Terrain,
   isles: Isle[],
   bridges: Bridge[],
-  treeCount: number,
+  counts: { trees: number; boats: number },
 ): Placement | null {
+  const treeCount = counts.trees;
+  const boatCount = Math.min(Math.max(0, counts.boats), MAX_BOATS);
   const terrain: Terrain = { ...source, heights: [...source.heights] };
   const { width, depth, heights, isle } = terrain;
   const index = (x: number, z: number) => z * width + x;
@@ -84,17 +92,21 @@ export function placeLandmarks(
 
   /**
    * Is every ground point of `cells` (on a ¼-cell grid, at height `y`) in
-   * plain view of the camera, with `footprint` levelled to `y`? The camera
+   * plain view of the camera, with `footprint` levelled to `footprintY`
+   * (`y` unless given) and `jetty` a deck at that height? The camera
    * looks along −(1, 1, 1), so the ray from a point runs towards (1, 1, 1):
    * it is hidden if it enters a column below that column's top. The ray
    * climbs one unit per unit of x (and of z), so only columns on the
    * diagonal band ahead, up to the highest ground, can block it. Points above
    * the ground (the model) are then visible too: their rays run higher.
    */
-  const inView = (cells: Cell[], y: number, footprint: Footprint) => {
+  const inView = (cells: Cell[], y: number, footprint: Footprint, footprintY = y, jetty: Cell[] = []) => {
     const { origin, width: w, depth: d } = footprint;
+    const deck = new Set(jetty.map((c) => index(c.x, c.z)));
     const levelled = (x: number, z: number) =>
-      x >= origin.x && x < origin.x + w && z >= origin.z && z < origin.z + d ? y : occluderHeight(x, z);
+      (x >= origin.x && x < origin.x + w && z >= origin.z && z < origin.z + d) || (x >= 0 && z >= 0 && deck.has(index(x, z)))
+        ? footprintY
+        : occluderHeight(x, z);
     const reach = top - y + 2;
     for (const c of cells) {
       for (let i = 0; i <= SAMPLES_PER_CELL; i++) {
@@ -155,12 +167,14 @@ export function placeLandmarks(
    * Pick one candidate at random that the camera sees in full. Visibility is
    * the costly check, so it runs only on the candidates drawn.
    */
-  const pickInView = (candidates: Candidate[]): Candidate | null => {
+  const pickInView = (candidates: Candidate[], fits: (c: Candidate) => boolean = () => true): Candidate | null => {
     const pool = [...candidates];
     while (pool.length > 0) {
       const k = Math.floor(rng() * pool.length);
       const candidate = pool[k]!;
-      if (inView([...candidate.footprint.cells, ...candidate.jetty], candidate.y, candidate.footprint)) return candidate;
+      if (inView([...candidate.footprint.cells, ...candidate.jetty], candidate.y, candidate.footprint) && fits(candidate)) {
+        return candidate;
+      }
       pool.splice(k, 1);
     }
     return null;
@@ -192,10 +206,10 @@ export function placeLandmarks(
     return order;
   };
   /** The first Isle, in turn, with a candidate in view, and that candidate. */
-  const firstInView = (candidatesOn: (owner: Isle) => Candidate[][]) => {
+  const firstInView = (candidatesOn: (owner: Isle) => Candidate[][], fits?: (c: Candidate) => boolean) => {
     for (const owner of islesInTurn()) {
       for (const candidates of candidatesOn(owner)) {
-        const picked = pickInView(candidates);
+        const picked = pickInView(candidates, fits);
         if (picked) return { owner, picked };
       }
     }
@@ -252,13 +266,47 @@ export function placeLandmarks(
         return jetty.length >= 2 ? [{ footprint, y, jetty }] : [];
       }),
     );
-  const dock = firstInView((owner) => {
-    const all = [...levelledDown(owner, 2, 1), ...levelledDown(owner, 1, 2)].flatMap(({ footprint, y }) =>
-      jettyFrom(footprint, y),
-    );
-    return [all.filter((c) => c.y === 1), all.filter((c) => c.y !== 1)];
-  });
+  // Its berths: sea cells beside the jetty and off its tip, nearest first,
+  // clear of bridges and in plain view at sea level. The Dock needs one per boat.
+  const berthsOf = (candidate: Candidate): Boat[] => {
+    const { jetty, footprint } = candidate;
+    const first = jetty[0]!;
+    const dx = Math.sign(jetty[1]!.x - first.x);
+    const dz = Math.sign(jetty[1]!.z - first.z);
+    const facing: Facing = dx === 1 ? 'east' : dx === -1 ? 'west' : dz === 1 ? 'south' : 'north';
+    const inGrid = (x: number, z: number) => x >= 0 && z >= 0 && x < width && z < depth;
+    const found: Array<{ cell: Cell; ring: number; along: number; side: number }> = [];
+    for (let along = 0; along < jetty.length + BERTH_REACH; along++) {
+      for (let side = -BERTH_REACH; side <= BERTH_REACH; side++) {
+        const ring = Math.max(Math.abs(side), along - (jetty.length - 1));
+        if (ring === 0) continue;
+        // Across the jetty: (dz, dx) is perpendicular to (dx, dz).
+        const x = first.x + dx * along + dz * side;
+        const z = first.z + dz * along + dx * side;
+        if (!isSea(x, z) || (inGrid(x, z) && blocked.has(index(x, z)))) continue;
+        found.push({ cell: { x, z }, ring, along, side });
+      }
+    }
+    found.sort((a, b) => a.ring - b.ring || a.along - b.along || Math.abs(a.side) - Math.abs(b.side) || a.side - b.side);
+    const berths: Boat[] = [];
+    for (const { cell } of found) {
+      if (berths.length === boatCount) break;
+      if (inView([cell], 0, footprint, candidate.y, jetty)) berths.push({ cell, facing });
+    }
+    return berths;
+  };
+  const dock = firstInView(
+    (owner) => {
+      const all = [...levelledDown(owner, 2, 1), ...levelledDown(owner, 1, 2)].flatMap(({ footprint, y }) =>
+        jettyFrom(footprint, y),
+      );
+      return [all.filter((c) => c.y === 1), all.filter((c) => c.y !== 1)];
+    },
+    (c) => berthsOf(c).length === boatCount,
+  );
   if (!dock) return null;
+  // Before settling, which blocks the jetty's surroundings. Nothing placed later goes to sea.
+  const boats = berthsOf(dock.picked);
   settle('dock', dock.owner, dock.picked);
 
   // The Mailbox: near the House if it can.
@@ -277,7 +325,7 @@ export function placeLandmarks(
   // Lowering ground never hides anything, and the Station (the only raise)
   // came first, so every Landmark checked above is still in view.
   terrain.surface = surfaceOf(terrain, isles);
-  return { landmarks: placed, terrain };
+  return { landmarks: placed, boats, terrain };
 }
 
 /** The Garden's tree rows (local z) for a depth: two rows of trees, then a path row, repeating. */

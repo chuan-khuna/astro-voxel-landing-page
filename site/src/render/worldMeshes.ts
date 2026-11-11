@@ -1,6 +1,7 @@
 /**
  * World to three.js objects: meshes the World's voxel grids into chunked
- * `BufferGeometry` with the soft-voxel material, plus the sea.
+ * `BufferGeometry` with the soft-voxel material, plus the sea and the
+ * Partners' sailing ships (`ships.ts`).
  */
 import * as THREE from 'three/webgpu';
 import type { World } from '../world';
@@ -8,6 +9,7 @@ import { triangleCount, type ChunkMesh } from './mesher';
 import { oklchToLinear } from './palette';
 import { voxelMaterial } from './voxelMaterial';
 import { meshWorld, type MeshedWorld } from './worldVoxels';
+import { buildFleet, type Fleet } from './ships';
 
 /** Sea cells this close to land (Chebyshev) are shallow water. */
 const SHALLOW_REACH = 2;
@@ -15,8 +17,10 @@ export const SEA_LEVEL = 0.15;
 
 export interface WorldObjects {
   group: THREE.Group;
-  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks); the sea adds a handful more. */
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks, boats, ships); the sea adds a handful more. */
   triangles: number;
+  /** The Partners' ships, which sail: `ships.sail(seconds)` moves them. */
+  ships: Fleet;
   dispose: () => void;
 }
 
@@ -44,11 +48,15 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
 
   const sea = buildSea(world);
   group.add(sea.group);
+  const ships = buildFleet(world);
+  group.add(ships.group);
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail),
+    triangles: triangleCount(terrain) + triangleCount(detail) + ships.triangles,
+    ships,
     dispose: () => {
+      ships.dispose();
       for (const g of geometries) g.dispose();
       for (const m of materials) m.dispose();
       sea.dispose();

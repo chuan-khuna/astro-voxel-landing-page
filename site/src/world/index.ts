@@ -6,5 +6,5 @@
 export { generateWorld } from './generateWorld';
 export { BIOME_COLOUR_ROLES, BIOME_IDS, LANDMARK_IDS, PLACED_LANDMARK_IDS, VIEW_LANDMARK_IDS } from './types';
 export { MAX_SEED_LENGTH } from './generateWorld';
-export { MAX_TREES } from './landmarks';
+export { MAX_BOATS, MAX_TREES } from './landmarks';
 export type * from './types';

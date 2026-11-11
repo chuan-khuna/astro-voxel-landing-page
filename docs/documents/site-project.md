@@ -36,10 +36,12 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | Path | What it holds |
 |---|---|
 | `src/data/site.ts` | The site data module: company identity, brand colour and fonts (`brand.fonts.body` Jersey 20, `brand.fonts.heading` Jersey 15, each with a fallback stack), SEO defaults, default Seed, brand Biome (the Biome the default Seed always gets), the Landmark list (id, route, label, Story Order) and the Data Card metrics (`dataCards`, keyed to a placed Landmark id). `landmarksInStoryOrder` is the sorted list. |
-| `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id and an optional meta `description`) `projects` (MDX, schema `projectSchema`) and `services` (MDX, schema `serviceSchema`). |
-| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema` and `serviceSchema` (see "Projects" and "Services" below). Tested in `contentSchemas.test.ts`. |
+| `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id and an optional meta `description`) `projects` (MDX, schema `projectSchema`), `services` (MDX, schema `serviceSchema`), `clients` (YAML, schema `clientSchema`) and `partners` (YAML, schema `partnerSchema`). |
+| `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema`, `serviceSchema`, `clientSchema` and `partnerSchema` (see "Projects", "Services" and "Clients and Partners" below). Tested in `contentSchemas.test.ts`. |
 | `src/content/projects/` | One MDX file per Project; the file name is its id and URL slug, the body its case study. Six mock Projects. |
 | `src/content/services/` | One MDX file per Service; the body says more about it. Four mock Services. |
+| `src/content/clients/` | One YAML file per Client; the file name is its id. Six mock Clients, the organisations the mock Projects were for. |
+| `src/content/partners/` | One YAML file per Partner; the file name is its id. Three fictional Partners. |
 | `src/content/pages/` | `home.mdx` (the home hook) and one intro per section, found by its `landmark`: `services.mdx` (station), `about.mdx` (house), `team.mdx` (house-interior), `garden.mdx`, `dock.mdx`, `contact.mdx` (mailbox). |
 | `src/world/` | The World generator. See `world-generator.md`. |
 | `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`), camera rig (pan, zoom and flights), Landmark focus and hotspots. See `rendering-and-shading.md`. |
@@ -51,10 +53,11 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/components/SectionPanel.astro` | A section's panel over the World, as a floating card: heading, close link and the intro copy. |
 | `src/components/ServiceList.astro` | The Station's list of every Service in `order`: icon, title, summary and body. |
 | `src/components/ProjectList.astro` | The Garden's list of every Project in tree order: title (a link to its page), Client, year and summary. |
+| `src/components/DockList.astro` | The Dock's two lists: Clients (by id) and Partners (closest tier first), each with its logo or initials. |
 | `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), Astro's `<ClientRouter />`, the self-hosted Jersey fonts, the colour, card and font tokens, and the inline script that turns on the full-screen layout (`data-world="live"`). |
 | `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the Garden's tree links and the Data Cards, and the HUD floating over it (company name, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice button), and the client script that runs the World across routes. |
 | `src/pages/index.astro` | The home page: the World and the home hook. |
-| `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project. |
+| `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project, the Dock's every Client and Partner. |
 | `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. |
 
 Company identity, the fonts, the default Seed, the Landmark list and the
@@ -63,8 +66,8 @@ Data Card metrics live only in `src/data/site.ts`. Landmark ids are typed agains
 ## Pages and routes
 
 Every page is the World plus, on a section page, that section's panel. The
-World gets the Project count from the `projects` collection; the Client and
-Partner counts are 0 until those collections exist.
+World gets its content counts from the collections: Projects, Clients and
+Partners.
 
 - **Home (`/`):** the company name (the page's `h1`), the World, the dice
   button with the current Seed, the Landmark menu, and the intro card: the
@@ -78,6 +81,12 @@ Partner counts are 0 until those collections exist.
   (then by id): an icon, the title, the summary and the body.
 - **Garden (`/garden`):** the intro copy, then every Project in tree order
   (by id), each linking to its page. Projects beyond the Garden's 24 trees
+  are listed too.
+- **Dock (`/dock`):** the intro copy, then two groups, each with its own
+  heading: **Clients** (moored at the Dock, one boat each), in order by id,
+  each with its logo or initials, name and industry; and **Partners**
+  (sailing between the Isles, one ship each), closest tier first, each with
+  its logo or initials, name and tier. Clients beyond the Dock's 12 boats
   are listed too.
 - **Project pages (`/garden/<id>`):** the panel's heading is the Project's
   title, then a link back to all Projects, the Client and year, the tags, the
@@ -269,6 +278,30 @@ to the Station's list on `/services`. The schema (`serviceSchema`):
 
 Services do not change the World and have no pages of their own.
 
+## Clients and Partners
+
+A Client is one YAML file in `src/content/clients/`, a Partner one in
+`src/content/partners/`; adding a file adds it to `/dock` and a boat or a
+ship to the World. Mock data only: fictional names, no real brands or
+logos. The schemas (`clientSchema`, `partnerSchema`):
+
+| Collection | Field | Type |
+|---|---|---|
+| `clients` | `name` | non-empty string |
+| `clients` | `industry` | non-empty string |
+| `clients` | `logo` | optional `{ src, alt }`: an image under `public/` (initials stand in without one) |
+| `partners` | `name` | non-empty string |
+| `partners` | `tier` | `strategic`, `technology` or `community` (closest first) |
+| `partners` | `logo` | optional `{ src, alt }`, as for Clients |
+
+**Boats and ships.** The World generator gets only the counts. It moors one
+boat per Client at the Dock, up to 12 (`MAX_BOATS`), and sails one ship per
+Partner (no cap). Clients are taken in order by id, so boat `k` is the
+`k`-th Client by id; Clients beyond the cap have no boat but stay on
+`/dock`. Every Client's boat is the same kind for now, as is every
+Partner's ship. See `world-generator.md` ("Boats", "Ships") and
+`rendering-and-shading.md` ("Boats and ships").
+
 ## Data Cards
 
 A Data Card floats beside a Landmark in the World and shows one company
@@ -294,4 +327,5 @@ and returns a view whose `show` swaps in another World, whose `camera` is
 the pan, zoom and flight rig, and whose `focus` flies to a Landmark. It
 has a mesher with culling, baked AO and greedy merging, a TSL material for
 seams, bevel and colour jitter, a static sun shadow map, and frames only on
-demand (only while the camera moves). See `rendering-and-shading.md`.
+demand: while the camera moves, and while the Partners' ships sail (never
+under reduced motion). See `rendering-and-shading.md`.

@@ -4,8 +4,10 @@
  * world position, so greedy-merged quads still read as single voxels. Baked
  * AO arrives in the vertex colours.
  *
- * Meshes using this material must not be rotated or scaled: the geometry
- * normal is used as the world normal.
+ * By default meshes using this material must not be rotated or scaled: the
+ * geometry normal is used as the world normal. With `space: 'local'` the
+ * look is computed in the mesh's own space instead, so a mesh that moves and
+ * turns (a sailing ship) carries its seams with it; it must not be scaled.
  */
 import * as THREE from 'three/webgpu';
 import {
@@ -22,19 +24,23 @@ import {
   mix,
   normalGeometry,
   normalize,
+  normalLocal,
+  positionLocal,
   positionWorld,
   smoothstep,
+  transformNormalToView,
   vec3,
   vec4,
 } from 'three/tsl';
 import { LOOK } from './palette';
 
 /** A node material for voxels `voxelSize` world units wide. */
-export function voxelMaterial(voxelSize: number): THREE.MeshStandardNodeMaterial {
+export function voxelMaterial(voxelSize: number, space: 'world' | 'local' = 'world'): THREE.MeshStandardNodeMaterial {
   const size = float(voxelSize);
-  const n = normalGeometry;
+  const inLocal = space === 'local';
+  const n = inLocal ? normalLocal : normalGeometry;
   const an = abs(n);
-  const local = positionWorld.div(size);
+  const local = (inLocal ? positionLocal : positionWorld).div(size);
   const f = fract(local);
   // Distance to the nearest voxel edge on each in-face axis; the normal axis is masked out.
   const d = min(f, f.oneMinus()).max(an);
@@ -50,7 +56,7 @@ export function voxelMaterial(voxelSize: number): THREE.MeshStandardNodeMaterial
     const hi = smoothstep(bevelWidth.oneMinus(), float(1), f);
     const tilt = hi.sub(lo).mul(an.oneMinus()).mul(LOOK.bevelStrength);
     const bent = normalize(n.add(tilt));
-    return normalize(cameraViewMatrix.mul(vec4(bent, 0)).xyz);
+    return inLocal ? transformNormalToView(bent).normalize() : normalize(cameraViewMatrix.mul(vec4(bent, 0)).xyz);
   })();
 
   material.colorNode = Fn(() => {

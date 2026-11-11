@@ -158,7 +158,11 @@ describe('generateWorld', () => {
   const hiddenFromCamera = (world: World, px: number, py: number, pz: number) => {
     const { width, depth, heights } = world.terrain;
     const top = Math.max(...heights, ...world.bridges.map((b) => b.y));
-    const deck = new Map(world.bridges.flatMap((b) => b.cells.map((c) => [key(c), b.y] as const)));
+    // Bridge decks, and the Dock's jetty: a deck at the Dock's height.
+    const deck = new Map([
+      ...world.bridges.flatMap((b) => b.cells.map((c) => [key(c), b.y] as const)),
+      ...world.landmarks.flatMap((l) => l.jetty.map((c) => [key(c), l.y] as const)),
+    ]);
     for (let t = 0.001; py + t <= top; t += 0.02) {
       const x = px + t;
       const y = py + t;
@@ -166,7 +170,8 @@ describe('generateWorld', () => {
       const cx = Math.floor(x);
       const cz = Math.floor(z);
       if (cx >= width || cz >= depth) return false;
-      if (y < heights[cz * width + cx]!) return true;
+      // Past the grid's low edges is open sea.
+      if (cx >= 0 && cz >= 0 && y < heights[cz * width + cx]!) return true;
       const deckY = deck.get(`${cx},${cz}`);
       if (deckY !== undefined && y < deckY && y > deckY - 0.25) return true;
     }
@@ -511,6 +516,146 @@ describe('generateWorld', () => {
       { projects: 500, clients: 500, partners: 500 },
     ]) {
       expect(generateWorld('harbour', c).landmarks).toHaveLength(5);
+    }
+  });
+
+  it('moors one boat per Client at the Dock, up to 12', () => {
+    for (const clients of [0, 1, 5, 12, 13, 500]) {
+      for (const seed of sampledSeeds.slice(0, 40)) {
+        expect(generateWorld(seed, { ...counts, clients }).boats, `${seed} ${clients}`).toHaveLength(Math.min(clients, 12));
+      }
+    }
+  });
+
+  it('sails one ship per Partner', () => {
+    for (const partners of [0, 1, 3, 7, 500]) {
+      for (const seed of sampledSeeds.slice(0, 20)) {
+        expect(generateWorld(seed, { ...counts, partners }).ships, `${seed} ${partners}`).toHaveLength(partners);
+      }
+    }
+  });
+
+  /** Is the point inside the loop through these cells' centres? Ray casting along +x. */
+  const encloses = (loop: Array<{ x: number; z: number }>, px: number, pz: number) => {
+    let inside = false;
+    for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+      const a = loop[i]!;
+      const b = loop[j]!;
+      if (a.z > pz !== b.z > pz && px < ((b.x - a.x) * (pz - a.z)) / (b.z - a.z) + a.x) inside = !inside;
+    }
+    return inside;
+  };
+  const landCells = (world: World) =>
+    world.terrain.isle.flatMap((owner, i) => (owner === -1 ? [] : [{ x: i % world.terrain.width, z: Math.floor(i / world.terrain.width), owner }]));
+
+  it('sails each ship round a closed loop of open sea, clear of land, bridges, the jetty and the boats', () => {
+    for (const seed of sampledSeeds) {
+      const world = generateWorld(seed, { ...counts, clients: 12, partners: 7 });
+      const hazards = [
+        ...landCells(world),
+        ...world.bridges.flatMap((b) => b.cells),
+        ...world.landmarks.flatMap((l) => l.jetty),
+        ...world.boats.map((b) => b.cell),
+      ];
+      for (const ship of world.ships) {
+        const { cells, phase } = ship;
+        expect(phase, seed).toBeGreaterThanOrEqual(0);
+        expect(phase, seed).toBeLessThan(1);
+        expect(cells.length, seed).toBeGreaterThanOrEqual(8);
+        expect(new Set(cells.map(key)).size, seed).toBe(cells.length);
+        cells.forEach((c, i) => {
+          const next = cells[(i + 1) % cells.length]!;
+          expect(Math.max(Math.abs(next.x - c.x), Math.abs(next.z - c.z)), `${seed} step ${key(c)}`).toBe(1);
+        });
+        for (const c of cells) {
+          const nearest = Math.min(...hazards.map((h) => Math.max(Math.abs(h.x - c.x), Math.abs(h.z - c.z))));
+          expect(nearest, `${seed} ${key(c)}`).toBeGreaterThanOrEqual(2);
+        }
+      }
+    }
+  });
+
+  it('sails every loop round the land: round the Isle when there is only one', () => {
+    let single = 0;
+    for (const seed of sampledSeeds) {
+      const world = generateWorld(seed, { ...counts, partners: 4 });
+      if (world.isles.length === 1) single++;
+      const land = landCells(world);
+      for (const { cells } of world.ships) {
+        const centres = cells.map((c) => ({ x: c.x + 0.5, z: c.z + 0.5 }));
+        for (const c of land) expect(encloses(centres, c.x + 0.5, c.z + 0.5), `${seed} ${key(c)}`).toBe(true);
+      }
+    }
+    expect(single).toBeGreaterThan(0);
+  });
+
+  it('sails between two Isles where a bridge leaves room to pass it', () => {
+    /** Is this sea cell in a strait: land of two different Isles either side of it, along x or z? */
+    const inStrait = (world: World, c: { x: number; z: number }) => {
+      const { width, depth, isle } = world.terrain;
+      const firstLand = (dx: number, dz: number) => {
+        for (let s = 1; s <= 12; s++) {
+          const x = c.x + dx * s;
+          const z = c.z + dz * s;
+          if (x < 0 || z < 0 || x >= width || z >= depth) return -1;
+          if (isle[z * width + x] !== -1) return isle[z * width + x]!;
+        }
+        return -1;
+      };
+      return [[1, 0], [0, 1]].some(([dx, dz]) => {
+        const one = firstLand(dx!, dz!);
+        const other = firstLand(-dx!, -dz!);
+        return one !== -1 && other !== -1 && one !== other;
+      });
+    };
+    // A strait can still be too tight where the coasts bulge in: then the ship sails round instead.
+    let checked = 0;
+    let between = 0;
+    for (const seed of sampledSeeds) {
+      const world = generateWorld(seed, { ...counts, partners: 1 });
+      if (!world.bridges.some((b) => b.cells.length >= 5)) continue;
+      checked++;
+      if (world.ships[0]!.cells.some((c) => inStrait(world, c))) between++;
+    }
+    expect(checked).toBeGreaterThan(20);
+    expect(between / checked).toBeGreaterThan(0.85);
+  });
+
+  it('spreads ships that share a loop round it', () => {
+    const world = generateWorld('harbour', { ...counts, partners: 12 });
+    const byLoop = new Map<string, number[]>();
+    for (const { cells, phase } of world.ships) byLoop.set(JSON.stringify(cells), [...(byLoop.get(JSON.stringify(cells)) ?? []), phase]);
+    for (const phases of byLoop.values()) expect(new Set(phases).size).toBe(phases.length);
+    expect(byLoop.size).toBeGreaterThan(1);
+  });
+
+  it('moors each boat in its own sea cell beside the jetty or off its tip, bow out to sea, in plain view', () => {
+    const FACING = { east: [1, 0], west: [-1, 0], south: [0, 1], north: [0, -1] } as const;
+    for (const seed of sampledSeeds) {
+      const world = generateWorld(seed, { ...counts, clients: 12 });
+      const { width, depth } = world.terrain;
+      const dock = world.landmarks.find((l) => l.id === 'dock')!;
+      const jetty = new Set(dock.jetty.map(key));
+      const bridgeCells = new Set(world.bridges.flatMap((b) => b.cells.map(key)));
+      const cells = world.boats.map((b) => key(b.cell));
+      expect(new Set(cells).size, seed).toBe(cells.length);
+      const out = [dock.jetty[1]!.x - dock.jetty[0]!.x, dock.jetty[1]!.z - dock.jetty[0]!.z];
+      for (const { cell, facing } of world.boats) {
+        const inside = cell.x >= 0 && cell.z >= 0 && cell.x < width && cell.z < depth;
+        if (inside) expect(isSeaAt(world, cell.x, cell.z), `${seed} ${key(cell)}`).toBe(true);
+        expect(jetty.has(key(cell)) || bridgeCells.has(key(cell)), `${seed} ${key(cell)}`).toBe(false);
+        const reach = Math.min(...dock.jetty.map((j) => Math.max(Math.abs(j.x - cell.x), Math.abs(j.z - cell.z))));
+        expect(reach, `${seed} ${key(cell)}`).toBeLessThanOrEqual(2);
+        expect(FACING[facing], seed).toEqual(out);
+        for (let i = 0; i <= 4; i++) {
+          for (let k = 0; k <= 4; k++) {
+            expect(hiddenFromCamera(world, cell.x + i / 4, 0, cell.z + k / 4), `${seed} boat ${key(cell)}`).toBe(false);
+          }
+        }
+        const { target, radius } = world.views.overview;
+        expect(Math.abs(cell.x + 0.5 - target.x), seed).toBeLessThanOrEqual(radius);
+        expect(Math.abs(cell.z + 0.5 - target.z), seed).toBeLessThanOrEqual(radius);
+      }
     }
   });
 });

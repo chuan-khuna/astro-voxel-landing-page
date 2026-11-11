@@ -39,3 +39,33 @@ export const serviceSchema = z.object({
 });
 
 export type ServiceData = z.infer<typeof serviceSchema>;
+
+/** A logo image under `public/`, with its alt text. */
+const logoSchema = z.object({ src: z.string().min(1), alt: z.string() });
+
+/**
+ * A Client: an organisation that has hired the company, shown as one boat
+ * moored at the Dock. Without a logo, the Dock's page shows its initials.
+ */
+export const clientSchema = z.object({
+  name: z.string().min(1),
+  industry: z.string().min(1),
+  logo: logoSchema.optional(),
+});
+
+export type ClientData = z.infer<typeof clientSchema>;
+
+/** How close an alliance a Partner is, closest first. */
+export const PARTNER_TIERS = ['strategic', 'technology', 'community'] as const;
+
+/**
+ * A Partner: a technology vendor the company is allied with, shown as one
+ * larger ship sailing between the Isles. Never a Client.
+ */
+export const partnerSchema = z.object({
+  name: z.string().min(1),
+  tier: z.enum(PARTNER_TIERS),
+  logo: logoSchema.optional(),
+});
+
+export type PartnerData = z.infer<typeof partnerSchema>;

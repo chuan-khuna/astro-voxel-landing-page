@@ -3,11 +3,13 @@ import { buildBridges } from './bridges';
 import { findPath, stairsAlong } from './paths';
 import { createRng } from './prng';
 import { placeLandmarks } from './landmarks';
+import { sailingRoutes } from './ships';
 import { buildStrata, buildTerrain } from './terrain';
 import { site } from '../data/site';
 import {
   BIOME_IDS,
   type BiomeId,
+  type Boat,
   type Bridge,
   type Cell,
   type ContentCounts,
@@ -50,9 +52,9 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
     const { isles } = built;
     const bridges = buildBridges(rng, built.terrain, isles);
     if (!bridges) continue;
-    const placement = placeLandmarks(rng, built.terrain, isles, bridges, counts.projects);
+    const placement = placeLandmarks(rng, built.terrain, isles, bridges, { trees: counts.projects, boats: counts.clients });
     if (!placement) continue;
-    const { landmarks, terrain } = placement;
+    const { landmarks, boats, terrain } = placement;
     const route = dockToHouse(terrain, bridges, landmarks);
     if (!route) continue;
     return {
@@ -66,7 +68,9 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
       paths: [{ from: 'dock', to: 'house', cells: route }],
       stairs: stairsAlong(terrain, bridges, route),
       landmarks,
-      views: deriveViews(isles, landmarks),
+      boats,
+      ships: sailingRoutes(terrain, isles, bridges, [...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)], counts.partners),
+      views: deriveViews(isles, landmarks, boats),
     };
   }
   throw new Error(`generateWorld: the safe layout broke a rule for Seed "${seed}"`);
@@ -96,9 +100,9 @@ function pickBiome(seed: string): BiomeId {
   return BIOME_IDS[Math.floor(createRng(`${seed}/biome`)() * BIOME_IDS.length)]!;
 }
 
-function deriveViews(isles: Isle[], landmarks: PlacedLandmark[]): World['views'] {
-  // Overview fits the World's bounds: the union of every Isle's footprint and the Dock's jetty.
-  const jetty = landmarks.flatMap((l) => l.jetty);
+function deriveViews(isles: Isle[], landmarks: PlacedLandmark[], boats: Boat[]): World['views'] {
+  // Overview fits the World's bounds: the union of every Isle's footprint, the Dock's jetty and its boats.
+  const jetty = [...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)];
   const minX = Math.min(...isles.map((i) => i.bounds.minX), ...jetty.map((c) => c.x));
   const maxX = Math.max(...isles.map((i) => i.bounds.maxX), ...jetty.map((c) => c.x)) + 1;
   const minZ = Math.min(...isles.map((i) => i.bounds.minZ), ...jetty.map((c) => c.z));

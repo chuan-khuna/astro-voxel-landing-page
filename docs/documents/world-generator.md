@@ -25,7 +25,8 @@ const world: World = generateWorld(seed, { projects, clients, partners });
 
 `index.ts` also exports the Landmark id lists (`PLACED_LANDMARK_IDS`,
 `VIEW_LANDMARK_IDS`, `LANDMARK_IDS`), the Biome lists (`BIOME_IDS`,
-`BIOME_COLOUR_ROLES`) and `MAX_SEED_LENGTH`. The site data module and the
+`BIOME_COLOUR_ROLES`), `MAX_SEED_LENGTH` and the caps `MAX_TREES` (24) and
+`MAX_BOATS` (12). The site data module and the
 `pages` collection schema type their Landmark ids against these, so a typo
 is a type or build error.
 
@@ -38,7 +39,8 @@ imports, so the generator stays pure.
 | File | What it does |
 |---|---|
 | `generateWorld.ts` | The public function: Seed fallback, Biome choice, the retry loop, the Dock-to-House route, derived views. |
-| `landmarks.ts` | Landmark footprints: placement, levelling, the occlusion check and the Garden's tree layout. |
+| `landmarks.ts` | Landmark footprints: placement, levelling, the occlusion check, the Garden's tree layout and the Dock's berths (the moored boats). |
+| `ships.ts` | The Partners' sailing routes: loops through open sea. |
 | `terrain.ts` | Isle layout, noise heights, surface kinds, cliff strata. |
 | `noise.ts` | Seeded 2D simplex noise and FBM. |
 | `bridges.ts` | Bridges between Isles. |
@@ -71,6 +73,8 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `paths` | Walkable paths between Landmarks. For now one: Dock to House, as 4-connected cells over land and bridges. |
 | `stairs` | One per single-step height change along a path: the lower `cell`, its height `y`, and the `facing` the stairs climb towards. |
 | `landmarks` | The five placed Landmarks: id, Isle, `footprint` (`origin` cell, `width` along x, `depth` along z, and every `cells` entry it covers), ground height `y` (the whole footprint is at this height), `variant` (always 0 for now), `trees` (Garden only: one cell per tree, in Project order) and `jetty` (Dock only: its sea cells, from the shore outwards). |
+| `boats` | One per Client, up to 12 (`MAX_BOATS`), in Client order: the berth `cell` (a sea cell beside the jetty or off its tip; it may lie past the grid's edge, in the open sea) and the `facing` its bow points, out to sea along the jetty. |
+| `ships` | One per Partner, in Partner order: `cells`, a closed loop of sea cells (each an 8-neighbour of the one before, the last of the first) sailed in order, and `phase` (0–1), how far round it the ship starts. Cells may lie past the grid's edge. |
 | `views` | The two derived Landmarks, as camera views (`target`, `radius`): `overview` and `house-interior`. |
 
 ### Placed vs derived Landmarks
@@ -106,7 +110,8 @@ Dock and Mailbox. The other two are views derived from the layout:
    (see "Landmark footprints" below): the Station (2×2) on its Isle's high
    ground; the Garden, then the House (3×3) on the Garden's Isle; the Dock
    (2×1 either way) on the shore with a jetty, preferring height 1; the
-   Mailbox (1×1) within 4 cells of the House if it can.
+   Mailbox (1×1) within 4 cells of the House if it can. The Dock's jetty
+   must have a berth for every boat (see "Boats" below).
 7. **Path and stairs.** The cheapest route from a cell beside the Dock's
    footprint to a cell beside the House's (each at most one voxel above or
    below the Landmark) over land and bridges, never stepping more than one
@@ -116,6 +121,9 @@ Dock and Mailbox. The other two are views derived from the layout:
 8. **Cliff strata.** The waterline layer is dark rock; above it, bands of soil
    and rock alternate, one or two voxels thick. All columns share them, so
    cliffs show the same layered cross-section all round the World.
+9. **Ships.** One sailing route per Partner (see "Ships" below). No
+   randomness: the loops follow from the layout, so they draw nothing from
+   the PRNG.
 
 ### Landmark footprints
 
@@ -162,6 +170,56 @@ footprints that keep every rule:
   Tree `k` fills the rows in order, so it keeps its place: 0–6 trees give
   3 × 3, 24 trees give 6 × 5.
 
+### Boats
+
+Boats moored are `min(clients, 12)`, one per Client in Client order. Their
+berths are sea cells within 2 cells (Chebyshev) of the jetty: beside it or
+off its tip. They are taken nearest first (the ring of cells touching the
+jetty before the ring beyond it), then from the shore outwards, then the
+nearer side before the farther; a cell past the grid's edge counts as sea.
+A berth is never a bridge cell or beside one, and it must be in plain view
+at sea level: the same ray check as footprints, with the Dock levelled and
+its jetty a deck at the Dock's height. Every boat faces the way the jetty
+runs, bow out to sea.
+
+A Dock candidate is kept only if it has a berth for every boat, so the
+boats are part of choosing the Dock. Nothing placed after the Dock goes to
+sea, so berths never clash with a later Landmark. Each Client keeps the
+same boat model in every World (one kind for now; a Client id, not the
+Seed, will pick a kind later).
+
+### Ships
+
+`ships.ts` gives every Partner a closed loop through open sea: sea cells at
+least 2 cells (Chebyshev) from land, bridges, the jetty and the boats, over
+a chart that runs 6 cells past the grid's edge. A loop sails round a
+**body**: a centre cell on solid ground and an axis through it.
+
+- **Bodies.** Each bridge with at least 3 sea cells is a body: its middle
+  cell, along the bridge. With none (one Isle, or only short bridges), the
+  body is all the land: the land cell nearest the middle of the Isles'
+  bounds, along x.
+- **A loop.** From the centre, walk across the axis both ways to the first
+  open water joined to the open sea (never a closed-off bay): `a` and `b`.
+  Sail the shortest way from `a` to `b` (8-connected; a diagonal step needs
+  both cells beside it open) with a wall along the axis past one end, then
+  back from `b` to `a` with a wall past the other end, so the two halves go
+  round opposite ends. Any spur where the halves share cells (a waypoint in
+  a dead-end strait) is cut out, keeping the longer arc.
+- **Between Isles.** A bridge's `a` and `b` lie in the strait on either side
+  of it, so its loop sails through both straits between the two Isles it
+  links. Since bridges link every Isle, every loop also goes round all the
+  land. With one Isle the loop goes round it. Where a strait is too tight
+  (under 5 cells of clear water), `a` and `b` fall outside it and the ship
+  sails round instead: about 1 in 15 Worlds with a bridge of 5+ cells.
+- **Lanes.** Partner `k` takes body `k mod bodies`. The first round of
+  Partners sails at clearance 2; the next round takes a wider loop
+  (clearance 3) the other way round; later rounds share those loops.
+  Ships on the same loop start evenly spread round it (`phase` = j / n).
+- **Fallbacks.** If a body's loop fails, the generator tries clearance 2,
+  then the all-land body, then a ring just inside the chart's edge, which is
+  always open. In 2,000 sampled Seeds the ring is never needed.
+
 ### Retry
 
 If a rule fails (two Isles touch, an Isle is under 30 cells, an Isle cannot
@@ -173,10 +231,12 @@ even a 24-tree Garden, fits in view (checked over 2,000 runs per Biome). So
 retry always ends, in at most 9 attempts, and the same input always gives
 the same World.
 
-With up to 6 Projects, about 35 in 100 Seeds need a retry and the safe
-layout is reached by about 1 Seed in 1,000; with 24 trees, about half need
-a retry and about 1 in 70 reaches the safe layout. Generation takes about
-2 ms on average (4 ms with 24 trees), under 25 ms at worst.
+With up to 6 Projects and 6 or 12 Clients, about 36 in 100 Seeds need a
+retry and the safe layout is reached by under 1 Seed in 1,000; with 24
+trees and 12 boats, about half need a retry and about 1 in 90 reaches the
+safe layout. The berths barely change these rates. Generation takes about
+5 ms on average with 3 Partners (9 ms with 24 trees, 12 boats and 6 ships;
+the ship routes are most of the rise), under 30 ms at worst.
 
 ### Biome colours
 
@@ -189,12 +249,12 @@ the Biome.
 
 ## Not yet built
 
-Later tickets: boats, ships, decoration, Data Card anchors, House Interior
-room layout, and Landmark variants beyond 0. Of `ContentCounts`, only
-`projects` is used yet (the Garden's trees). The site passes the size of
-the `projects` collection and pairs tree `k` with the `k`-th Project by id
+Later tickets: decoration, Data Card anchors, House Interior room layout,
+Landmark variants beyond 0, and boat and ship kinds (ASCII structures, ADR
+0004). The site passes the sizes of the `projects`, `clients` and
+`partners` collections; it pairs tree `k` with the `k`-th Project by id
 (`site/src/lib/gardenTrees.ts`; see `site-project.md`); the generator never
-sees ids. `MAX_TREES` (24) is exported from `index.ts` for the site.
+sees ids.
 
 ## Tests
 
@@ -224,7 +284,17 @@ Seeds, never snapshots:
 - Biome in the set, every Biome seen, every Biome colour chroma ≤ 0.10, the
   default Seed gets the brand Biome, empty and 33-character Seeds fall back;
 - retry happens for some Seeds, stays deterministic and stops within 9
-  attempts; each World generates in under 250 ms; counts of 0 and 500.
+  attempts; each World generates in under 250 ms; counts of 0 and 500;
+- boats: `min(clients, 12)` for 0, 1, 5, 12, 13 and 500 Clients; each in its
+  own sea cell within 2 cells of the jetty, never on the jetty or a bridge,
+  bow out along the jetty, in plain view at sea level (the ray march, with
+  the jetty as a deck) and inside the Overview;
+- ships: one per Partner for 0, 1, 3, 7 and 500; each a closed loop of
+  distinct cells, 8-neighbour steps, at least 2 cells from land, bridges,
+  the jetty and boats; every loop encloses all the land (so with one Isle it
+  sails round it); over 85% of Worlds with a bridge of 5+ cells sail
+  through a strait between two Isles; ships sharing a loop start at
+  different phases.
 
 ```sh
 cd site && bun run test

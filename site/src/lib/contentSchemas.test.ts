@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { projectSchema, serviceSchema } from './contentSchemas';
+import { clientSchema, partnerSchema, projectSchema, serviceSchema } from './contentSchemas';
 
 const valid = {
   title: 'Tide tables that forecast themselves',
@@ -44,5 +44,38 @@ describe('serviceSchema', () => {
     expect(serviceSchema.safeParse(noSummary).success).toBe(false);
     expect(serviceSchema.safeParse({ ...service, order: 0 }).success).toBe(false);
     expect(serviceSchema.safeParse({ ...service, order: 1.5 }).success).toBe(false);
+  });
+});
+
+describe('clientSchema', () => {
+  const client = { name: 'Port Meridian Authority', industry: 'Logistics' };
+
+  it('accepts a Client with a name and industry, and an optional logo', () => {
+    expect(clientSchema.parse(client)).toEqual(client);
+    const withLogo = { ...client, logo: { src: '/logos/port-meridian.svg', alt: 'Port Meridian Authority' } };
+    expect(clientSchema.parse(withLogo)).toEqual(withLogo);
+  });
+
+  it('rejects a Client with no name, an empty industry or a logo without a source', () => {
+    const { name: _, ...noName } = client;
+    expect(clientSchema.safeParse(noName).success).toBe(false);
+    expect(clientSchema.safeParse({ ...client, industry: '' }).success).toBe(false);
+    expect(clientSchema.safeParse({ ...client, logo: { alt: 'x' } }).success).toBe(false);
+  });
+});
+
+describe('partnerSchema', () => {
+  const partner = { name: 'Cumulus Cloudworks', tier: 'strategic' };
+
+  it('accepts a Partner with a name and a known tier, and an optional logo', () => {
+    expect(partnerSchema.parse(partner)).toEqual(partner);
+    const withLogo = { ...partner, logo: { src: '/logos/cumulus.svg', alt: 'Cumulus Cloudworks' } };
+    expect(partnerSchema.parse(withLogo)).toEqual(withLogo);
+  });
+
+  it('rejects a Partner with an unknown tier or no name', () => {
+    expect(partnerSchema.safeParse({ ...partner, tier: 'platinum-plus' }).success).toBe(false);
+    const { name: _, ...noName } = partner;
+    expect(partnerSchema.safeParse(noName).success).toBe(false);
   });
 });

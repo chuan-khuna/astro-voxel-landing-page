@@ -30,8 +30,12 @@ const { title, description } = Astro.props;
 const hasPanel = Astro.slots.has('panel');
 
 const projects = treeOrder(await getCollection('projects'));
-// The Client and Partner collections arrive in later tickets.
-const counts: ContentCounts = { projects: projects.length, clients: 0, partners: 0 };
+// The generator gets counts only: a tree per Project, a boat per Client, a ship per Partner.
+const counts: ContentCounts = {
+  projects: projects.length,
+  clients: (await getCollection('clients')).length,
+  partners: (await getCollection('partners')).length,
+};
 
 // One hotspot link per placed Landmark; the World positions them over its model.
 const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly string[]).includes(l.id));
