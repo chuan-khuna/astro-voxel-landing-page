@@ -275,7 +275,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 
 ### Data contracts
 
-**Site data module (`data/site.ts`, a user requirement).** It holds:
+**Site data module (`site/src/data/site.ts`, a user requirement).** It holds:
 - company identity: name, tagline, logo, address, email, phone, socials
 - SEO and OG defaults
 - the default Seed
