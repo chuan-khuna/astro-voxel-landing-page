@@ -19,6 +19,8 @@ Things the agents went ahead on without waiting for the user, while the user was
 - [ ] **Night glow is unlit colour, not real lights (13).** Check against the torches and Night light ticket.
 - [ ] **Ships render every frame while they sail (10).** This costs battery; under reduced motion or on a hidden tab it stops.
 - [ ] **Stats card text is 14px (20)**, below the site's 16px minimum, as a dev-only tool.
+- [ ] **The Guide (14)** is named **Lumen** (`site.guide.name`), and all its lines were written by the agent (`guide` in `pages/home.mdx`). It has six screen moods and lives beside the Station. It renders every frame while idle, stopping under reduced motion or on a hidden tab. Its model is ¼ unit; ADR 0006 moves structures to ⅛ later.
+- [ ] **Guide spots (14).** About 1 in 1500 Landmark spots has no clear place for the Guide (a Mailbox tucked in front of its House), and the Guide then takes the preferred spot anyway.
 
 ## Known issues not yet fixed
 
@@ -31,5 +33,5 @@ Things the agents went ahead on without waiting for the user, while the user was
 
 - [ ] **Merge to `main`.** All work is on `feat/voxel-world`; `main` is still at the first commit.
 - [ ] **`mise trust`.** Agents ran node and bun directly because `mise.toml` is not trusted.
-- [ ] **Restart the dev server** if :4321 shows HTTP 500 after the `@/` alias change, so it picks up the new `tsconfig.json`.
+- [ ] **Restart the dev server.** Do this if :4321 shows HTTP 500 after the `@/` alias change, so it picks up the new `tsconfig.json`. A restart is also needed for the Guide to speak in dev: the running server's content store lacks the new `guide` field.
 - [ ] **`../` imports.** 88 relative imports predate the `@/` rule; they are converted as files are touched. Decide whether to do one sweep.
