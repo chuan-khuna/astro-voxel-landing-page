@@ -236,6 +236,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - Frames render on demand, only while something moves.
 - DPR is capped at 1.5 on mobile and 2 on desktop.
 - A reduced-decoration tier applies on small devices.
+- **Done (ticket 16).** `site/src/lib/renderTier.ts`: a touch device whose screen's shorter side is under 600px gets the `reduced` tier (no MSAA, a 1024² shadow map instead of 2048², frames that only ambient motion asks for at most 30 a second); everything else `full`. Camera moves always render every frame. A tier never removes anything from the World (every Landmark, tree, boat, ship and buoy stays); later Decoration and Ambient Life read it for density. `?tier=full|reduced` forces one for measuring; the stats card shows it. Measured on a phone viewport with Chromium's software renderer: Tour flights at 13 fps full, 28 reduced (10 and 21 at 4× CPU throttling); on a desktop GPU 57–60 fps at 4× throttling, desktop 60. Not yet measured on a real phone.
 
 **Performance budget**
 - Mid-range phone: at least 30 fps while the camera moves. Desktop: 60 fps.
@@ -300,6 +301,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
 - **Fallback.** A still image of the default Seed's World is shown when WebGL/WebGPU or JS is unavailable.
   - The still is captured automatically at build time: a headless browser (Playwright) loads the World for the default Seed and screenshots it, in Day and Night.
   - The same capture serves as the default OG image.
+  - **Done (ticket 16).** The `worldStills` integration (`site/src/integrations/worldStills.ts`, on `astro:build:done`) serves `dist` locally and captures the home page's canvas in headless Chromium (Playwright 1.64, a dev dependency) at 1600×1000 with reduced motion, by Day and by Night, as WebP at 800 and 1600px in `dist/stills/`. Every page has a `<figure data-world-still>` with one lazy `<img>` per theme, shown only without the full-screen World; CSS picks Day or Night like the theme tokens (`data-theme`, or `prefers-color-scheme` without JS). Without Playwright's Chromium the build warns with the install command (`bunx playwright install chromium`) and strips the figure from every page. Under reduced motion every camera move, Tour step, lid and Guide re-form is a cut and nothing loops (audited: no idle frames). The OG image is ticket 17.
   - Everything in the image is drawn by the three.js World itself. Nothing comes from the claude-drawing skill.
 
 ### Data contracts

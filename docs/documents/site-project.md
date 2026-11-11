@@ -13,6 +13,7 @@ docs and skills at the repo root.
 | vitest | 5.1.0 |
 | @astrojs/check | 0.9.12 |
 | typescript | 6.0.x (`@astrojs/check` does not support TypeScript 7) |
+| playwright | 1.64.1 (dev; build-time World still only, Chromium revision 1248) |
 
 - bun is the package manager. `bunfig.toml` and `.npmrc` set a 7-day minimum
   release age, so newer releases are skipped on install.
@@ -27,9 +28,23 @@ bun install
 bun run dev      # dev server
 bun run check    # astro check
 bun run test     # vitest run
-bun run build    # static build into site/dist
+bun run build    # static build into site/dist, then the World still (needs Playwright's Chromium, below)
 bun run preview  # serve the build (Astro 7 runs it in the background; stop with `bunx astro preview stop`)
 ```
+
+The build captures the World still with a headless Chromium from
+Playwright. Download it once per machine (it goes to the shared Playwright
+cache, `%LOCALAPPDATA%ms-playwright` on Windows, `~/.cache/ms-playwright`
+on Linux; on a bare Linux CI image add `--with-deps`):
+
+```sh
+cd site
+bunx playwright install chromium
+```
+
+Without it the build still passes: it warns, says this command, and leaves
+the still out of every page (see "World still"). `WORLD_STILLS=off bun run
+build` skips the capture the same way.
 
 ## Layout
 
@@ -54,6 +69,9 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/lib/seedUrl.ts` | The Seed in the URL: `seedFromUrl`, `rollSeed` (numeric) and `withSeed` (keep the Seed on a route link). Tested in `seedUrl.test.ts`. |
 | `src/lib/gardenTrees.ts` | `treeOrder(projects)`: Projects sorted by id (tree order). `gardenTrees(world, projectIds)`: the World's tree cells, each paired with its Project (tree `k` is the `k`-th Project by id; none beyond the cap). Tested in `gardenTrees.test.ts`. |
 | `src/lib/contactDetails.ts` | `contactDetails(company)`: the Contact panel's details, from `site.company`: email, phone, address, then each social, each with a label, the text shown and a link (none for the address). Tested in `contactDetails.test.ts`. |
+| `src/lib/renderTier.ts` | The render tier: `renderTier(device, override)` (`reduced` for a touch device whose screen's shorter side is under 600px, `full` otherwise; `?tier=full` or `?tier=reduced` overrides), `pixelRatio(device)` (the DPR cap) and `ambientFrameDue` (the 30 fps gate for ambient frames). Tested in `renderTier.test.ts`. See "Phones and the render tier". |
+| `src/lib/worldStill.ts` | The World still's files: `STILL_SIZE` (1600×1000), `STILL_WIDTHS` (800, 1600), `stillPath(theme, width)` (`/stills/world-<theme>-<width>.webp`), `stillSrcset` and `stripStills(html)` (a page without its still). Tested in `worldStill.test.ts`. See "World still". |
+| `src/integrations/worldStills.ts` | The `worldStills` Astro integration (in `astro.config.mjs`): after the build, captures the World still by Day and by Night with Playwright. See "World still". |
 | `src/lib/landmarkRoutes.ts` | `landmarkForPath(pathname)`: the Landmark a route belongs to, from the Landmark list. A trailing slash and `index.html` are ignored, `/garden/<slug>` belongs to the Garden, and any other route gives `null`. `routeView(id)`: what the World shows for it: the Landmark the camera goes to, and whether the House is open (About and Team both open it and go to the House Interior). Tested in `landmarkRoutes.test.ts`. |
 | `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order: a floating rounded bar, collapsing below 64rem into a menu button that opens the list as a popover (the Popover API, so it needs no JS). Its links carry `data-seed-link`, so they keep a rolled Seed; the current section's link has `aria-current="page"`. |
 | `src/components/ThemeToggle.astro` | The theme toggle: one icon button (a monitor, a sun or a moon, for the choice in force) that cycles Auto, Day and Night, and the script that keeps the choice (see "Day and Night"). |
@@ -131,7 +149,7 @@ radius, the `--card` paper at 95%, a soft shadow), haru-ni style:
 |---|---|
 | Top left | The logo mark and company name (the `h1` on the Overview, a link home on a section page). |
 | Top right | The theme toggle (one icon button), then the Landmark menu: a rounded bar; below 64rem a menu button that opens it as a popover (the bar, the toggle and the name need about 1,018px). The current section is marked (`aria-current`). |
-| Bottom left | The dice button and the current Seed. |
+| Bottom left | The dice button, the Tour button and the current Seed (narrower than 48rem the two buttons are icons only, so the row stays on one line). |
 | Right, below the menu (48rem and wider) | A section's panel: `min(27rem, 42vw)` wide, as tall as its content and no taller than the screen; long content scrolls inside it. |
 | Left, below the name (48rem and wider) | The Overview's intro card: the tagline and the home hook. |
 | Bottom (narrower than 48rem) | The panel or the intro as a bottom sheet (up to 55dvh; the intro 40dvh), with the dice row just above it. |
@@ -148,8 +166,9 @@ radius, the `--card` paper at 95%, a soft shadow), haru-ni style:
   script carries it across route swaps (`astro:before-swap`), does not
   mount without it, and removes it if the World fails to mount. Without it
   (no JS, or no GPU) the page is a normal page that scrolls: the same cards
-  stacked in a 64rem column, with the World and the dice hidden. It is
-  never a locked, empty screen.
+  stacked in a 64rem column, with the World still (below) in the World's
+  place and the World, the dice and the Tour hidden. It is never a locked,
+  empty screen.
 - **Camera framing.** Every card that covers the World carries
   `data-covers-world` (the top bar, the panel, the intro, the controls).
   `freeCentre(frame, covers)` (`src/render/freeArea.ts`, tested) finds the
@@ -161,6 +180,10 @@ radius, the `--card` paper at 95%, a soft shadow), haru-ni style:
   seen there, so a Landmark at the edge of the World still lands beside the
   panel or above the sheet. It is measured again on each route and on
   resize.
+- **Icon-only controls on phones.** Below 48rem the dice and the Tour button
+  show only their icons; their labels (`.control-label`) stay for screen
+  readers and both carry a `title`. With the stats toggle beside them the
+  row stays on one line on a 360px screen.
 - **Fonts.** Jersey 20 for body text (20px, line height 1.3, never below
   16px) and Jersey 15 for headings (`h1`–`h3`, `dt`, card titles and the
   company name, at multiples of 15px), from `@fontsource/jersey-20` and
@@ -173,6 +196,66 @@ radius, the `--card` paper at 95%, a soft shadow), haru-ni style:
   for backgrounds under `--on-brand` text: links, the tagline, Data Card
   figures, the dice, hovered menu links and hotspot labels. Every text pair
   meets AA in both themes (`theme.test.ts`); see "Day and Night".
+
+### World still
+
+Without JS or without WebGPU and WebGL 2 the World cannot be drawn, so a
+picture of it stands in its place (ADR 0003): the default Seed's World by
+Day and by Night, captured at build time.
+
+- **Capture.** The `worldStills` integration (`src/integrations/worldStills.ts`)
+  runs on `astro:build:done`. It serves `dist` on a free local port, opens
+  the home page in headless Chromium (Playwright, loaded with Node's
+  `require`, not Vite) at 1600×1000 with reduced motion on (so the Guide is
+  simply there and the ships keep their starting places) and the system
+  theme set to light, then dark. Once the canvas has drawn in that theme it
+  hides the cards, hotspots, Data Cards and bubble, screenshots the canvas
+  and encodes it as WebP at 800 and 1600px in the page
+  (`dist/stills/world-day-800.webp` and so on, about 17–70 KB each). No GPU
+  is needed: Chromium falls back to SwiftShader.
+- **On the page.** `WorldPage.astro` has a `<figure class="world-still"
+  data-world-still>` before the World frame: one `<img>` per theme
+  (`srcset` at both widths, `loading="lazy"`, `width`/`height` set, an
+  `alt` naming what the World holds), and a caption. CSS shows the Day
+  picture, or the Night one on `<html data-theme="night">` and, before any
+  script or without JS, when the system prefers dark (as `themeCss` does).
+  The figure is hidden whenever the full-screen World is on, so a visitor
+  with a GPU never downloads it.
+- **No browser.** If Playwright or its Chromium is missing, or the World
+  does not draw, the build warns with the reason and the install command,
+  and `stripStills` takes the figure out of every built page: no broken
+  image, only the Landmark menu and the cards.
+
+### Phones and the render tier
+
+Small touch devices get the reduced render tier (`lib/renderTier.ts`,
+chosen once in `mountWorld`): no MSAA, a 1024px shadow map instead of
+2048px, and frames that only ambient motion asks for (ships sailing, the
+Guide idling, the developer working) at most 30 a second. Camera moves
+(drags, pinches, flights) always render every frame. The tier changes how
+the World is drawn, never what is in it: every Landmark, tree, boat, ship
+and buoy is there in both, and Decoration and Ambient Life (polish) will
+read the tier for their density. The DPR cap stays 1.5 on touch devices and
+2 elsewhere.
+
+- `?tier=full` or `?tier=reduced` forces a tier, to compare on one device;
+  `canvas.dataset.tier` and the stats card's `tier` row say which is on.
+- Measured (ticket 16, phone viewport 393×852, DPR 2.75 capped to 1.5):
+  with Chromium's software renderer (SwiftShader, a stand-in for a weak
+  GPU) the Tour's camera flights ran at 13 fps on the full tier and 28 on
+  the reduced one, and with 4× CPU throttling 10 and 21. On a desktop GPU
+  both tiers held 57–60 fps at 4× CPU throttling and desktop held 60.
+  A real mid-range phone has not been measured yet.
+
+### Reduced motion
+
+Under `prefers-reduced-motion: reduce` every move is a cut and nothing
+loops: camera flights and the Tour's steps (the camera and the Guide), the
+House's lid, the Guide assembling and re-forming; the ships, the Guide's
+idling and the developer stand still, so nothing renders while idle; the
+panel, Data Card, hotspot label and bubble fades are off. Checked in the
+built site (ticket 16): no frames over 2 s idle, and each Tour step and
+opening About render a single frame.
 
 ### Day and Night
 
@@ -297,7 +380,7 @@ route on every `astro:after-swap`:
   request is shown, so fast rolls never show a stale World. A new World
   starts at its Overview, then cuts to the open section's Landmark, if any.
 - **Dice button** ("Roll a new World", a real `<button>` with a visible
-  label and focus ring): rolls a numeric Seed different from the current
+  label, an icon only below 48rem, and a focus ring): rolls a numeric Seed different from the current
   one (`rollSeed`) and navigates to the same route with `?seed=` set
   (`navigate` from `astro:transitions/client`). Each roll is a history
   entry, and an open panel stays open. Back returns to the previous World:
@@ -334,7 +417,7 @@ plain CSS import would be hoisted onto every page).
 - **What it shows:** FPS and frame time (`frameMeter.ts`; `idle` when no
   frame has rendered for 0.5 s or only a lone on-demand frame did),
   triangles and draw calls of the last frame (the renderer's info), the
-  backend (WebGPU or WebGL 2), the Seed and Biome, the generate time (from
+  backend (WebGPU or WebGL 2), the render tier (`full` or `reduced`), the Seed and Biome, the generate time (from
   the worker; `cached` on a cache hit) and retries (`attempts - 1`), and
   voxels in total and by kind (`countVoxels`, once per World shown, only
   while the card is on).

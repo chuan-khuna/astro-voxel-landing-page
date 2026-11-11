@@ -22,6 +22,9 @@ Things the agents went ahead on without waiting for the user, while the user was
 - [ ] **The Guide (14)** is named **Lumen** (`site.guide.name`), and all its lines were written by the agent (`guide` in `pages/home.mdx`). It has six screen moods and lives beside the Station. It renders every frame while idle, stopping under reduced motion or on a hidden tab. Its model is ¼ unit; ADR 0006 moves structures to ⅛ later.
 - [ ] **Guide spots (14).** About 1 in 1500 Landmark spots has no clear place for the Guide (a Mailbox tucked in front of its House), and the Guide then takes the preferred spot anyway.
 - [ ] **The Tour (15)** is step-by-step: it never plays by itself (the glossary avoids "autoplay"), so there is no Pause button; it waits at each step for Next. It never changes the URL; while it runs, the intro or section panel is hidden and the Tour's card takes its place. All Tour lines (`tour` in each `pages` entry) were written by the agent. A click on the idle Guide now starts the Tour, so `idle` lines are said when the Guide gets back to the Station after the Tour instead. The camera stays at most 1.3 × the House's close-up inside the House on the Tour, so the Guide stays in view. Test seams picked: `lib/tour.ts` and `travelPoint`.
+- [ ] **Phone render tier (16).** A touch device whose screen's shorter side is under 600px gets the reduced tier: no MSAA, a 1024² shadow map and ambient motion (ships, the Guide idling) at 30 fps; camera moves stay at full rate. Tablets get the full tier. `?tier=full|reduced` forces one. Test seams picked: `lib/renderTier.ts` and `lib/worldStill.ts`.
+- [ ] **World still (16).** It is captured at 1600×1000 with the HUD hidden and reduced motion on, as WebP at 800 and 1600px. Without JS or a GPU it shows on every page after the intro or panel, with a caption and alt text the agent wrote. Playwright is pinned to 1.64.1 because 1.65 is under the 7-day release age. Without Playwright's Chromium the build passes and leaves the still out.
+- [ ] **Icon-only controls on phones (16).** Below 48rem the dice and the Tour button show only their icons (labels stay for screen readers and as tooltips), which fixes "Roll a new World" wrapping (Phone Tour, 15).
 
 ## Known issues not yet fixed
 
@@ -34,6 +37,7 @@ Things the agents went ahead on without waiting for the user, while the user was
   - At the Mailbox step the Guide's bubble can cover the Mailbox.
 - [ ] **No Pause in the Tour (15).** The ticket asked for pause; the Tour is step-by-step and never plays by itself, so there is nothing to pause.
 - [ ] **Code-built models to port.** The Station (09), Mailbox (12), boats and ships (10) and the House room (11) are still code-built and will need porting to ASCII structures in the polish feature.
+- [ ] **Phone FPS not measured on a real phone (16).** It was checked only in Chromium on a phone viewport with 4× CPU throttling: 57–60 fps on a desktop GPU; with the software renderer the reduced tier doubles FPS (13 → 28). Check 30 fps on a real mid-range phone with `?stats` (compare `&tier=full`).
 
 ## Housekeeping
 
@@ -41,3 +45,4 @@ Things the agents went ahead on without waiting for the user, while the user was
 - [ ] **`mise trust`.** Agents ran node and bun directly because `mise.toml` is not trusted.
 - [ ] **Restart the dev server.** Do this if :4321 shows HTTP 500 after the `@/` alias change, so it picks up the new `tsconfig.json`. A restart is also needed for the Guide to speak in dev: the running server's content store lacks the new `guide` field.
 - [ ] **`../` imports.** 88 relative imports predate the `@/` rule; they are converted as files are touched. Decide whether to do one sweep.
+- [ ] **Playwright Chromium (16).** Each machine or CI that builds needs `cd site && bunx playwright install chromium` once (on Linux CI add `--with-deps`), or the build ships without the World still.

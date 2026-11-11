@@ -35,6 +35,11 @@
  *   House's windows and the buoys' lamps glow. Nothing moves, so the shadow
  *   map is kept; one frame is rendered.
  * - DPR is capped at 1.5 on touch devices and 2 elsewhere.
+ * - The render tier (`lib/renderTier.ts`): phones get the reduced tier (no
+ *   MSAA, a 1024 px shadow map, ambient motion at 30 fps); camera moves
+ *   always render every frame. A tier never removes anything from the World.
+ *   `ui.tierOverride` (`?tier=full|reduced`) picks one for measuring;
+ *   `canvas.dataset.tier` and `WorldView.tier` say which is on.
  * - `ui.onExplore` hears the visitor pan, zoom or tab to a Landmark off
  *   screen: free exploration, which stops the Tour.
  * - `onFrame(listener)` hears about every frame that renders anyway (its
@@ -58,20 +63,23 @@ import type { MeshedWorld } from './worldVoxels';
 import type { Rect, ScreenOffset } from './freeArea';
 import { createGuide, type GuideView } from './guide';
 import { guideSpot } from './guideMotion';
+import { ambientFrameDue, pixelRatio, renderTier, type Device, type RenderTierName } from '@/lib/renderTier';
 
 export type { ScreenOffset, GuideView };
-
-const SHADOW_MAP_SIZE = 2048;
 
 const setColour = (target: THREE.Color, colour: Oklch) => {
   const [r, g, b] = oklchToLinear(colour);
   target.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
 };
 
-/** Device-pixel-ratio cap: 1.5 on phones and tablets (coarse pointer), 2 on desktop. */
-function pixelRatio(): number {
-  const mobile = window.matchMedia('(pointer: coarse)').matches;
-  return Math.min(window.devicePixelRatio, mobile ? 1.5 : 2);
+/** This device, for its render tier and pixel-ratio cap. */
+function currentDevice(): Device {
+  return {
+    coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+    screenWidth: window.screen.width,
+    screenHeight: window.screen.height,
+    devicePixelRatio: window.devicePixelRatio,
+  };
 }
 
 export interface WorldView {
@@ -120,6 +128,8 @@ export interface WorldView {
   onFrame(listener: (frame: FrameInfo) => void): () => void;
   /** The renderer's backend: WebGPU, or the WebGL 2 fallback. */
   readonly backend: 'webgpu' | 'webgl2';
+  /** The render tier on this device (`lib/renderTier.ts`). */
+  readonly tier: RenderTierName;
   dispose(): void;
 }
 
@@ -146,6 +156,8 @@ export interface WorldFrame {
   guide?: { button?: HTMLElement | null; bubble?: HTMLElement | null; covers?: () => Rect[]; landmarks?: () => Rect[] };
   /** The visitor explores on their own: pans or zooms the World, or tabs to a Landmark off screen (the Tour stops for it). */
   onExplore?: () => void;
+  /** `?tier=full` or `?tier=reduced`: that render tier whatever the device (for measuring); anything else is ignored. */
+  tierOverride?: string | null;
 }
 
 /** Closest zoom: about this many world units from the centre to the edge of the frame. */
@@ -157,8 +169,10 @@ export async function mountWorld(
   meshed?: MeshedWorld,
   ui: WorldFrame = { frame: canvas.parentElement ?? canvas, hotspots: [] },
 ): Promise<WorldView> {
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(pixelRatio());
+  const tier = renderTier(currentDevice(), ui.tierOverride);
+  canvas.dataset.tier = tier.name;
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: tier.antialias });
+  renderer.setPixelRatio(pixelRatio(currentDevice()));
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = LOOK.exposure;
   renderer.shadowMap.enabled = true;
@@ -202,6 +216,8 @@ export async function mountWorld(
   // Render on demand: a request schedules at most one frame.
   let frame = 0;
   let frames = 0;
+  /** A frame was asked for (a camera move, a new World, a resize): it renders at once, whatever the tier. */
+  let asked = false;
   // Ships sail while the page is visible and the visitor has not asked for reduced motion:
   // then every frame asks for the next. Otherwise they keep still where they are.
   const stillness = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -223,9 +239,19 @@ export async function mountWorld(
   let lastTick = 0;
   const frameListeners = new Set<(frame: FrameInfo) => void>();
   const requestRender = () => {
+    asked = true;
+    schedule();
+  };
+  /** The next animation frame: an asked frame renders; one only ambient motion wants renders when due on this tier. */
+  const schedule = () => {
     if (frame) return;
     frame = requestAnimationFrame((now) => {
       frame = 0;
+      if (!asked && !ambientFrameDue(now, lastTick, tier.ambientFps)) {
+        if (moving()) schedule();
+        return;
+      }
+      asked = false;
       // At most a tenth of a second a frame, so nothing leaps after a pause.
       const dt = lastTick ? Math.min(100, now - lastTick) : 0;
       if (sailing()) {
@@ -260,7 +286,7 @@ export async function mountWorld(
       canvas.dataset.frames = String(++frames);
       const { target, zoom } = rig.state;
       canvas.dataset.camera = `${target.x.toFixed(2)} ${target.z.toFixed(2)} ${zoom.toFixed(3)}`;
-      if (moving()) requestRender();
+      if (moving()) schedule();
     });
   };
   const wake = () => requestRender();
@@ -305,7 +331,7 @@ export async function mountWorld(
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return;
-    renderer.setPixelRatio(pixelRatio());
+    renderer.setPixelRatio(pixelRatio(currentDevice()));
     renderer.setSize(w, h, false);
     frameCamera();
     lookAtViewCentre();
@@ -329,7 +355,7 @@ export async function mountWorld(
 
     const { width, depth } = next.terrain;
     const centre = new THREE.Vector3(width / 2, 0, depth / 2);
-    placeSun(sun, centre, Math.hypot(width, depth) / 2 + 2);
+    placeSun(sun, centre, Math.hypot(width, depth) / 2 + 2, tier.shadowMapSize);
 
     // Pan bounds are the union of the Isles' footprints; zoom runs from the Overview in to a close-up.
     const { target } = next.views.overview;
@@ -398,6 +424,7 @@ export async function mountWorld(
       return () => frameListeners.delete(listener);
     },
     backend,
+    tier: tier.name,
     setViewCentre: (at) => {
       viewCentre = at;
       lookAtViewCentre();
@@ -423,14 +450,14 @@ export async function mountWorld(
  * the whole World, and render its shadow map once. Call again (or set
  * `sun.shadow.needsUpdate`) whenever the World changes.
  */
-function placeSun(sun: THREE.DirectionalLight, centre: THREE.Vector3, reach: number): void {
+function placeSun(sun: THREE.DirectionalLight, centre: THREE.Vector3, reach: number, mapSize: number): void {
   const az = THREE.MathUtils.degToRad(LOOK.sunAzimuth);
   const el = THREE.MathUtils.degToRad(LOOK.sunElevation);
   const direction = new THREE.Vector3(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az));
   sun.position.copy(centre).addScaledVector(direction, reach * 2);
   sun.target.position.copy(centre);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+  sun.shadow.mapSize.set(mapSize, mapSize);
   Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 0.5, far: reach * 4 });
   sun.shadow.camera.updateProjectionMatrix();
   sun.shadow.bias = -0.0005;

@@ -44,6 +44,7 @@ import type { ContentCounts, LandmarkId } from '@/world';
 import { treeOrder } from '@/lib/gardenTrees';
 import type { GuideLines } from '@/lib/contentSchemas';
 import { tourSteps } from '@/lib/tour';
+import { STILL_SIZE, stillPath, stillSrcset } from '@/lib/worldStill';
 
 interface Props {
   title?: string;
@@ -81,6 +82,11 @@ const tour = tourSteps(
   landmarksInStoryOrder,
   (await getCollection('pages')).map((page) => ({ landmark: page.data.landmark, tour: page.data.tour })),
 );
+// The World still's description: what the picture shows, for anyone who cannot see it.
+const stillAlt =
+  `${site.company.name}'s World seen from above: voxel Isles in the sea with a lighthouse station (Services), ` +
+  'a house (About), a garden of trees (Projects), a dock with moored boats and ships sailing by (Clients & Partners) ' +
+  'and a mailbox (Contact).';
 ---
 
 <Base title={title} description={description}>
@@ -123,6 +129,30 @@ const tour = tourSteps(
           </section>
         )
       }
+      <!--
+        The World still: what the default Seed's World looks like, by Day and
+        by Night, shown in the World's place when the browser cannot draw it
+        (no JS, no WebGPU or WebGL 2). Captured at build time (the
+        worldStills integration); a build that cannot capture it leaves it out.
+      -->
+      <figure class="world-still" data-world-still>
+        {
+          (['day', 'night'] as const).map((theme) => (
+            <img
+              class={`world-still-${theme}`}
+              src={stillPath(theme, STILL_SIZE.width)}
+              srcset={stillSrcset(theme)}
+              sizes="(max-width: 64rem) 100vw, 62rem"
+              width={STILL_SIZE.width}
+              height={STILL_SIZE.height}
+              alt={stillAlt}
+              loading="lazy"
+              decoding="async"
+            />
+          ))
+        }
+        <figcaption>The World of Seed {site.defaultSeed}. The menu above leads to every Landmark.</figcaption>
+      </figure>
       <div class="world" id="world-frame" transition:persist="world">
         <canvas
           id="world-canvas"
@@ -186,7 +216,7 @@ const tour = tourSteps(
         <script type="application/json" id="guide-lines" set:html={JSON.stringify({ name: guideName, lines: guideLines })} />
       </div>
       <div class="world-controls" data-covers-world transition:persist="world-controls">
-        <button type="button" class="dice" id="roll-seed">
+        <button type="button" class="dice" id="roll-seed" title="Roll a new World">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
             <rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2"></rect>
             <circle cx="8" cy="8" r="1.6" fill="currentColor"></circle>
@@ -195,13 +225,13 @@ const tour = tourSteps(
             <circle cx="8" cy="16" r="1.6" fill="currentColor"></circle>
             <circle cx="16" cy="16" r="1.6" fill="currentColor"></circle>
           </svg>
-          Roll a new World
+          <span class="control-label">Roll a new World</span>
         </button>
-        <button type="button" class="tour-start" id="tour-start" aria-controls="tour">
+        <button type="button" class="tour-start" id="tour-start" aria-controls="tour" title="Take the Tour">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
             <path d="M4 20 9 4l6 12 3-6 2 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
           </svg>
-          Take the Tour
+          <span class="control-label">Take the Tour</span>
         </button>
         <p class="world-status" id="world-status" aria-live="polite"></p>
       </div>
@@ -524,6 +554,8 @@ const tour = tourSteps(
             guide: { button: guideButton, bubble: guideBubble, covers, landmarks },
             // Free exploration stops the Tour.
             onExplore: () => endTour('explore'),
+            // `?tier=full|reduced` picks a render tier whatever the device, for measuring.
+            tierOverride: new URL(location.href).searchParams.get('tier'),
           });
           view = await mounting;
           mounted = true;
@@ -668,6 +700,44 @@ const tour = tourSteps(
   }
   .world,
   .world-controls {
+    display: none;
+  }
+  /*
+   * The World still stands in for them: the Day picture, or the Night one
+   * on <html data-theme="night"> (and, before any script or without JS,
+   * when the system prefers dark), as the theme tokens do.
+   */
+  .world-still {
+    margin: 0;
+  }
+  .world-still img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--card-radius);
+    background: var(--surface);
+    box-shadow: var(--card-shadow);
+  }
+  .world-still .world-still-night,
+  :global(:root[data-theme='night']) .world-still .world-still-day {
+    display: none;
+  }
+  :global(:root[data-theme='night']) .world-still .world-still-night {
+    display: block;
+  }
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme])) .world-still .world-still-day {
+      display: none;
+    }
+    :global(:root:not([data-theme])) .world-still .world-still-night {
+      display: block;
+    }
+  }
+  .world-still figcaption {
+    margin-top: 0.4rem;
+    font-size: 1rem;
+  }
+  :global(:root[data-world]) .world-still {
     display: none;
   }
 
@@ -935,6 +1005,30 @@ const tour = tourSteps(
     /* Phones have no arrow keys to speak of. */
     .tour-keys {
       display: none;
+    }
+    /*
+     * The dice and the Tour button are icons only, so the row (with the
+     * stats toggle and the Seed) stays on one line; their labels stay for
+     * screen readers, and as tooltips.
+     */
+    .control-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    /* The same size as the stats toggle: the dice has no border, so 2px more padding. */
+    .dice {
+      padding: calc(0.35rem + 2px);
+    }
+    .tour-start {
+      padding: 0.35rem;
+    }
+    .world-controls {
+      gap: 0.5rem;
+      white-space: nowrap;
     }
   }
   .world[data-dragging] {

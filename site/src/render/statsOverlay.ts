@@ -1,7 +1,7 @@
 /**
  * The render stats overlay, for developers (ticket 20): a toggle beside the
  * dice and a small card at the top right, below the Landmark menu, with
- * FPS, frame time, triangles, draw calls, the backend, the World's build
+ * FPS, frame time, triangles, draw calls, the backend, the render tier, the World's build
  * time and retries, its Seed and Biome, and its voxels by kind.
  *
  * Loaded only when stats are available (`lib/renderStats.ts`: `astro dev`,
@@ -121,6 +121,7 @@ export function createStatsOverlay({ dice, frame }: StatsOverlayElements): Stats
     rows.push(row('triangles', lastFrame ? fmt(lastFrame.triangles) : '–'));
     rows.push(row('draw calls', lastFrame ? fmt(lastFrame.drawCalls) : '–'));
     rows.push(row('backend', view ? (view.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : '–'));
+    rows.push(row('tier', view ? view.tier : '–'));
     if (shown) {
       const { world } = shown;
       rows.push(row('Seed', escape(world.seed)));

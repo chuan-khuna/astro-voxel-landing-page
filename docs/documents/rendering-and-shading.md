@@ -41,7 +41,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `ships.ts` | `buildFleet(world)`: one mesh per Partner ship, sharing one geometry, and `sail(seconds)` to move them along their loops. | yes |
 | `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `setTheme` recolours the sea and lights the lamps and windows. | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
-| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
+| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand and the render tier, sailing ships, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it (`onInput` hears that input). | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
@@ -377,15 +377,21 @@ shuts it (the lid comes down); 0 cuts. The House stays open or shut across
 camera to a Landmark (see "Landmark focus and flights").
 
 - **Renderer:** `WebGPURenderer` (`three/webgpu`), falling back to WebGL 2 by
-  itself. Neutral tone mapping, PCF shadows.
-- **DPR cap:** 1.5 on coarse-pointer (touch) devices, 2 elsewhere; re-read on
-  resize.
+  itself. Neutral tone mapping, PCF shadows; MSAA on the full tier only.
+- **DPR cap:** 1.5 on coarse-pointer (touch) devices, 2 elsewhere
+  (`pixelRatio` in `lib/renderTier.ts`); re-read on resize.
+- **Render tier:** chosen once at mount (`renderTier`, `lib/renderTier.ts`;
+  `ui.tierOverride` from `?tier=`). `full`: MSAA, a 2048² shadow map,
+  every frame. `reduced` (a touch device whose screen's shorter side is
+  under 600px): no MSAA, a 1024² shadow map, and ambient frames at most 30 a
+  second (below). It never adds or removes anything in the World.
+  `canvas.dataset.tier` and `view.tier` report it.
 - **Camera:** orthographic, on the true isometric axis (1, 1, 1). Zoom 1
   frames the Overview view so every Isle fits at any aspect ratio; the
   camera rig moves and zooms it from there. It never rotates.
 - **Lights:** a hemisphere sky light and one directional sun at the approved
   azimuth and elevation. Its shadow camera covers the whole World
-  (2048² map). Their colours and strengths, and the sky, are theme tokens
+  (2048² map, 1024² on the reduced tier). Their colours and strengths, and the sky, are theme tokens
   (see "Day and Night").
 - **Static shadow map:** `shadow.autoUpdate = false`; `needsUpdate = true` is
   set once each time a World is shown, so the shadow map renders on that
@@ -413,7 +419,16 @@ camera to a Landmark (see "Landmark focus and flights").
   dissolves or flies on the Tour, and while it idles (bobbing and blinking) with the page
   visible and motion allowed; idling is why, like the ships, an idle World
   with motion allowed renders every frame (ADR 0005). Under reduced motion
-  it re-forms by a cut and keeps still. Each frame first updates the camera's matrices, re-places the hotspots
+  it re-forms by a cut and keeps still.
+  Frames come two ways: `requestRender()` (mount, `show`, resizes, camera
+  moves and flights, a theme change) marks the frame as asked for, and it
+  renders on the next animation frame; a frame that only ambient motion
+  wants (the ships, the Guide, the developer, the lid) renders only when
+  `ambientFrameDue(now, lastTick, tier.ambientFps)` says so, otherwise it
+  waits for the next animation frame. On the full tier that is every frame;
+  on the reduced tier at most 30 a second, while the camera still moves at
+  the display's rate. Elapsed time is measured between rendered frames, so
+  motion keeps its speed. Each frame first updates the camera's matrices, re-places the hotspots
   and the Data Cards, then renders.
   three's `render()` also starts the renderer's internal animation loop,
   which would then tick `requestAnimationFrame` forever (it only advances
