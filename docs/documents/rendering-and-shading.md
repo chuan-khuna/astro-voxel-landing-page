@@ -45,14 +45,16 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `landmarkFocus.ts` | `landmarkFocus(world, id)`: the point to look at and the zoom for each of the seven Landmarks. | no |
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
-| `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?)`: the TSL node material, in world space or (for ships) the mesh's own space. | yes |
+| `seaModel.ts` | The sea, pure (see "Sea"): `seaModel(world)` (the water voxels' tops and skirts, the flat water beyond them and the seabed, as typed arrays), `coastDistance` and `seaShade`, and `SEA_LEVEL`. | no |
+| `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?)`: the TSL node material, in world space or (for ships) the mesh's own space; `softVoxelLook` is the look on its own (seams, bevel, jitter) for other materials. | yes |
+| `seaMaterial.ts` | `seaMaterial()`: the sea's TSL material (the soft-voxel look at 1 unit, shallow to deep colour, opacity, the bob in the vertex shader) and its `time` and colour uniforms. | yes |
 | `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, pure maths) and `mergeChunks`. | yes |
 | `house.ts` | `buildHouse(world)`: the House Variant's lid (⅛ unit) as a mesh and the windows' lights; `setOpening` lifts the lid, `setLights` lights the windows. | yes |
 | `interior.ts` | `buildInterior(world)`: the House Interior scene: the House's shell and ground, the room at 1/16 unit, the developer's head and hands as meshes, the screen's code shader, its own lights; `work(seconds)` animates the developer and the screen, `setTheme` lights it for Day or Night. | yes |
 | `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `setTheme` recolours the sea and lights the lamps and windows. | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea (water and seabed), the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `swell(seconds)` bobs the sea; `setTheme` recolours the sea and lights the lamps and windows. | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
-| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand and the render tier, sailing ships, opening the House and handing over to the House Interior scene, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
+| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand and the render tier, the sea's bob, sailing ships, opening the House and handing over to the House Interior scene, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it (`onInput` hears that input). | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
@@ -430,9 +432,55 @@ shown (`data-offscreen`).
 
 ## Sea
 
-A wide deep-water plane at y = 0.15, plus shallow-water quads (runs merged
-along x) on sea cells within 2 cells of land. Both are opaque
-`MeshStandardNodeMaterial`s in the Biome's water colours and receive shadows. At Night both darken (`seaColour`: the `waterShift` token, −0.12 OKLCH lightness).
+The sea is a 1-unit voxel layer (the terrain tier; polish ticket 07),
+built by `seaModel.ts` (pure) and drawn with `seaMaterial.ts`:
+
+- **Voxels.** Every sea cell of the grid, and of a ring 8 cells wide
+  round it (`SEA_RING`), is one water voxel 1 unit tall whose top is at
+  the sea level, y = 0.15 (`SEA_LEVEL`). Only faces that can show are
+  built: each voxel's top, and a short skirt on its +x and +z sides (the
+  sides the isometric camera sees) where the neighbour is water too, from
+  the top down to y = 0.05, so a voxel bobbing above its neighbour shows a
+  side, never a gap. Faces against land and undersides are never seen.
+  Beyond the ring, four flat strips of still deep water reach 6× the grid
+  (`SEA_SPAN`) round its middle, flush with the ring's outer voxels, so the
+  sea fills the frame at any aspect ratio.
+- **Shade.** `coastDistance` measures each voxel's distance to the nearest
+  land cell (centre to centre, a two-pass chamfer within about half a cell
+  of the true distance). `seaShade` turns it into the voxel's `deep` (0
+  beside the coast to 1 at 6 cells, `DEEP_REACH`), its `opacity` (0.7
+  beside the coast to 1 at 3 cells, `CLEAR_REACH`) and its `swell` (1, fading
+  to 0 over the ring's 4 outer cells). The shader mixes the Biome's
+  `waterShallow` and `waterDeep` by `deep`.
+- **Seabed.** The sea floor is y = 0 (boats, buoys and the jetty's posts
+  stand on it). Under every translucent voxel a seabed tile at y = 0, the
+  Biome's sand 0.1 darker, shows through the water.
+- **Look.** `seaMaterial` uses the soft-voxel look (`softVoxelLook`, shared
+  with `voxelMaterial`) at 1 unit, measured at each vertex's place before
+  the bob (and from the sea level, so the voxel edges are at y = 0.15),
+  so seams, bevels and jitter ride with the voxel. It is transparent
+  (`opacityNode` from the shade), receives shadows and casts none.
+- **Bob.** In the vertex shader each voxel's top (and its skirts' top
+  edges) rises and falls 0.04 units (`SEA_BOB`) round the sea level every
+  4.5 s (`SWELL_PERIOD`), out of step with its neighbours (a hash of its
+  cell) and with a slow swell running across the sea (its x + z),
+  scaled by its `swell`. The `time` uniform is the runtime's seconds of
+  swell (`objects.swell`): it advances only while the World (not the House
+  Interior) is on show, motion is allowed and the page visible, so under
+  reduced motion the water holds still where it is (a fresh page and the
+  build's World still show the bob at time 0, the voxels' steps frozen).
+  The bob keeps frames coming at the tier's ambient rate (30 fps on
+  phones), like the ships.
+- **Night** darkens both water colours and the seabed (`seaColour`: the
+  `waterShift` token, −0.12 OKLCH lightness).
+- **Triangles.** Two for each top, two for each skirt, eight for the flat
+  strips, two for each seabed tile: about 34,000 on `lighthouse` (66×64
+  grid), 22,000 on `42` (49×49) and 47,000 on `seed-1` (64×98), the
+  largest part of `data-triangles` now.
+
+Boats and ships still stand on the sea floor with their first layer under
+the water; they do not bob. The Model Gallery floats them on an opaque
+1-unit patch of the Biome's shallow water whose top is the sea level.
 
 ## World Web Worker and cache
 
@@ -512,10 +560,13 @@ camera to a Landmark (see "Landmark focus and flights").
   visible and motion allowed; idling is why, like the ships, an idle World
   with motion allowed renders every frame (ADR 0005). Under reduced motion
   it re-forms by a cut and keeps still.
+  The sea bobs while the World (not the House Interior) is on show, the
+  page visible and motion allowed (`swell(seconds)` advances its shader's
+  time), so it keeps frames coming too; under reduced motion it holds still.
   Frames come two ways: `requestRender()` (mount, `show`, resizes, camera
   moves and flights, a theme change) marks the frame as asked for, and it
   renders on the next animation frame; a frame that only ambient motion
-  wants (the ships, the Guide, the developer, the lid) renders only when
+  wants (the sea, the ships, the Guide, the developer, the lid) renders only when
   `ambientFrameDue(now, lastTick, tier.ambientFps)` says so, otherwise it
   waits for the next animation frame. On the full tier that is every frame;
   on the reduced tier at most 30 a second, while the camera still moves at
@@ -556,10 +607,10 @@ page's CSS:
 | `sky` (background) | the approved pale blue | a deep blue (L 0.27) |
 | `sunLight`, `sunIntensity` | the approved warm sun, 2.4 | a cool moon, 1.2, from the same direction |
 | `skyLight`, `groundLight`, `skyIntensity` | the approved hemisphere, 1.1 | a dim blue hemisphere, 0.95 |
-| `waterShift` | 0 | −0.12 lightness on both water colours |
+| `waterShift` | 0 | −0.12 lightness on both water colours and the seabed |
 | `lightsOn` | off | the House's windows (`windowLight`, a warm white) and the buoys' lamps (`buoyLight`, a warm amber) glow |
 
-`setTheme` recolours the sky, the lights and the two sea materials, shows
+`setTheme` recolours the sky, the lights, the water's two colours and the seabed, shows
 or hides the window panes and lamp boxes, sets `canvas.dataset.theme` and
 renders one frame. A new World (`show`) takes the theme in force. Nothing
 moves, nothing is added to or removed from the voxel meshes, the sun keeps
@@ -729,7 +780,7 @@ camera):
 ## Budget
 
 The spec allows 300k triangles for the World. Greedy merging keeps it far
-below that today (counts for the voxel meshes; the sea adds a few hundred):
+below that today (counts for the voxel meshes; see below for the sea):
 
 | Seed | Isles | Terrain | Detail | Total |
 |---|---|---|---|---|
@@ -772,10 +823,14 @@ replaced the ¼-unit boat and ship with ⅛-unit kinds (instanced): with the
 site's six Clients and three Partners `data-triangles` reads 16,870 (`42`),
 17,662 (`harbour`), 18,100 (`lighthouse`), 19,810 (`lanternfish`) and
 22,998 (`seed-2`), about 3,100–3,300 more, mostly the ships' sails and
-cabins. Decoration (a later ticket) will add most of the remaining
+cabins. Polish ticket 07 replaced the two flat sea planes with the voxel sea,
+now counted in `data-triangles`: 38,664 (`42`), 51,948 (`lighthouse`),
+62,152 (`seed-2`) and 68,532 (`seed-1`), the sea about two thirds of it.
+Headless Chrome (software GL) drew `lighthouse` at about 18 fps on
+desktop (20.5 before) and held 30 fps on the phone tier. Decoration (a later ticket) will add most of the remaining
 triangles.
 
 ## Not yet built
 
-Animation of water and plants (and boats and ships rocking on the swell), and
-the reduced-decoration tier.
+Animation of plants, boats and ships rocking on the swell, and the
+reduced-decoration tier.

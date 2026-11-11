@@ -238,8 +238,8 @@ Day and by Night, captured at build time.
 
 Small touch devices get the reduced render tier (`lib/renderTier.ts`,
 chosen once in `mountWorld`): no MSAA, a 1024px shadow map instead of
-2048px, and frames that only ambient motion asks for (ships sailing, the
-Guide idling, the developer working) at most 30 a second. Camera moves
+2048px, and frames that only ambient motion asks for (the sea bobbing, ships
+sailing, the Guide idling, the developer working) at most 30 a second. Camera moves
 (drags, pinches, flights) always render every frame. The tier changes how
 the World is drawn, never what is in it: every Landmark, plant, boat, ship
 and buoy is there in both, and Decoration and Ambient Life (polish) will
@@ -259,8 +259,8 @@ read the tier for their density. The DPR cap stays 1.5 on touch devices and
 
 Under `prefers-reduced-motion: reduce` every move is a cut and nothing
 loops: camera flights and the Tour's steps (the camera and the Guide), the
-House's lid, the Guide assembling and re-forming; the ships, the Guide's
-idling and the developer stand still, so nothing renders while idle; the
+House's lid, the Guide assembling and re-forming; the sea's bob, the ships,
+the Guide's idling and the developer stand still, so nothing renders while idle; the
 panel, Data Card, hotspot label and bubble fades are off. Checked in the
 built site (ticket 16): no frames over 2 s idle, and each Tour step and
 opening About render a single frame.
@@ -621,7 +621,7 @@ the pan, zoom and flight rig, whose `focus` flies to a Landmark, and whose
 `setTheme` shows it by Day or by Night. It
 has a mesher with culling, baked AO and greedy merging, a TSL material for
 seams, bevel and colour jitter, a static sun shadow map, and frames only on
-demand: while the camera moves, while the Partners' ships sail and while
+demand: while the camera moves, while the sea bobs and the Partners' ships sail, and while
 the House Interior shows (the developer at work) or the House's lid moves (never under
 reduced motion). `onFrame` reports each frame (time, triangles, draw calls)
 to the render stats overlay without asking for any. See `rendering-and-shading.md`.

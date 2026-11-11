@@ -89,19 +89,18 @@ layout สำรอง (safe layout) เป็นเกาะกลมเกา�
 | **เรือ (ticket 06)** | ⅛ unit | `InstancedMesh` แบบละ 1 mesh · Boat 3 แบบ (1×1) · Ship 3 แบบ (1×3) ต่อ Biome | เรือ Client จอดที่ Dock · เรือ Partner แล่นไปตามเส้นทางรอบเกาะ · แบบเรือมาจาก hash ของ id | `boats.ts`, `ships.ts`, `vesselModels.ts` |
 | **house lid mesh** | ⅛ unit (ตั้งแต่ ticket 01) | 1 mesh | หลังคาและผนังด้านหน้า 2 ด้าน (มีประตูและหน้าต่าง) · ยกขึ้นได้เมื่อเปิดดูห้อง | `house.ts` |
 | **House Interior scene** (ticket 04) | 1/16 unit | อีก scene · mesh ห้อง 1 + หัวและมือ 3 | ห้องของ Biome พร้อม Developer · โครงบ้าน (⅛) และพื้นหญ้าใต้บ้าน · จอโค้ด · แสงของตัวเอง | `interior.ts`, `interiorModel.ts` |
+| **ทะเล** (ticket 07) | 1 unit | mesh น้ำ 1 + พื้นทะเล 1 · น้ำทุก cell ใน grid และวงรอบอีก 8 cell · นอกนั้นเป็นแผ่นน้ำนิ่งกว้าง 6 เท่าของ World | น้ำ cell ละ 1 voxel ผิวบนอยู่ที่ระดับน้ำ 0.15 · ไล่สีจากตื้นริมฝั่งไปลึกที่ 6 cell · โปร่งแสงริมฝั่ง (เห็นพื้นทราย) ทึบที่ 3 cell · แต่ละ voxel โยกขึ้นลงเบาๆ ใน shader (หยุดเมื่อลดการเคลื่อนไหว) | `seaModel.ts`, `seaMaterial.ts`, `worldMeshes.ts` |
 
 **ส่วนที่ยังไม่เป็น voxel**
 
 | ส่วน | รูปแบบตอนนี้ | ที่มา |
 |---|---|---|
-| ทะเล | ระนาบเรียบ 2 ชั้น: ทะเลลึกกว้าง 6 เท่าของ World และทะเลตื้นรอบเกาะ | `worldMeshes.ts` |
 | จอคอมพิวเตอร์ | ระนาบเรืองแสงที่เลื่อนแสดงโค้ด (ใน scene House Interior) | `interior.ts` |
 
 **Block ที่จะเพิ่ม**
 
 | Block | ขนาด voxel | มีอะไรบ้าง | Ticket |
 |---|---|---|---|
-| ชั้นทะเล | 1 unit | ทะเลโปร่งแสงหนา 1 unit · ไล่สีจากตื้นไปลึก · โยกขึ้นลงเบาๆ (มาแทนระนาบ 2 ชั้น) | 07 |
 | Decoration | ⅛ unit | ต้นไม้เล็ก หญ้า กอดอกไม้ และอาคารเล็ก · ใช้ `InstancedMesh` แบบละ 1 mesh | 08 |
 | สัตว์ | ⅛ unit | กวาง กระรอก นก ค้างคาว และปลา · ใช้ `InstancedMesh` | 13, 14 |
 | particle | ⅛ unit | ใบไม้ ผีเสื้อ หิ่งห้อย หิมะ เถ้า และฟองคลื่น · ใช้ `InstancedMesh` ชนิดละ 1 mesh | 10, 11, 13 |

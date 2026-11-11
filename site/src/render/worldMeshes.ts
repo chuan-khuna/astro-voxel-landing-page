@@ -1,18 +1,19 @@
 /**
  * World to three.js objects: meshes the World's voxel grids into chunked
- * `BufferGeometry` with the soft-voxel material, plus the sea, the
+ * `BufferGeometry` with the soft-voxel material, plus the sea (a 1-unit
+ * voxel layer that bobs, `seaModel.ts` and `seaMaterial.ts`), the
  * Partners' sailing ships (`ships.ts`) and the Clients' moored boats
  * (`boats.ts`), both instanced, the House's moving parts (`house.ts`:
  * its lid and its lights), the Garden's plants (`garden.ts`, instanced) and
  * the buoys' lamps. The House Interior is a
  * scene of its own (`interior.ts`).
  * `setTheme` recolours the sea and lights the lamps and the House's windows
- * at Night; it never moves or adds anything.
+ * at Night; it never moves or adds anything. `swell(seconds)` bobs the sea.
  */
 import * as THREE from 'three/webgpu';
 import type { World } from '@/world';
 import { triangleCount, type ChunkMesh } from './mesher';
-import { oklchToLinear } from './palette';
+import { oklchToLinear, shiftLightness } from './palette';
 import { seaColour, THEME_TOKENS, type WorldTokens } from '@/data/theme';
 import type { Theme } from '@/lib/theme';
 import { buoyLamp } from './buoyModel';
@@ -22,19 +23,19 @@ import { buildFleet, type Fleet } from './ships';
 import { buildHouse, type HouseParts } from './house';
 import { buildGardenPlants } from './garden';
 import { buildBoats } from './boats';
-
-/** Sea cells this close to land (Chebyshev) are shallow water. */
-const SHALLOW_REACH = 2;
-export const SEA_LEVEL = 0.15;
+import { seaModel, type SeaMesh } from './seaModel';
+import { seaMaterial } from './seaMaterial';
 
 export interface WorldObjects {
   group: THREE.Group;
-  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure and room, boats, ships, the House's lid, the Garden's plants); the sea adds a handful more. */
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure and room, boats, ships, the House's lid, the Garden's plants) and the sea's water and seabed. */
   triangles: number;
   /** The Partners' ships, which sail: `ships.sail(seconds)` moves them. */
   ships: Fleet;
   /** The House's lid and its lights: `house.setOpening` lifts the lid. */
   house: HouseParts;
+  /** Bob the sea's water voxels to where they are after this many seconds. */
+  swell: (seconds: number) => void;
   /** Recolour the sea and light (or put out) the House's windows and the buoys' lamps. */
   setTheme: (theme: Theme) => void;
   dispose: () => void;
@@ -78,9 +79,10 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + sea.triangles,
     ships,
     house,
+    swell: sea.swell,
     setTheme: (theme) => {
       const tokens = THEME_TOKENS[theme].world;
       sea.setTheme(theme);
@@ -146,70 +148,63 @@ function buildLamps(world: World): { group: THREE.Group; setLights: (tokens: Wor
   };
 }
 
-/** Deep water as one wide plane, shallow water as one mesh of tiles beside the land. Darker at Night. */
-function buildSea(world: World): { group: THREE.Group; setTheme: (theme: Theme) => void; dispose: () => void } {
-  const { width, depth, isle } = world.terrain;
+/** How much darker than the Biome's sand the seabed is (OKLCH lightness): wet sand under the water. */
+const SEABED_SHIFT = -0.1;
+
+/**
+ * The sea: a 1-unit voxel layer of water (`seaModel.ts`) that bobs in the
+ * shader (`seaMaterial.ts`), and the seabed seen through its shallows.
+ * Darker at Night. `swell(seconds)` moves the water.
+ */
+function buildSea(world: World): {
+  group: THREE.Group;
+  triangles: number;
+  swell: (seconds: number) => void;
+  setTheme: (theme: Theme) => void;
+  dispose: () => void;
+} {
+  const model = seaModel(world);
   const group = new THREE.Group();
-  const waterMaterial = (role: 'waterDeep' | 'waterShallow') =>
-    new THREE.MeshStandardNodeMaterial({ color: linearColour(oklchToLinear(seaColour(world.biome, role, 'day'))), roughness: 0.35 });
+  group.name = 'sea';
 
-  // Far wider than the grid so the sea fills the frame at any aspect ratio.
-  const deepGeometry = new THREE.PlaneGeometry(width * 6, depth * 6);
-  deepGeometry.rotateX(-Math.PI / 2);
-  deepGeometry.translate(width / 2, SEA_LEVEL, depth / 2);
-  const deepMaterial = waterMaterial('waterDeep');
-  const deep = new THREE.Mesh(deepGeometry, deepMaterial);
-  deep.receiveShadow = true;
-  group.add(deep);
-
-  const nearLand = (x: number, z: number) => {
-    for (let dz = -SHALLOW_REACH; dz <= SHALLOW_REACH; dz++) {
-      for (let dx = -SHALLOW_REACH; dx <= SHALLOW_REACH; dx++) {
-        const nx = x + dx;
-        const nz = z + dz;
-        if (nx >= 0 && nz >= 0 && nx < width && nz < depth && isle[nz * width + nx] !== -1) return true;
-      }
-    }
-    return false;
+  /** Add one of the sea's meshes: never moved (the sea's material takes its own space as world space), receiving shadows. */
+  const addMesh = (mesh: SeaMesh, material: THREE.Material, name: string) => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(mesh.normals, 3));
+    geometry.setAttribute('seaCell', new THREE.BufferAttribute(mesh.cells, 3));
+    geometry.setAttribute('seaShade', new THREE.BufferAttribute(mesh.shades, 3));
+    geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
+    geometry.computeBoundingSphere();
+    const object = new THREE.Mesh(geometry, material);
+    object.name = name;
+    object.receiveShadow = true;
+    object.matrixAutoUpdate = false;
+    group.add(object);
+    return geometry;
   };
-  const positions: number[] = [];
-  const indices: number[] = [];
-  const y = SEA_LEVEL + 0.01;
-  for (let z = 0; z < depth; z++) {
-    // Merge runs of shallow cells along x into one quad.
-    for (let x = 0; x < width; ) {
-      if (!(isle[z * width + x] === -1 && nearLand(x, z))) {
-        x++;
-        continue;
-      }
-      let run = 1;
-      while (x + run < width && isle[z * width + x + run] === -1 && nearLand(x + run, z)) run++;
-      const base = positions.length / 3;
-      positions.push(x, y, z, x, y, z + 1, x + run, y, z + 1, x + run, y, z);
-      indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      x += run;
-    }
-  }
-  const shallowGeometry = new THREE.BufferGeometry();
-  shallowGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  shallowGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(positions.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
-  shallowGeometry.setIndex(indices);
-  const shallowMaterial = waterMaterial('waterShallow');
-  const shallow = new THREE.Mesh(shallowGeometry, shallowMaterial);
-  shallow.receiveShadow = true;
-  group.add(shallow);
+  const water = seaMaterial();
+  const waterGeometry = addMesh(model.water, water.material, 'water');
+  const seabedMaterial = new THREE.MeshStandardNodeMaterial({ roughness: 0.9, metalness: 0 });
+  const seabedGeometry = addMesh(model.seabed, seabedMaterial, 'seabed');
 
   return {
     group,
+    triangles: model.water.triangles + model.seabed.triangles,
+    swell: (seconds) => {
+      water.time.value = seconds;
+    },
     setTheme: (theme) => {
-      deepMaterial.color.copy(linearColour(oklchToLinear(seaColour(world.biome, 'waterDeep', theme))));
-      shallowMaterial.color.copy(linearColour(oklchToLinear(seaColour(world.biome, 'waterShallow', theme))));
+      water.shallow.value.set(...oklchToLinear(seaColour(world.biome, 'waterShallow', theme)));
+      water.deep.value.set(...oklchToLinear(seaColour(world.biome, 'waterDeep', theme)));
+      const shift = THEME_TOKENS[theme].world.waterShift + SEABED_SHIFT;
+      seabedMaterial.color.copy(linearColour(oklchToLinear(shiftLightness(world.biome.colours.sand, shift))));
     },
     dispose: () => {
-      deepGeometry.dispose();
-      shallowGeometry.dispose();
-      deepMaterial.dispose();
-      shallowMaterial.dispose();
+      waterGeometry.dispose();
+      seabedGeometry.dispose();
+      water.material.dispose();
+      seabedMaterial.dispose();
     },
   };
 }

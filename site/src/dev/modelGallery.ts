@@ -23,7 +23,7 @@ import { LOOK, oklchToLinear } from '@/render/palette';
 import { structureInstances, type InstancePlacement } from '@/render/structureMeshes';
 import { voxelMaterial } from '@/render/voxelMaterial';
 import { worldColours } from '@/render/worldVoxels';
-import { SEA_LEVEL } from '@/render/worldMeshes';
+import { SEA_LEVEL } from '@/render/seaModel';
 import { GROUND_DETAIL, STRUCTURE } from '@/render/voxelTiers';
 import type { Oklch } from '@/world';
 

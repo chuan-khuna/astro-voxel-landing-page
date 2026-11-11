@@ -6,7 +6,8 @@
  * - One directional light (the sun) whose shadow map renders only when the
  *   World changes, plus a hemisphere sky light.
  * - Frames render only on request (mount, resize, a new World, a camera move),
- *   and every frame while something moves: the Partners' ships sailing, the
+ *   and every frame while something moves: the sea bobbing (while the World,
+ *   not the House Interior, is on show), the Partners' ships sailing, the
  *   House's lid lifting or lowering, the developer at work in the House
  *   Interior, the Guide assembling, dissolving or idling. With nothing moving, under reduced motion or on a hidden page
  *   nothing renders while idle. Each frame bumps `canvas.dataset.frames` and
@@ -236,6 +237,10 @@ export async function mountWorld(
   const sailing = () => !!objects && objects.ships.count > 0 && idling();
   /** Seconds sailed so far. */
   let sailed = 0;
+  // The sea bobs while the World is on show and motion is allowed; otherwise it holds still where it is.
+  const swelling = () => !!objects && !interiorShown && idling();
+  /** Seconds of swell so far. */
+  let swelled = 0;
   /** The House: open or shut, how far its lid is lifted (0–1), how long a lift takes, and seconds worked inside. */
   let interior = false;
   let opening = 0;
@@ -245,7 +250,7 @@ export async function mountWorld(
   // The developer works while the House Interior is on show, the page visible and motion allowed.
   const working = () => interiorShown && idling();
   // The Guide assembles and dissolves whenever it does; it bobs and blinks only while idling.
-  const moving = () => sailing() || lifting() || working() || guide.moving(idling());
+  const moving = () => sailing() || swelling() || lifting() || working() || guide.moving(idling());
   /** The time of the last frame while something moved (0 when nothing did). */
   let lastTick = 0;
   const frameListeners = new Set<(frame: FrameInfo) => void>();
@@ -268,6 +273,10 @@ export async function mountWorld(
       if (sailing()) {
         sailed += dt / 1000;
         objects!.ships.sail(sailed);
+      }
+      if (swelling()) {
+        swelled += dt / 1000;
+        objects!.swell(swelled);
       }
       if (lifting()) {
         opening = openingStep(opening, interior, dt, openingMs);
@@ -385,6 +394,7 @@ export async function mountWorld(
     }
     objects = buildWorldObjects(next, nextMeshed);
     objects.setTheme(theme);
+    objects.swell(swelled);
     objects.house.setOpening(opening);
     scene.add(objects.group);
     setInside(false);

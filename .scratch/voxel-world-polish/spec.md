@@ -169,6 +169,7 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 - Its colour runs from the Biome's shallow to deep water by distance from the coast.
 - A gentle per-voxel bob is computed in the shader. It stops under reduced motion.
 - At Night the water darkens, as the base spec already says.
+- Built in ticket 07: every sea cell of the grid and of a ring 8 cells round it is one water voxel, its top at the sea level (0.15); flat still water beyond the ring reaches 6× the grid. Only tops and short skirts on the camera-facing sides are drawn. Colour runs from `waterShallow` beside the coast to `waterDeep` at 6 cells; opacity runs from 0.7 beside the coast to opaque at 3 cells, over a seabed tile (darker sand) on the sea floor (y = 0). Each voxel bobs 0.04 units every 4.5 s, out of step with its neighbours and with a slow swell across the sea; the bob fades out over the ring's outer cells and holds still under reduced motion or while the House Interior shows. Boats and ships do not bob yet. The sea costs about 20,000–47,000 triangles (`seaModel.ts`, `seaMaterial.ts`).
 
 **Station and Services**
 - The Station is a group: its own 2×2 building at the centre, and a 2×2 structure for each Service round it.
