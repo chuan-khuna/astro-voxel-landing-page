@@ -28,7 +28,7 @@ import { worldColours } from './worldVoxels';
 import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 import { landmarkOrigin } from './landmarkModels';
 import { DEVELOPER_PARTS, SCREEN, drawDeveloperPart, type DeveloperPart, type HouseDraw } from './houseModel';
-import { drawStructure, houseStructure, housePlacement, houseWindowFaces } from './structureModels';
+import { drawHousePart, houseWindowFaces } from './structureModels';
 import type { WorldTokens } from '@/data/theme';
 import { developerPose, roofLift } from './houseMotion';
 
@@ -96,7 +96,7 @@ export function buildHouse(world: World): HouseParts {
   };
 
   const lidGrid = new VoxelGrid(1 / STRUCTURE);
-  drawStructure(houseStructure(world), housePlacement(house), colours, (x, y, z, colour) => lidGrid.set(x, y, z, colour), 'lid');
+  drawHousePart(world, colours, 'lid', (x, y, z, colour) => lidGrid.set(x, y, z, colour));
   const lid = gridMesh('house-lid', lidGrid, lidMaterial);
   lid.castShadow = true;
   lid.receiveShadow = true;

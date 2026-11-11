@@ -13,9 +13,9 @@
  */
 import * as THREE from 'three/webgpu';
 import type { GroundPoint } from './cameraMath';
-import type { PlacedLandmarkId, World } from '../world';
+import type { PlacedLandmarkId, World } from '@/world';
 import { landmarkExtent, treeExtent } from './landmarkModels';
-import { gardenTrees } from '../lib/gardenTrees';
+import { gardenTrees } from '@/lib/gardenTrees';
 import { developerExtent } from './houseModel';
 import { GROUND_DETAIL } from './voxelTiers';
 

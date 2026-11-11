@@ -4,10 +4,12 @@
  *
  * A placed structure is drawn voxel by voxel into a grid, with each voxel's
  * colour role resolved to a colour id (`structureColour`) and its part
- * (`base` or `lid`) chosen by the caller. A structure turns to face its
- * door the way its Landmark says: files are drawn with the door on +z
- * (south); a door facing east swaps x and z, which keeps the walls the
- * camera sees (+x and +z) the front walls.
+ * (`base` or `lid`) chosen by the caller. A structure faces its door the
+ * way its Landmark says: files are drawn with the door on +z (south); a
+ * door facing east swaps x and z. That is a mirror, not a quarter turn: it
+ * keeps the walls the camera sees (+x and +z) the front walls, so the lid
+ * still opens the room to the camera, but asymmetric details (a chimney,
+ * a side window) swap sides. A file whose door is not on +z is refused.
  *
  * Today only the House is a structure: its base goes into the World's
  * structure grid (`worldVoxels.ts`), its lid into a mesh of its own that
@@ -36,7 +38,7 @@ export interface StructurePlacement {
   facing: Facing;
 }
 
-/** A structure voxel's offset from the placement point, turned to face `facing` (south or east). */
+/** A structure voxel's offset from the placement point, facing `facing`: as drawn for south, mirrored across x = z for east. */
 export function turned(s: Structure, v: { x: number; y: number; z: number }, facing: Facing): { x: number; y: number; z: number } {
   const x = v.x - s.anchor.x;
   const y = v.y - s.anchor.y;
@@ -52,6 +54,7 @@ export function drawStructure(
   paint: Paint,
   part?: StructurePart,
 ): void {
+  if (s.door !== null && s.door !== '+z') throw new Error(`${s.name}: placed structures are drawn with their door on +z, not ${s.door}`);
   const ids = s.palette.map(({ role }) => structureColour(colours, role));
   for (const v of structureVoxels(s)) {
     if (part !== undefined && v.part !== part) continue;
@@ -64,6 +67,7 @@ export function drawStructure(
 export function houseStructure(world: World): Structure {
   const house = world.landmarks.find((l) => l.id === 'house');
   const variants = variantsOf('house', world.biome.id);
+  if (variants.length === 0) throw new Error(`No House Variant for the ${world.biome.id} Biome`);
   return variants[(house?.variant ?? 0) % variants.length]!;
 }
 
@@ -73,10 +77,15 @@ export function housePlacement(house: PlacedLandmark): StructurePlacement {
   return { x: origin.x * STRUCTURE, y: house.y * STRUCTURE, z: origin.z * STRUCTURE, facing: house.door ?? 'south' };
 }
 
+/** Paint one part of the World's House Variant where the House stands (nothing if the World has no House). */
+export function drawHousePart(world: World, colours: Pick<WorldColours, 'biome' | 'fixed'>, part: StructurePart, paint: Paint): void {
+  const house = world.landmarks.find((l) => l.id === 'house');
+  if (house) drawStructure(houseStructure(world), housePlacement(house), colours, paint, part);
+}
+
 /** Draw a World's placed structures (today, the House's base) into the World's ⅛-unit structure grid. */
 export function drawStructures(world: World, colours: WorldColours, paint: Paint): void {
-  const house = world.landmarks.find((l) => l.id === 'house');
-  if (house) drawStructure(houseStructure(world), housePlacement(house), colours, paint, 'base');
+  drawHousePart(world, colours, 'base', paint);
 }
 
 /** The tallest House Variant, in world units: the House's box for its link and its Data Card. */

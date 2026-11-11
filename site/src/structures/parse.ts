@@ -31,9 +31,7 @@
 // Relative, not `@/`: this module loads with the Vite and Vitest configs, before the alias exists.
 import { BIOME_IDS, type BiomeId } from '../world/types';
 import { STRUCTURE_PARTS, isStructureRole, type StructurePart, type StructureRole } from './roles';
-
-/** Structure voxels per cell, along each axis (ADR 0006). */
-export const STRUCTURE_VOXELS_PER_CELL = 8;
+import { STRUCTURE } from '../render/voxelTiers';
 
 export type DoorFace = '+x' | '-x' | '+z' | '-z';
 
@@ -141,8 +139,8 @@ export function parseStructure(text: string, name: string): Structure {
   const [ax, ay, az] = numbers('anchor', 3);
   const interiorBox = header.has('interior') ? numbers('interior', 6) : null;
 
-  const sx = width * STRUCTURE_VOXELS_PER_CELL;
-  const sz = depth * STRUCTURE_VOXELS_PER_CELL;
+  const sx = width * STRUCTURE;
+  const sz = depth * STRUCTURE;
   blocks.sort((a, b) => a.from - b.from);
   let next = 0;
   for (const b of blocks) {

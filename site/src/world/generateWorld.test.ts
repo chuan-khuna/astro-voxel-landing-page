@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { site } from '../data/site';
+import { site } from '@/data/site';
 import { BIOME_COLOUR_ROLES, BIOME_IDS, MAX_BUOYS, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };

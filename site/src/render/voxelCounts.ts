@@ -14,7 +14,7 @@ import { drawDetail, worldColours } from './worldVoxels';
 import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 import { landmarkOrigin, treeExtent } from './landmarkModels';
 import { DEVELOPER_PARTS, drawDeveloperPart, type HouseDraw } from './houseModel';
-import { drawStructure, drawStructures, housePlacement, houseStructure } from './structureModels';
+import { drawHousePart, drawStructures } from './structureModels';
 import { shipVoxels } from './vesselModels';
 
 /** The kinds counted, in the order the overlay lists them. */
@@ -92,10 +92,9 @@ export function countVoxels(world: World): VoxelCounts {
     paint({ box: (...args) => grid.box(...args), set: (...args) => grid.set(...args) });
     return grid.count;
   };
-  const house = world.landmarks.find((l) => l.id === 'house');
-  if (house) {
+  if (world.landmarks.some((l) => l.id === 'house')) {
     const lid = new VoxelGrid(1 / STRUCTURE);
-    drawStructure(houseStructure(world), housePlacement(house), colours, (x, y, z, colour) => lid.set(x, y, z, colour), 'lid');
+    drawHousePart(world, colours, 'lid', (x, y, z, colour) => lid.set(x, y, z, colour));
     counts.landmarks += lid.count;
     for (const part of DEVELOPER_PARTS) counts.houseRoom += partCount((draw) => drawDeveloperPart(part, draw, colours));
   }

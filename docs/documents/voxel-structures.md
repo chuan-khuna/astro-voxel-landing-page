@@ -115,9 +115,14 @@ biome)` lists one kind's Variants for a Biome.
 - `structureColour(colours, role)`: a role's colour id in a World's colour
   table.
 - `drawStructure(structure, at, colours, paint, part?)`: paints a structure
-  (or one part) with its anchor at `at` (World ⅛ voxels), turned to face
-  `at.facing`. Files are drawn with the door south; `east` swaps x and z,
-  which keeps the front walls on the camera's two sides.
+  (or one part) with its anchor at `at` (World ⅛ voxels), facing
+  `at.facing`. Files are drawn with the door south (`door: +z`; any other
+  door face is refused); `east` swaps x and z. That is a mirror, not a
+  quarter turn: it keeps the front walls on the camera's two sides, so the
+  lid still opens the room to the camera, but a chimney or side window swaps
+  sides. The Gallery's **Turn** shows quarter turns, not this mirror.
+- `drawHousePart(world, colours, part, paint)`: one part of the World's
+  House Variant where the House stands.
 - `houseStructure(world)` (the World's Biome's House Variant, by the
   House's `variant`), `housePlacement(house)` (its plot's origin, on the
   ground, its door the House's way) and `drawStructures(world, …)` (the

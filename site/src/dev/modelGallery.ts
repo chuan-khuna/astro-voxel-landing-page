@@ -107,7 +107,7 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
     }
   };
 
-  const placementOf = (s: Structure, at: THREE.Vector3, lift = 0): InstancePlacement => ({ x: at.x, y: at.y + lift, z: at.z, turns });
+  const placementOf = (at: THREE.Vector3, lift = 0): InstancePlacement => ({ x: at.x, y: at.y + lift, z: at.z, turns });
 
   const clear = () => {
     for (const { base, lid } of shown) {
@@ -137,9 +137,10 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
   };
   applyTheme('day');
 
+  /** A Biome's colours for a structure (a shared one shows in the tropical Biome's). */
+  const coloursOf = (s: Structure) => worldColours({ biome: BIOMES[s.biome ?? 'tropical'] });
   /** A patch of a Biome's grass under a model, one cell wider each side than its footprint. */
-  const groundPatch = (s: Structure, at: THREE.Vector3) => {
-    const colours = worldColours({ biome: BIOMES[s.biome ?? 'tropical'] });
+  const groundPatch = (s: Structure, colours: ReturnType<typeof coloursOf>, at: THREE.Vector3) => {
     const w = s.footprint.width + 2;
     const d = s.footprint.depth + 2;
     const geometry = new THREE.BoxGeometry(w, 1, d);
@@ -166,13 +167,13 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
         column.forEach((s, r) => {
           // Columns run across the screen (+x −z), rows down it (+x +z).
           const at = new THREE.Vector3((r + c) * SPACING, 0, (r - c) * SPACING);
-          const colours = worldColours({ biome: BIOMES[s.biome ?? 'tropical'] });
+          const colours = coloursOf(s);
           const hasLid = s.palette.some((p) => p.part === 'lid');
-          const base = structureInstances(s, colours, [placementOf(s, at)], hasLid ? { part: 'base' } : {});
+          const base = structureInstances(s, colours, [placementOf(at)], hasLid ? { part: 'base' } : {});
           scene.add(base.mesh);
-          const lid = hasLid ? structureInstances(s, colours, [placementOf(s, at, lifted ? LID_LIFT : 0)], { part: 'lid' }) : undefined;
+          const lid = hasLid ? structureInstances(s, colours, [placementOf(at, lifted ? LID_LIFT : 0)], { part: 'lid' }) : undefined;
           if (lid) scene.add(lid.mesh);
-          groundPatch(s, at);
+          groundPatch(s, colours, at);
           shown.push({ structure: s, at, base, lid });
         });
       });
@@ -193,16 +194,16 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
     /** Turn every model a quarter turn. */
     turn() {
       turns = (turns + 1) % 4;
-      for (const { structure, at, base, lid } of shown) {
-        base.setPlacements([placementOf(structure, at)]);
-        lid?.setPlacements([placementOf(structure, at, lifted ? LID_LIFT : 0)]);
+      for (const { at, base, lid } of shown) {
+        base.setPlacements([placementOf(at)]);
+        lid?.setPlacements([placementOf(at, lifted ? LID_LIFT : 0)]);
       }
       render();
     },
     /** Lift the lids off (the House's roof and front walls), or put them back. */
     liftLids(on: boolean) {
       lifted = on;
-      for (const { structure, at, lid } of shown) lid?.setPlacements([placementOf(structure, at, lifted ? LID_LIFT : 0)]);
+      for (const { at, lid } of shown) lid?.setPlacements([placementOf(at, lifted ? LID_LIFT : 0)]);
       render();
     },
     setTheme(theme: Theme) {

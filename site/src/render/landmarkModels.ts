@@ -197,15 +197,15 @@ export function landmarkExtent(landmark: PlacedLandmark): ModelExtent {
   };
   const shape = shapeOf(landmark);
   // The ground the Landmark stands on: its footprint (the House's own 3×3), plus the jetty's deck.
-  const ground = landmark.id === 'house' ? HOUSE_CELLS * GROUND_DETAIL : null;
-  cover(0, 0, 0, ground ?? shape.w, 0, ground ?? shape.d);
+  const houseSide = landmark.id === 'house' ? HOUSE_CELLS * GROUND_DETAIL : null;
+  cover(0, 0, 0, houseSide ?? shape.w, 0, houseSide ?? shape.d);
   for (const c of shape.jetty) cover(c.x, -1, c.z, c.x + GROUND_DETAIL, 0, c.z + GROUND_DETAIL);
   // Models only pick colours through `biome` and `fixed`; any id will do here.
   const anyColour = () => 0;
   const colours = { biome: anyColour, fixed: anyColour } as Omit<WorldColours, 'table'> as WorldColours;
   MODELS[landmark.id](draw, colours, shape);
   // The House's structure, up to its roof (the tallest Variant's), is part of what a visitor clicks.
-  if (ground !== null) cover(0, 0, 0, ground, HOUSE_HEIGHT * GROUND_DETAIL, ground);
+  if (houseSide !== null) cover(0, 0, 0, houseSide, HOUSE_HEIGHT * GROUND_DETAIL, houseSide);
   // Posts reaching down to the sea floor are not part of what a visitor clicks.
   min.y = Math.max(min.y, -1);
   const unit = (v: number) => v / GROUND_DETAIL;

@@ -7,11 +7,11 @@
  * at Night; it never moves or adds anything.
  */
 import * as THREE from 'three/webgpu';
-import type { World } from '../world';
+import type { World } from '@/world';
 import { triangleCount, type ChunkMesh } from './mesher';
 import { oklchToLinear } from './palette';
-import { seaColour, THEME_TOKENS, type WorldTokens } from '../data/theme';
-import type { Theme } from '../lib/theme';
+import { seaColour, THEME_TOKENS, type WorldTokens } from '@/data/theme';
+import type { Theme } from '@/lib/theme';
 import { buoyLamp } from './buoyModel';
 import { voxelMaterial } from './voxelMaterial';
 import { meshWorld, type MeshedWorld } from './worldVoxels';

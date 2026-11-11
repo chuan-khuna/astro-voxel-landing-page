@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateWorld, type PlacedLandmark } from '../world';
+import { generateWorld, type PlacedLandmark } from '@/world';
 import { VoxelGrid } from './mesher';
 import { buildLandmark, landmarkExtent, treeExtent } from './landmarkModels';
 import { worldColours } from './worldVoxels';

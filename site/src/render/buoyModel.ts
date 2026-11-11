@@ -4,7 +4,7 @@
  * Buoys are static, so they are drawn into the World's detail grid; at Night
  * a glowing box over the lamp (`buoyLamp`) lights it. Pure (no three.js).
  */
-import type { Cell } from '../world';
+import type { Cell } from '@/world';
 import type { VoxelGrid } from './mesher';
 import type { WorldColours } from './worldVoxels';
 import { GROUND_DETAIL } from './voxelTiers';

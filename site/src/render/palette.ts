@@ -3,7 +3,7 @@
  * change with the Biome. Plain data and maths, no three.js, so the mesher and
  * the World-to-voxels step stay testable without a GPU.
  */
-import type { Oklch } from '../world';
+import type { Oklch } from '@/world';
 
 /** Linear sRGB, each channel 0–1. */
 export type Rgb = readonly [number, number, number];

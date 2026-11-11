@@ -10,7 +10,7 @@
  *   three times a boat's height, centred on `SHIP_ORIGIN` with its bow
  *   towards +x. Ships sail, so each is a mesh of its own that moves.
  */
-import type { Boat } from '../world';
+import type { Boat } from '@/world';
 import { VoxelGrid } from './mesher';
 import type { WorldColours } from './worldVoxels';
 import { GROUND_DETAIL } from './voxelTiers';

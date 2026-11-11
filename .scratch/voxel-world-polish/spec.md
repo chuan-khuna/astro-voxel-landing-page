@@ -172,7 +172,7 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 - Open: the group's layout (a 6×4 row or a 6×6 ring), how it adapts to the number of Services, and whether each Service structure can be clicked.
 
 **House plot and Mailbox**
-- The House stands on a 4×4 plot: the House itself is 3×3, and the other seven cells are its front yard on the door side.
+- The House stands on a 4×4 plot: the House itself is 3×3, and the other seven cells are its front yard, an L along its south and east sides (the two the camera sees); the door opens onto one of them.
 - The Mailbox stands in that yard. It is still the Contact Landmark with its own hotspot, but it has no footprint of its own.
 
 **House Interior**

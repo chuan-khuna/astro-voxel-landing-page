@@ -6,7 +6,7 @@ import { houseYard, placeLandmarks } from './landmarks';
 import { sailingRoutes } from './ships';
 import { placeBuoys } from './buoys';
 import { buildStrata, buildTerrain } from './terrain';
-import { site } from '../data/site';
+import { site } from '@/data/site';
 import {
   BIOME_IDS,
   type BiomeId,

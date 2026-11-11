@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateWorld } from '../world';
+import { generateWorld } from '@/world';
 import { VoxelGrid } from './mesher';
 import { buoyLamp, drawBuoy } from './buoyModel';
 import { worldColours } from './worldVoxels';

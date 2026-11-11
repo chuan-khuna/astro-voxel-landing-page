@@ -18,7 +18,7 @@
  * above the ground. The room never turns with the House's door. Pure (no
  * three.js).
  */
-import type { BiomeColourRole } from '../world';
+import type { BiomeColourRole } from '@/world';
 import type { FixedColour } from './palette';
 
 /** Draws ¼ voxels: `box` fills [x0, x1) × [y0, y1) × [z0, z1). */

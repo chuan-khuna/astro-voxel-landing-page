@@ -222,7 +222,7 @@ The House is a structure (polish ticket 01): one Variant per Biome, drawn as
 an ASCII file at ⅛ unit, 24×24 on the House's 3×3 at its plot's origin (see
 `voxel-structures.md` for the four Variants). It stands with its door
 south or east, the way the World says (`world-generator.md`, "House
-plot"), turned by swapping x and z. Its voxels come in two parts, so the
+plot"), mirrored by swapping x and z (so the front walls stay on the camera side; a chimney or side window swaps sides). Its voxels come in two parts, so the
 roof can lift off and show a room inside, like a doll's house; the room is
 still the ticket 11 code-built model in ¼ voxels (`houseModel.ts`), until
 ticket 04 redraws it at 1/16 unit in a scene of its own:

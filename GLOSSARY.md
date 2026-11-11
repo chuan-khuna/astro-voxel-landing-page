@@ -67,6 +67,10 @@ _Avoid_: staff, employee, developer
 A floating card, tilted to the world's isometric plane, that shows one company metric beside the Landmark it belongs to.
 _Avoid_: tooltip, label, popup
 
+**Model Gallery**:
+The developers' page (`/dev/models`, never published) that shows every predefined voxel model, Biome by Biome and Variant by Variant, so the site owner can review the look before it ships.
+_Avoid_: model viewer, showcase
+
 **Guide**:
 The floating voxel cube with a screen face that leads the Tour and talks in speech bubbles. It assembles itself from voxels and re-forms whenever a new Seed is rolled.
 _Avoid_: mascot, bot, assistant

@@ -61,6 +61,16 @@ Clear-cut findings were fixed in the review-fixes commit: glossary wording, text
 - [ ] **Card headings are now 30px.** The spec allows multiples of 15px and nothing below 16px, so the card `h2`s on Services, Team and Dock went from 22.5px to 30px. That matches the panel title and looks large on `/services`. Consider allowing a 24px step in the spec instead.
 - [ ] **The Guide assembles on every page load.** The spec says "on first visit"; only the greeting is limited to the first visit.
 
+## Code review of polish 01 (6ae4ec8..fe47ca6)
+
+Clear-cut findings were fixed in the review-fixes commit: `../` imports in touched files, a duplicated 8-voxels-a-cell constant, a misleading name, an unused argument, a clear error for a Biome with no House or a structure drawn with its door off +z, one helper for drawing a House part, the mirror called a mirror in code and docs, the spec's yard wording, and a glossary entry for the Model Gallery. These need your call:
+
+- [ ] **An east door mirrors the House.** Facing east swaps x and z, a mirror rather than a quarter turn, so the lid (roof plus front walls) still opens the room to the camera. A chimney or side window swaps sides, and the Gallery's Turn shows quarter turns, never this mirror. A true turn would need a second lid split per facing.
+- [ ] **The Mailbox still has a 1×1 footprint** (a cell of the House's plot). The spec says "it has no footprint of its own"; the footprint keeps its hotspot, Data Card, Guide spot and camera focus working unchanged. The overlap test leaves the Mailbox out.
+- [ ] **Scope beyond the ticket:** the door turns if the path cannot reach it, the yard cell before the door is painted as path, the House's box shrank to its 3×3, Night lights now glow on every open face of window glass, and the safe Isle grew to radius 12.
+- [ ] **Seeds give new Worlds.** Choosing the door draws one more number from the Seed's sequence, so every Seed's layout after the House changed (the World still and OG image are captured again at build).
+- [ ] **`TERRAIN` and `INTERIOR`** in `render/voxelTiers.ts` are not used yet; they are kept to list every tier of ADR 0006 in one place.
+
 ## Housekeeping
 
 - [ ] **Merge to `main`.** All work is on `feat/voxel-world`; `main` is still at the first commit.

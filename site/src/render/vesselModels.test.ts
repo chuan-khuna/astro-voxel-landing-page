@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateWorld } from '../world';
+import { generateWorld } from '@/world';
 import { VoxelGrid } from './mesher';
 import { drawBoat, shipVoxels, SHIP_ORIGIN } from './vesselModels';
 import { worldColours } from './worldVoxels';
