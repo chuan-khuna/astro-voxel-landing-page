@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Spec: `.scratch/voxel-world-landing/spec.md`
 
@@ -12,7 +12,7 @@ Spec: `.scratch/voxel-world-landing/spec.md`
 - [x] Seams, bevel, colour jitter and AO are visible and can be tuned from a few constants
 - [x] Every colour has OKLCH chroma ≤ 0.10
 - [x] It works on the WebGL 2 fallback as well as WebGPU
-- [ ] The user has reviewed it and approved the look, and the approved settings are written down for ticket 04
+- [x] The user has reviewed it and approved the look, and the approved settings are written down for ticket 04
 
 ## Comments
 
@@ -49,3 +49,18 @@ Prototype shortcuts (not decisions for the real renderer):
 - AO is kept in its own `ao` vertex attribute, not multiplied into `color`, so its strength stays tunable.
 - Frames render every frame instead of on demand.
 - The shadow map is not static.
+
+**2026-11-11 — look approved by the user as shipped (default settings).** Ticket 04 should match this look. Approved settings, from `LOOK` and `PALETTE` at the top of `prototypes/look/main.js` (commit `9580bec`):
+
+```js
+const LOOK = {
+  seamWidth: 0.035, seamDarkness: 0.22,
+  bevelWidth: 0.16, bevelStrength: 0.55,
+  jitter: 0.035, tintJitter: 0.015,
+  aoStrength: 0.55, roughness: 0.9,
+  sunIntensity: 2.4, sunAzimuth: 35, sunElevation: 52,
+  skyIntensity: 1.1, exposure: 1.0,
+};
+```
+
+The House colours in `PALETTE` (whitewash, roof white, plinth, blue trim and door, glass, bougainvillea) are the approved fixed House colours.
