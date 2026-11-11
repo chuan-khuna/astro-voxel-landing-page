@@ -13,6 +13,14 @@
  * new page; only the panel and the rest of the page are swapped. The script
  * runs once and follows the route on every `astro:after-swap`.
  *
+ * The Guide floats in the World too: a button over it (under the Landmark
+ * hotspots, so it never takes their clicks) and its speech bubble. It
+ * greets the visitor once the World has mounted and it has assembled
+ * (`greeting` on a first visit, one `welcomeBack` line after), says a
+ * `reform` line whenever a new World is rolled, and an `idle` line when
+ * clicked. Its lines come from the `pages` collection (`guide` on the home
+ * page), its name from the site data module.
+ *
  * In `astro dev`, or with `?stats` in the URL, the script also loads the
  * render stats overlay (`render/statsOverlay.ts`): a toggle after the dice
  * and a stats card. Otherwise none of it loads.
@@ -21,11 +29,12 @@ import Base from './Base.astro';
 import LandmarkMenu from '@/components/LandmarkMenu.astro';
 import Logo from '@/components/Logo.astro';
 import ThemeToggle from '@/components/ThemeToggle.astro';
-import { getCollection } from 'astro:content';
+import { getCollection, getEntry } from 'astro:content';
 import { site, landmarksInStoryOrder, type DataCardMetric } from '@/data/site';
 import { MAX_TREES, PLACED_LANDMARK_IDS } from '@/world';
 import type { ContentCounts, LandmarkId } from '@/world';
 import { treeOrder } from '@/lib/gardenTrees';
+import type { GuideLines } from '@/lib/contentSchemas';
 
 interface Props {
   title?: string;
@@ -54,6 +63,10 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
   const metric = metrics[landmark.id];
   return metric ? [{ id: landmark.id, metric }] : [];
 });
+// The Guide's lines (filled in with the Seed and its name on the client).
+const home = await getEntry('pages', 'home');
+const guideLines: GuideLines = home?.data.guide ?? { greeting: [], welcomeBack: [], reform: [], idle: [] };
+const guideName = site.guide.name;
 ---
 
 <Base title={title} description={description}>
@@ -111,6 +124,13 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
             ))
           }
         </ul>
+        <button
+          type="button"
+          class="guide-button"
+          id="guide"
+          aria-label={`Talk to ${guideName}, the Guide`}
+          draggable="false"
+          hidden></button>
         {
           hotspots.map((landmark) => (
             <>
@@ -145,6 +165,11 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
             </>
           ))
         }
+        <p class="guide-bubble" id="guide-bubble" role="status" aria-live="polite" aria-atomic="true">
+          <span class="guide-name">{guideName}</span>
+          <span class="guide-say" data-guide-say></span>
+        </p>
+        <script type="application/json" id="guide-lines" set:html={JSON.stringify({ name: guideName, lines: guideLines })} />
       </div>
       <div class="world-controls" data-covers-world transition:persist="world-controls">
         <button type="button" class="dice" id="roll-seed">
@@ -176,6 +201,8 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
   import type { StatsOverlay } from '@/render/statsOverlay';
   import type { ContentCounts, LandmarkId } from '@/world';
   import type { Theme } from '@/lib/theme';
+  import { fillLine, pickLine, type GuideLine } from '@/lib/guideLines';
+  import type { GuideLines } from '@/lib/contentSchemas';
 
   /** How long a camera flight to a Landmark takes; a cut under reduced motion. */
   const FLIGHT_MS = 900;
@@ -187,10 +214,17 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
   const frame = document.querySelector<HTMLElement>('#world-frame');
   const dice = document.querySelector<HTMLButtonElement>('#roll-seed');
   const status = document.querySelector<HTMLElement>('#world-status');
+  /** Remembered once the Guide has greeted this visitor, so a later visit gets a shorter hello. */
+  const GREETED_KEY = 'guide-greeted';
   // No GPU (see `Base.astro`): no World to mount; the page stays the normal page that scrolls.
   if (canvas && frame && document.documentElement.dataset.world) {
     const hotspots = [...frame.querySelectorAll<HTMLElement>('[data-hotspot]')];
     const cards = [...frame.querySelectorAll<HTMLElement>('[data-card]')];
+    const guideButton = frame.querySelector<HTMLElement>('#guide');
+    const guideBubble = frame.querySelector<HTMLElement>('#guide-bubble');
+    const guide = JSON.parse(frame.querySelector('#guide-lines')?.textContent ?? '{}') as { name: string; lines: GuideLines };
+    /** The Guide's last idle line, so a click never gets the same one twice running. */
+    let lastIdle: GuideLine | undefined;
     const defaultSeed = canvas.dataset.defaultSeed ?? '';
     const counts = JSON.parse(canvas.dataset.counts ?? '{}') as ContentCounts;
     const source = createWorldSource();
@@ -219,6 +253,32 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     const currentSeed = () => seedFromUrl(new URL(location.href)) ?? defaultSeed;
     const routeLandmark = () => landmarkForPath(location.pathname) ?? 'overview';
     const flightMs = () => (reducedMotion.matches ? 0 : FLIGHT_MS);
+    /** The cards floating over the World: the Guide's bubble keeps clear of them. */
+    const covers = () => [...document.querySelectorAll<HTMLElement>('[data-covers-world]')].map((c) => c.getBoundingClientRect());
+    /** The Landmarks' hotspots on screen (not the trees within the Garden's): the Guide's bubble keeps off them when it can. */
+    const landmarks = () =>
+      hotspots.filter((h) => !h.hidden && !h.dataset.project).map((h) => h.getBoundingClientRect());
+    /** A Guide line with the Seed on show and the Guide's name filled in. */
+    const fill = (line: GuideLine): GuideLine => ({ ...line, say: fillLine(line.say, { seed: linkSeed, name: guide.name }) });
+    const greeted = () => {
+      try {
+        return localStorage.getItem(GREETED_KEY) !== null;
+      } catch {
+        return false;
+      }
+    };
+    /** Once the Guide has assembled: the full greeting on a first visit, one welcome-back line after. */
+    const greet = (view: WorldView) =>
+      view.guide.formed.then(() => {
+        const { greeting, welcomeBack } = guide.lines;
+        const back = greeted() ? pickLine(welcomeBack, undefined, Math.random()) : undefined;
+        view.guide.say((back ? [back] : greeting).map(fill));
+        try {
+          localStorage.setItem(GREETED_KEY, '1');
+        } catch {
+          // No storage (a private window): every visit is a first one.
+        }
+      });
 
     /** Keep the Seed on links to other routes (e.g. `/garden?seed=1234`), and `?stats` when stats are on. */
     const keepSeedOnLinks = () => {
@@ -287,15 +347,27 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
         if (request !== latest) return;
         let view: WorldView;
         if (!mounting) {
-          mounting = mountWorld(canvas, world, meshed, { frame, hotspots, cards, theme: currentTheme() });
+          mounting = mountWorld(canvas, world, meshed, {
+            frame,
+            hotspots,
+            cards,
+            theme: currentTheme(),
+            guide: { button: guideButton, bubble: guideBubble, covers, landmarks },
+          });
           view = await mounting;
           mounted = true;
+          void greet(view);
           // The theme may have changed while the World mounted.
           view.setTheme(currentTheme());
         } else {
           view = await mounting;
           if (request !== latest) return;
           view.show(world, meshed);
+          // The Guide re-forms with the new World; then it remarks on it (unless another World is already on its way).
+          void view.guide.formed.then(() => {
+            const line = request === latest && pickLine(guide.lines.reform, undefined, Math.random());
+            if (line) view.guide.say([fill(line)]);
+          });
         }
         // A new World starts at its Overview: cut to the open section's Landmark, if any.
         worldState = null;
@@ -332,6 +404,13 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
       url.searchParams.set(SEED_PARAM, rollSeed(currentSeed()));
       // A navigation, so each roll is a history entry: Back returns to the previous World.
       void navigate(url.href);
+    });
+
+    // Clicking the Guide: it says something.
+    guideButton?.addEventListener('click', () => {
+      lastIdle = pickLine(guide.lines.idle, lastIdle, Math.random());
+      const line = lastIdle;
+      if (line) void mounting?.then((view) => view.guide.say([fill(line)]));
     });
 
     // Escape closes an open section, like its close button; an open menu popover takes it first.
@@ -676,9 +755,92 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
     outline: 2px solid var(--brand);
     outline-offset: 1px;
   }
+  /* The Guide's button: over the Guide, under the hotspots (earlier in the frame), so it never takes a Landmark's click. */
+  .guide-button {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    -webkit-user-drag: none;
+  }
+  .world[data-dragging] .guide-button {
+    cursor: grabbing;
+  }
+  .guide-button:hover,
+  .guide-button:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+  /* The Guide's speech bubble: beside the Guide, never under a card, never in the pointer's way. */
+  .guide-bubble {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: 17rem;
+    margin: 0;
+    padding: 0.45rem 0.75rem 0.55rem;
+    border-radius: 6px;
+    background: var(--paper);
+    box-shadow: 0 4px 14px var(--shadow);
+    color: var(--ink);
+    font-size: 1.125rem;
+    line-height: 1.2;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms;
+  }
+  .guide-bubble[data-shown]:not([data-offscreen]) {
+    opacity: 1;
+  }
+  .guide-name {
+    display: block;
+    color: var(--brand-ink);
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    line-height: 1;
+  }
+  /* The tail: a small square turned 45°, pointing at the Guide from the side it is on. */
+  .guide-bubble::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: var(--paper);
+    rotate: 45deg;
+  }
+  .guide-bubble[data-side='above']::after {
+    top: calc(100% - 6px);
+    left: calc(var(--tail, 50%) - 6px);
+  }
+  .guide-bubble[data-side='below']::after {
+    bottom: calc(100% - 6px);
+    left: calc(var(--tail, 50%) - 6px);
+  }
+  .guide-bubble[data-side='right']::after {
+    right: calc(100% - 6px);
+    top: calc(var(--tail, 50%) - 6px);
+  }
+  .guide-bubble[data-side='left']::after {
+    left: calc(100% - 6px);
+    top: calc(var(--tail, 50%) - 6px);
+  }
+  @media (max-width: 47.99rem) {
+    .guide-bubble {
+      max-width: 13.5rem;
+      font-size: 1rem;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     .hotspot-label,
-    .data-card {
+    .data-card,
+    .guide-bubble {
       transition: none;
     }
   }

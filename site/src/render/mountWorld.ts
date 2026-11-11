@@ -8,7 +8,7 @@
  * - Frames render only on request (mount, resize, a new World, a camera move),
  *   and every frame while something moves: the Partners' ships sailing, the
  *   House's lid lifting or lowering, the developer at work in the open
- *   House. With nothing moving, under reduced motion or on a hidden page
+ *   House, the Guide assembling, dissolving or idling. With nothing moving, under reduced motion or on a hidden page
  *   nothing renders while idle. Each frame bumps `canvas.dataset.frames` and
  *   writes `canvas.dataset.camera` (target x, z and zoom), for checks.
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
@@ -22,6 +22,12 @@
  * - `setInterior(open, ms)` opens the House (its lid lifts, the developer's
  *   link appears) or shuts it.
  * - `show(world)` swaps in another World (a new Seed) and disposes the old one.
+ * - The Guide (`guide.ts`) lives for the whole visit: it assembles at the
+ *   Station's spot (`guideSpot`) when the World mounts and dissolves and
+ *   re-forms there on every `show` (a cut under reduced motion or on a
+ *   hidden page). Frames render while it assembles or dissolves, and while
+ *   it idles (bobbing and blinking) if motion is allowed and the page
+ *   visible. `guide.say(lines)` talks in its speech bubble.
  * - `setTheme(theme)` switches Day and Night (`data/theme.ts`): the sky,
  *   the lights' colours and strengths, the water's colour, and at Night the
  *   House's windows and the buoys' lamps glow. Nothing moves, so the shadow
@@ -45,9 +51,11 @@ import { stateShowing, type CameraState } from './cameraMath';
 import { buildWorldObjects, type WorldObjects } from './worldMeshes';
 import { openingStep } from './houseMotion';
 import type { MeshedWorld } from './worldVoxels';
-import type { ScreenOffset } from './freeArea';
+import type { Rect, ScreenOffset } from './freeArea';
+import { createGuide, type GuideView } from './guide';
+import { guideSpot } from './guideMotion';
 
-export type { ScreenOffset };
+export type { ScreenOffset, GuideView };
 
 const SHADOW_MAP_SIZE = 2048;
 
@@ -93,6 +101,12 @@ export interface WorldView {
   /** Show the World by Day or by Night. Kept across `show`. */
   setTheme(theme: Theme): void;
   /**
+   * The Guide: it assembles at the Station when the World mounts, and
+   * dissolves and re-forms there on every `show`. `guide.formed` resolves
+   * once it has; `guide.say(lines)` talks in its speech bubble.
+   */
+  readonly guide: GuideView;
+  /**
    * Hear about each frame after it renders (the render stats overlay).
    * Never causes a frame: only frames that render anyway are reported.
    * Returns a function that stops listening.
@@ -122,6 +136,8 @@ export interface WorldFrame {
   cards?: HTMLElement[];
   /** Day or Night from the first frame (default Day). */
   theme?: Theme;
+  /** The Guide's button and speech bubble over the canvas, the cards its bubble keeps clear of and the Landmarks it keeps off (client px). */
+  guide?: { button?: HTMLElement | null; bubble?: HTMLElement | null; covers?: () => Rect[]; landmarks?: () => Rect[] };
 }
 
 /** Closest zoom: about this many world units from the centre to the edge of the frame. */
@@ -192,7 +208,9 @@ export async function mountWorld(
   const lifting = () => opening !== (interior ? 1 : 0);
   // The developer works while the House is open, the page visible and motion allowed.
   const working = () => interior && opening > 0 && !stillness.matches && document.visibilityState === 'visible';
-  const moving = () => sailing() || lifting() || working();
+  // The Guide assembles and dissolves whenever it does; it bobs and blinks only while motion is allowed and the page visible.
+  const idling = () => !stillness.matches && document.visibilityState === 'visible';
+  const moving = () => sailing() || lifting() || working() || guide.moving(idling());
   /** The time of the last frame while something moved (0 when nothing did). */
   let lastTick = 0;
   const frameListeners = new Set<(frame: FrameInfo) => void>();
@@ -217,11 +235,13 @@ export async function mountWorld(
         worked += dt / 1000;
         objects!.house.work(worked);
       }
+      guide.step(dt, idling());
       lastTick = moving() ? now : 0;
       // The overlays project through the camera's matrices: bring them up to date first.
       camera.updateMatrixWorld();
       hotspots.place(camera);
       cards.place(camera, rig.state, viewCentre);
+      guide.place(camera);
       renderer.render(scene, camera);
       idleRenderer();
       if (frameListeners.size > 0) {
@@ -241,6 +261,9 @@ export async function mountWorld(
   const rig = createCameraRig({ element: ui.frame, camera, onChange: requestRender });
   const hotspots = createLandmarkHotspots(ui.frame, ui.hotspots, (target) => rig.jumpTo({ target, zoom: rig.state.zoom }));
   const cards = createDataCards(ui.frame, ui.cards ?? []);
+  // The Guide lives for the whole visit; each World only moves it (`show`).
+  const guide = createGuide({ frame: ui.frame, ...ui.guide, onChange: requestRender });
+  scene.add(guide.object);
   let viewCentre: ScreenOffset = { x: 0, y: 0 };
 
   const frameCamera = () => {
@@ -305,6 +328,8 @@ export async function mountWorld(
     hotspots.setWorld(next);
     hotspots.setInterior(interior);
     cards.setWorld(next);
+    // The Guide (dis)assembles in flight only where it can be seen; otherwise it is simply there.
+    guide.formAt(guideSpot(next, 'station'), idling());
     rig.reset(
       {
         minX: Math.min(...next.isles.map((i) => i.bounds.minX)),
@@ -348,6 +373,7 @@ export async function mountWorld(
       if (!lifting()) canvas.dataset.interior = open ? 'open' : 'shut';
       requestRender();
     },
+    guide,
     setTheme: (next) => {
       if (next === theme) return;
       theme = next;
@@ -372,6 +398,7 @@ export async function mountWorld(
       document.removeEventListener('visibilitychange', wake);
       rig.dispose();
       hotspots.dispose();
+      guide.dispose();
       observer.disconnect();
       objects?.dispose();
       renderer.dispose();

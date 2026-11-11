@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clientSchema, partnerSchema, projectSchema, serviceSchema, teamMemberSchema } from './contentSchemas';
+import { clientSchema, guideSchema, partnerSchema, projectSchema, serviceSchema, teamMemberSchema } from './contentSchemas';
 
 const valid = {
   title: 'Tide tables that forecast themselves',
@@ -96,5 +96,25 @@ describe('teamMemberSchema', () => {
     expect(teamMemberSchema.safeParse({ ...member, order: 0 }).success).toBe(false);
     expect(teamMemberSchema.safeParse({ ...member, order: 2.5 }).success).toBe(false);
     expect(teamMemberSchema.safeParse({ ...member, avatar: { alt: 'x' } }).success).toBe(false);
+  });
+});
+
+describe('guideSchema', () => {
+  it('accepts the Guide lines, each with a mood that defaults to neutral', () => {
+    const parsed = guideSchema.parse({
+      greeting: [{ say: 'Hello.' }, { say: 'Still here.', mood: 'smug' }],
+      reform: [{ say: 'Seed {seed}.', mood: 'happy' }],
+    });
+    expect(parsed.greeting).toEqual([
+      { say: 'Hello.', mood: 'neutral' },
+      { say: 'Still here.', mood: 'smug' },
+    ]);
+    expect(parsed.welcomeBack).toEqual([]);
+    expect(parsed.idle).toEqual([]);
+  });
+
+  it('rejects an empty line or an unknown mood', () => {
+    expect(guideSchema.safeParse({ idle: [{ say: '' }] }).success).toBe(false);
+    expect(guideSchema.safeParse({ idle: [{ say: 'Hm.', mood: 'furious' }] }).success).toBe(false);
   });
 });

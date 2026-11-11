@@ -4,6 +4,7 @@
  * build time; a mistake fails the build.
  */
 import { z } from 'astro/zod';
+import { GUIDE_MOODS } from './guideLines';
 
 /** Tree shapes a Project can hint at. The Garden draws one shape for now. */
 export const TREE_HINTS = ['round', 'tall', 'bushy'] as const;
@@ -85,3 +86,25 @@ export const teamMemberSchema = z.object({
 });
 
 export type TeamMemberData = z.infer<typeof teamMemberSchema>;
+
+/** One thing the Guide says, and the face it makes saying it (`neutral` when absent). */
+const guideLineSchema = z.object({
+  say: z.string().min(1),
+  mood: z.enum(GUIDE_MOODS).default('neutral'),
+});
+
+/**
+ * The Guide's lines, in the `pages` collection's front matter (`guide`, on
+ * the home page): `greeting` is said in order on a first visit,
+ * `welcomeBack` (one of them) on a later one, `reform` (one) when a new
+ * World is rolled, and `idle` (one) when the Guide is clicked. A line may
+ * use `{seed}` and `{name}` (the Guide's name, from the site data module).
+ */
+export const guideSchema = z.object({
+  greeting: z.array(guideLineSchema).default([]),
+  welcomeBack: z.array(guideLineSchema).default([]),
+  reform: z.array(guideLineSchema).default([]),
+  idle: z.array(guideLineSchema).default([]),
+});
+
+export type GuideLines = z.infer<typeof guideSchema>;

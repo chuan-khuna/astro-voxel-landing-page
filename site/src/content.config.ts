@@ -2,11 +2,12 @@ import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { LANDMARK_IDS } from './world';
-import { clientSchema, partnerSchema, projectSchema, serviceSchema, teamMemberSchema } from './lib/contentSchemas';
+import { clientSchema, guideSchema, partnerSchema, projectSchema, serviceSchema, teamMemberSchema } from '@/lib/contentSchemas';
 
 /**
  * `pages`: copy that is not a content item of its own: the home hook and
- * each Landmark section's intro copy (Guide Tour lines in a later ticket).
+ * each Landmark section's intro copy, and the Guide's lines (`guide`, on
+ * the home page; Tour lines per Landmark come with the Tour).
  */
 const pages = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/pages' }),
@@ -16,6 +17,8 @@ const pages = defineCollection({
     landmark: z.enum(LANDMARK_IDS).optional(),
     /** Meta description of the section page; the site's default when absent. */
     description: z.string().optional(),
+    /** What the Guide says: see `guideSchema`. */
+    guide: guideSchema.optional(),
   }),
 });
 

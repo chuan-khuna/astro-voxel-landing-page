@@ -28,6 +28,9 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `houseMotion.ts` | `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame) and `developerPose(seconds)` (typing and reading). | no |
 | `vesselModels.ts` | `drawBoat(boat, grid, colours)`: a Client's boat in its berth, drawn into the detail grid; `shipVoxels(colours)`: the Partner ship's own small grid, centred on `SHIP_ORIGIN`, bow towards +x. | no |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
+| `guideModel.ts` | The Guide's model: `guideVoxels(colours)` (a 6×6×6 ¼-unit cube centred on its origin, side fins, an antenna, the bezel on +x), `GUIDE_SCREEN` (the screen's rectangle) and `GUIDE_FACES` (a 12 × 10 pixel-eye face per mood, and a blink). | no |
+| `guideMotion.ts` | `guideSpot(world, id)` (where the Guide floats beside a placed Landmark), `voxelFlights` and `flightPoint` (the assembly), `hoverPose(seconds)` (the bob) and `blinking(seconds)`. | no |
+| `speechBubble.ts` | `placeBubble(guide, bubble, frame, covers, landmarks?)`: where the speech bubble goes on screen, or nowhere. | no |
 | `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`, `stateShowing` (the state that shows a point at a screen offset), `screenOffsetOf` (where a point is seen; its inverse) and `flightState` (one moment of an eased flight). | no |
 | `dataCardMath.ts` | Data Card maths: `nearestDataCard` (which card shows), `dataCardAnchors` (where a card stands or hangs), `dataCardTransform` and `placeDataCard` (the CSS `matrix3d`). | no |
 | `landmarkFocus.ts` | `landmarkFocus(world, id)`: the point to look at and the zoom for each of the seven Landmarks. | no |
@@ -37,7 +40,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `house.ts` | `buildHouse(world)`: the lid and the developer's head and hands as meshes, and the screen's code shader; the windows' lights; `setOpening` lifts the lid, `work(seconds)` animates the room, `setLights` lights the windows. | yes |
 | `ships.ts` | `buildFleet(world)`: one mesh per Partner ship, sharing one geometry, and `sail(seconds)` to move them along their loops. | yes |
 | `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea, the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `setTheme` recolours the sea and lights the lamps and windows. | yes |
-| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, opening the House, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
+| `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
+| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand, sailing ships, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it. | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
@@ -45,8 +49,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
 meshing run in the Web Worker. Only geometry upload, materials, the sea,
-the ship mesh and the House's lid and developer parts (small grids) are
-built on the main thread.
+the ship mesh, the House's lid and developer parts and the Guide (small
+grids) are built on the main thread.
 
 ## Voxel grids
 
@@ -256,6 +260,71 @@ interior space.
 - **Triangles.** The room adds about 320 triangles to the detail mesh; the
   lid is 250 and the developer's parts 48, as their own meshes.
 
+## The Guide
+
+The Guide (`GLOSSARY.md`; its lines and page markup are in `site-project.md`,
+"The Guide") is an original design: a pale 6×6×6 cube of ¼-unit voxels
+(1.5 units a side) with a darker top and bottom rim, a blue fin on each
+side, a thin antenna with a blue lamp set back from the face, and a dark
+bezel round a square screen (`guideModel.ts`). Only its tone is inspired by
+Portal 2; nothing is drawn from it. It is one mesh (227 voxels, 128
+triangles) with the soft-voxel material in local space, so its seams bob
+and turn with it, and the screen plane (2 triangles). It casts no shadow
+(the shadow map is static) and is built once for the visit: a new World
+only moves it.
+
+**Screen face.** The screen is a plane a hair in front of the bezel showing
+a 12×12 texture (`DataTexture`, nearest filtering): one of the
+`GUIDE_FACES`, 12 × 10 pixel-eye faces centred on it. A TSL colour node
+draws each lit pixel in a pale cyan (OKLCH 0.88 0.09 205) with a gap round
+it, on the dark screen colour, so it reads as a pixel screen; it is unlit,
+so it glows at Night as by Day. Moods: `neutral` (two upright eyes),
+`happy` (two arcs), `smug` (one eye lidded, one under a raised brow),
+`surprised` (two round eyes), `sleepy` (both half shut) and `wink`; plus
+`blink`. A line's mood shows while it is said; otherwise `neutral`. The
+texture is rewritten only when the face changes.
+
+**Where it floats.** `guideSpot(world, 'station')`, beside the Station. In
+isometric screen space (`x = (x − z)/√2`, `y = (2y − x − z)/√6`) it takes
+the clear spot nearest the one just right of the Landmark's box
+(`landmarkExtent`) and level with its middle, searching a 0.25-unit grid
+up to 2.2 units past it; the left side costs 0.5 more. A spot is clear when
+the Guide's reach (`GUIDE_REACH`, 1.3 units round its middle, bob
+included) overlaps no placed Landmark's box on screen, so it never stands
+in front of or behind one. The point is then pushed along the line of sight
+towards the camera, which keeps it on the same screen spot, until its
+bottom is clear of the ground in the 3×3 cells under it. The Station's
+spot was clear in all of 300 Seeds tested; for the other Landmarks (which
+the Tour will use) 1 in 1500 found nothing clear (a Mailbox tucked in
+front of its House) and takes the preferred spot anyway.
+
+**Assembling and re-forming** (`guide.ts`, `guideMotion.ts`). On mount
+the Guide assembles: one small cube per voxel (an `InstancedMesh` with the
+voxels' colours, standard material) flies from a scattered spot 2.5–4.5
+units round and 1.5–3.5 below its place, on an arc 1.2 units high, eased
+out, growing from nothing; the voxels set off in turn, lower ones first,
+over the first 45% of the 1.6 s. Once all have landed the body and screen
+replace them. On `show` (a new Seed) the formed Guide dissolves (the same
+flights backwards, 0.7 s), moves to the new World's Station spot and
+assembles again; `guide.formed` resolves when it has landed, and the page
+then has it say a line. A roll during either restarts from where it is.
+Under reduced motion or on a hidden page it is simply there, formed.
+
+**Idling.** While formed, with motion allowed and the page visible, it bobs
+0.1 units every 2.6 s, turns ±0.08 rad every 7 s about its face-on pose
+(turned −45° so the screen faces the camera) and blinks for 0.15 s every
+4.2 s. Under reduced motion it keeps still and does not blink.
+
+**Over the canvas.** Each frame `place(camera)` projects its middle: the
+button is laid over it (0.8 of its reach each way), and the speech bubble
+is placed by `placeBubble` (`speechBubble.ts`): over the Guide, else under,
+right or left, the first that fits inside the frame 10 px from its edges
+and 10 px clear of every floating card, preferring one also clear of the
+Landmark hotspots; over or under it slides along the frame and its tail
+(`--tail`, `data-side`) keeps pointing at the Guide. If the Guide's middle
+half is off screen or under a card, or nothing fits, the bubble is not
+shown (`data-offscreen`).
+
 ## Sea
 
 A wide deep-water plane at y = 0.15, plus shallow-water quads (runs merged
@@ -282,10 +351,12 @@ along x) on sea cells within 2 cells of land. Both are opaque
 ## Scene runtime
 
 `mountWorld(canvas, world, meshed?, ui?)` returns a `WorldView`
-`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), setViewCentre(at), setInterior(open, ms), setTheme(theme), onFrame(listener), backend, dispose() }`. `ui` is
-`{ frame, hotspots, cards?, theme? }`: the element round the canvas that takes pan and zoom
-input, the Landmark hotspot links inside it, the Data Cards and the theme of the first frame (default: the canvas's
-parent, no hotspots, no cards, Day). `setViewCentre(at)` says where the visitor
+`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), setViewCentre(at), setInterior(open, ms), setTheme(theme), guide, onFrame(listener), backend, dispose() }`. `ui` is
+`{ frame, hotspots, cards?, theme?, guide? }`: the element round the canvas that takes pan and zoom
+input, the Landmark hotspot links inside it, the Data Cards, the theme of the first frame and the Guide's
+button, speech bubble and the boxes its bubble avoids (default: the canvas's
+parent, no hotspots, no cards, Day, no Guide button or bubble). `guide` is the Guide's
+`{ formed, say(lines), hush() }` (see "The Guide"). `setViewCentre(at)` says where the visitor
 looks (CSS px from the frame's centre: the middle of the part the floating
 cards leave free, from `freeCentre`), which picks the Data Card shown and
 is where the pan bounds apply (`CameraLimits.at`, below). `setInterior(open, ms)`
@@ -327,7 +398,11 @@ camera to a Landmark (see "Landmark focus and flights").
   developer and the screen (`house.work`). Elapsed time is shared: at most
   0.1 s a frame for ships and the developer alike. Under reduced motion
   the open House renders once and goes idle, the developer in their pose of
-  the moment. Each frame first updates the camera's matrices, re-places the hotspots
+  the moment. The Guide keeps frames coming while it assembles or
+  dissolves, and while it idles (bobbing and blinking) with the page
+  visible and motion allowed; idling is why, like the ships, an idle World
+  with motion allowed renders every frame (ADR 0005). Under reduced motion
+  it re-forms by a cut and keeps still. Each frame first updates the camera's matrices, re-places the hotspots
   and the Data Cards, then renders.
   three's `render()` also starts the renderer's internal animation loop,
   which would then tick `requestAnimationFrame` forever (it only advances
@@ -551,4 +626,4 @@ add most of the remaining triangles.
 ## Not yet built
 
 Animation of water and trees, boat and ship kinds, the reduced-decoration tier,
-real models for the Garden and Dock, House Variants and one room per Biome, and the Guide's dissolve and re-form on a new Seed.
+real models for the Garden and Dock, House Variants and one room per Biome, and the Guide flying ahead of the camera on the Tour (ticket 15).

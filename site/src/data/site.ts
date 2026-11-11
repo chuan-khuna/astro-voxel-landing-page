@@ -1,9 +1,10 @@
 /**
- * The site data module: company identity, the default Seed, the Landmark
- * list and the Data Card metrics. All mock data for a fictional company.
+ * The site data module: company identity, the default Seed, the Guide's
+ * name, the Landmark list and the Data Card metrics. All mock data for a
+ * fictional company.
  * Edit here; nothing of this is hardcoded anywhere else in the site.
  */
-import type { BiomeId, LandmarkId, PlacedLandmarkId } from '../world';
+import type { BiomeId, LandmarkId, PlacedLandmarkId } from '@/world';
 
 export interface Landmark {
   id: LandmarkId;
@@ -84,6 +85,8 @@ export const site = {
    * Seed string is; every other Seed picks its Biome from the Seed.
    */
   brandBiome: 'tropical' satisfies BiomeId as BiomeId,
+  /** The Guide: the floating voxel cube that greets visitors and leads the Tour. Its lines are in the `pages` collection (`guide`, on the home page). */
+  guide: { name: 'Lumen' },
   /** The Landmark list: id, route, label and Story Order. */
   landmarks,
   /** Data Card metrics, keyed to a Landmark id. */
