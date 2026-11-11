@@ -40,6 +40,23 @@ Things the agents went ahead on without waiting for the user, while the user was
 - [ ] **Code-built models to port.** The Station (09), Mailbox (12), boats and ships (10) and the House room (11) are still code-built and will need porting to ASCII structures in the polish feature.
 - [ ] **Phone FPS not measured on a real phone (16).** It was checked only in Chromium on a phone viewport with 4× CPU throttling: 57–60 fps on a desktop GPU; with the software renderer the reduced tier doubles FPS (13 → 28). Check 30 fps on a real mid-range phone with `?stats` (compare `&tier=full`).
 
+## Code review of the landing feature (de5fbfd..e14f053)
+
+Clear-cut findings were fixed in the review-fixes commit: glossary wording, text below 16px, heading sizes, Seed links on a failed load, and small duplicates. These need your call:
+
+- [ ] **"developer" vs Team Member.** The glossary avoids "developer" for Team Member, but the code names the figure in the House `developer` (`DEVELOPER_PARTS`, `data-developer`, `.hotspot.developer`). Either rename the code or add a glossary term for the figure. The design record calls it "a developer at a computer".
+- [ ] **"hotspot".** It is on the _Avoid_ list for Landmark, but the code uses it for the clickable overlay link (`landmarkHotspots.ts`, `data-hotspot`). Consider a glossary term for that link.
+- [ ] **Refactor `site/src/render/mountWorld.ts`.** It was edited by 11 tickets and owns the renderer, lighting, tier, House lid state, ships, the Guide, stats and pan bounds. Suggested split: an `objects.step(dt)` that House and ships own, and a pan-bounds helper on the World. Do this before the polish feature adds more.
+- [ ] **Split the `WorldPage.astro` inline script** (about 400 lines, about 15 mutable `let`s). Suggested modules: `tourController`, `guideTalk`, Seed loading and routes.
+- [ ] **Scope added beyond the tickets.** Keep or drop each:
+  - the `?tier=full|reduced` override
+  - the Guide's `welcomeBack` lines
+  - `sitemap.xml` and `robots.txt`
+  - `aria-current` on tree and developer links
+- [ ] **Unit tests for rendering and UI maths.** spec.md:395 says rendering and UI have no unit tests, but agents added pure-function tests (`cameraMath`, `dataCardMath`, `guideMotion` and others). Update the spec's Testing Decisions, or accept the drift.
+- [ ] **Card headings are now 30px.** The spec allows multiples of 15px and nothing below 16px, so the card `h2`s on Services, Team and Dock went from 22.5px to 30px. That matches the panel title and looks large on `/services`. Consider allowing a 24px step in the spec instead.
+- [ ] **The Guide assembles on every page load.** The spec says "on first visit"; only the greeting is limited to the first visit.
+
 ## Housekeeping
 
 - [ ] **Merge to `main`.** All work is on `feat/voxel-world`; `main` is still at the first commit.
