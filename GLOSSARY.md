@@ -21,7 +21,7 @@ One of a few hand-tuned, muted colour and vegetation sets (e.g. tropical, northe
 _Avoid_: palette, theme (Theme means Day/Night)
 
 **Landmark**:
-A place in the world that stands for one section of the site. Every Seed contains every Landmark. Five are places in the World; Overview and House Interior are views, of the whole World and of the inside of the House. The seven are, in story order: Overview (Hero), Station (Services), House (About), House Interior (Team), Garden (Portfolio), Dock (Clients), Mailbox (Contact).
+A place in the world that stands for one section of the site. Every Seed contains every Landmark. Five are places in the World; Overview and House Interior are views, of the whole World and of the inside of the House. The seven are, in story order: Overview (Hero), Station (Services), House (About), House Interior (Team), Garden (Portfolio), Dock (Clients), Mailbox (Contact). The Mailbox stands in the House's front yard; the Station is a group with a structure for each Service.
 _Avoid_: hotspot, POI, node
 
 **Landmark Variant**:
@@ -40,7 +40,7 @@ _Avoid_: critters, wildlife, effects
 The fixed sequence in which the visitor is guided through the Landmarks; it never depends on the Seed.
 
 **Project**:
-A piece of past work shown in the portfolio. Each Project grows in the Garden: a Pinned Project as a flower, every other Project as a tree.
+A piece of past work shown in the portfolio. Each Project grows in the Garden: a Pinned Project as a flower, every other Project as a tree. The Garden has room for nine; the rest are listed only in the portfolio.
 _Avoid_: case, work item
 
 **Pinned Project**:
@@ -56,7 +56,7 @@ A technology vendor the company is allied with, such as a cloud or data platform
 _Avoid_: vendor, alliance
 
 **Service**:
-A capability the company sells, such as data engineering or ML. Services are shown at the Station.
+A capability the company sells, such as data engineering or ML. Each Service has a structure of its own in the Station's group.
 _Avoid_: product, offering
 
 **Team Member**:

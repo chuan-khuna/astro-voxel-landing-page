@@ -6,6 +6,8 @@
 
 **Status:** ready-for-agent
 
+Scale: structures are ⅛ unit (ADR 0006). Sizes: `.scratch/voxel-world-polish/README.md`.
+
 Spec: `.scratch/voxel-world-polish/spec.md`
 
 - [ ] There are several Client boat kinds and 2–3 Partner ship kinds, with Biome-styled Variants as ASCII structures. Partner ships are always clearly larger than Client boats.

@@ -10,7 +10,7 @@ Spec: `.scratch/voxel-world-polish/spec.md` · ADR: `docs/adr/0005-continuous-re
 
 - [ ] Shore foam is white ⅛-unit voxels that run in towards the coast, break along the Isle's edge and draw back. It is computed in the shader from the water's distance-from-coast data, with no per-frame CPU work.
 - [ ] Waves never break over the Dock's jetty or under moored boats in a way that looks wrong.
-- [ ] Fish are ¼-unit ASCII structures, one species per Biome, drawn with `InstancedMesh`. Schools of 3–5 swim in the shallows and are seen through the translucent water. Now and then one leaps and splashes with ⅛-unit spray.
+- [ ] Fish are ⅛-unit ASCII structures, one species per Biome, drawn with `InstancedMesh`. Schools of 3–5 swim in the shallows and are seen through the translucent water. Now and then one leaps and splashes with ⅛-unit spray.
 - [ ] School areas are deterministic from the Seed through `generateWorld`, in shallow water only. The number of schools follows the tier.
 - [ ] At Night the foam dims and a faint bioluminescent glow shows where waves break. If Day/Night is not built yet, note this.
 - [ ] Nothing moves when the clock is frozen, and fish and foam are never click targets.

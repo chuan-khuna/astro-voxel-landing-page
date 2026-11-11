@@ -7,7 +7,8 @@ Starts after every ticket in `.scratch/voxel-world-landing/` is resolved. It bui
 Sources:
 - Discussion records: `docs/records/2026-11-11-voxel-world-polish.md`, `docs/records/2026-11-11-voxel-world-ambient-life.md`
 - Glossary: `GLOSSARY.md` (Pinned Project, Landmark Variant, Decoration, Ambient Life, and the updated Biome, Client and Partner)
-- ADRs: `docs/adr/0004-ascii-voxel-structures.md`, `docs/adr/0005-continuous-render-for-ambient-life.md`, plus 0001–0003
+- ADRs: `docs/adr/0004-ascii-voxel-structures.md`, `docs/adr/0005-continuous-render-for-ambient-life.md`, `docs/adr/0006-voxel-resolution-tiers.md`, plus 0001–0003
+- Sizes and scale: `.scratch/voxel-world-polish/README.md`, record `docs/records/2026-11-11-voxel-scale-and-footprints.md`
 - Base spec: `.scratch/voxel-world-landing/spec.md`
 
 ## Problem Statement
@@ -22,7 +23,7 @@ Rolling a new Seed changes the terrain and the colours, but not the character of
 
 ## Solution
 
-**Structures are predefined.** Every Landmark, tree, flower, boat, ship and piece of Decoration is a hand-drawn voxel structure, kept in the repo as an ASCII file at ¼-unit scale (ADR 0004). An agent draws them, and the user reviews them in a dev-only Model Gallery.
+**Structures are predefined.** Every Landmark, tree, flower, boat, ship and piece of Decoration is a hand-drawn voxel structure, kept in the repo as an ASCII file at ⅛-unit scale (ADR 0004, ADR 0006). An agent draws them, and the user reviews them in a dev-only Model Gallery.
 
 **Landmark Variants.**
 - Each Biome has its own building style for every Landmark. For example, the House is a stilt house in the tropical Biome, a timber cabin in northern, a brick cottage in autumn and a stone house in volcanic.
@@ -82,7 +83,7 @@ None of it can be clicked, none of it hides a Landmark for long, and all of it s
 ## Implementation Decisions
 
 **Structure files (ADR 0004)**
-- Each structure is an ASCII file: one block per ¼-unit layer, bottom to top, with one character per voxel.
+- Each structure is an ASCII file: one block per ⅛-unit layer (1/16-unit for the House Interior), bottom to top, with one character per voxel.
 - A key maps each character to a colour role, such as wall, roof, window, door, trim or foliage.
 - Roles resolve to the Biome's palette or to the fixed House and brand colours. Structures never hold raw colours, so the same OKLCH, jitter and seam shading applies everywhere.
 - Files are parsed at build time into typed voxel arrays. The browser never parses ASCII.
@@ -92,28 +93,41 @@ None of it can be clicked, none of it hides a Landmark for long, and all of it s
 - Each placed Landmark is meshed once by the existing greedy mesher.
 - Repeated structures (trees, flowers, Decoration, boats, ships) are drawn with one `InstancedMesh` per structure.
 
-**Scale.** Structures stay at ¼ unit:
+**Scale (ADR 0006).**
 
-| Structure | Voxels |
-|---|---|
-| House | 12×12 |
-| Station | 8×8 |
-| Mailbox | 4×4 |
-| Tree or flower | 4×4 |
+| Tier | Voxel | Used for |
+|---|---|---|
+| Terrain | 1 unit | ground, sea, clouds |
+| Ground detail | ¼ unit | bridges, stairs, the Dock's deck and jetty |
+| Structure | ⅛ unit | Landmarks, Service structures, plants, fences, boats, ships, Decoration, creatures |
+| Particle | ⅛ unit | leaves, butterflies, fireflies, snow, ash, foam |
+| Interior | 1/16 unit | the House Interior scene |
+
+Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person 12.
+
+| Footprint | Cells | Voxels (⅛) |
+|---|---|---|
+| House plot: House 3×3 plus front yard with the Mailbox | 4×4 | 32×32 |
+| Station group: Station 2×2 plus one 2×2 structure per Service | about 6×4 (layout open) | – |
+| Garden: 3×3 bed inside a one-cell fence | 5×5 | 40×40 |
+| Dock | 2×1 plus jetty | 16×8 |
+| Tree or flower | 1×1 | 8×8 |
 
 **Landmark Variants**
-- Each Landmark (House, Station, Mailbox, Dock) has one style per Biome and 2–3 Variants per style, about 8–12 per Landmark.
+- Each Landmark (House, Station, Mailbox, Dock) and each Service structure has one style per Biome and 2–3 Variants per style, about 8–12 per Landmark.
 - The Seed picks a Variant per Landmark, so the same Seed gives the same Variants.
 - A Variant fills its Landmark's footprint (ticket 18 of the base feature).
 - Doors face the path where there is one.
 
 **Garden**
 - Projects gain an optional `pinned` flag.
-- Pinned Projects bloom as flowers, up to 6, chosen as the first six by id. Any further Pinned Projects grow as trees.
-- Flowers and trees together are capped at 24 (the existing cap). Pinned Projects take places first.
-- Projects beyond the cap are not in the World but stay on `/garden`, where Pinned Projects are listed first.
-- Flowers occupy the Garden's front row as the camera sees it.
-- Trees use the Biome's tree species and a 3×3 canopy in a 4×4 cell.
+- The Garden is a fixed 3×3 bed inside a fence one cell wide (5×5 in all), with a gate on the path side.
+- Pinned Projects bloom as flowers in the front two rows (3×2 as the camera sees it), up to 6, chosen as the first six by id.
+- Other Projects, and Pinned Projects beyond six, grow as trees in the back row (3×1), up to 3.
+- One plant per cell, so the Garden shows at most 9 Projects. Pinned Projects take places first.
+- Projects beyond that are not in the World but stay on `/garden`, where Pinned Projects are listed first.
+- Open: whether other Projects may take empty flower cells when fewer than six are pinned.
+- Trees use the Biome's tree species with a 6×6 canopy in an 8×8 cell, so each plant reads separately.
 - No Decoration inside the Garden: an empty Garden is a grass patch.
 
 **Boats and ships**
@@ -148,7 +162,17 @@ None of it can be clicked, none of it hides a Landmark for long, and all of it s
 - A gentle per-voxel bob is computed in the shader. It stops under reduced motion.
 - At Night the water darkens, as the base spec already says.
 
+**Station and Services**
+- The Station is a group: its own 2×2 building at the centre, and a 2×2 structure for each Service round it.
+- Each Service structure says what the Service does, for example pipes and tanks for data engineering, silos for data platforms, an observatory with a chart board for analytics, and a lab for machine learning.
+- Open: the group's layout (a 6×4 row or a 6×6 ring), how it adapts to the number of Services, and whether each Service structure can be clicked.
+
+**House plot and Mailbox**
+- The House stands on a 4×4 plot: the House itself is 3×3, and the other seven cells are its front yard on the door side.
+- The Mailbox stands in that yard. It is still the Contact Landmark with its own hotspot, but it has no footprint of its own.
+
 **House Interior**
+- The Interior is a scene of its own at 1/16 unit (ADR 0006). The roof lifts in the World, the camera dives in, and the Interior scene takes over.
 - There is one furnished room per Biome, four in all.
 - Every House Variant in a Biome has a roof that lifts off and the same interior space, so that Biome's room fits it.
 - Every room has the developer at a computer, and clicking the developer opens Team.
@@ -164,7 +188,7 @@ None of it can be clicked, none of it hides a Landmark for long, and all of it s
 - *Tiers.* There are three tiers: full, reduced and still. Desktop starts at full and phones at reduced. Frames slower than the target for several seconds drop one tier, which never climbs back during that visit. Camera flights and drags never stutter because of Ambient Life.
 - *One clock and one wind.* Every motion reads a shared time uniform and a shared wind uniform. The wind has one direction for the whole World, decided by the Seed, and blows in gusts that roll across the Isles. Freezing the clock freezes everything, for reduced motion, the still tier, the Model Gallery and build-time stills.
 - *Not clickable.* Ambient Life is never a hotspot or a raycast target. Pointers reach Landmarks and Garden plants through it.
-- *Scale.* Shaped creatures (deer, squirrels, birds, fish) are ¼-unit ASCII structures drawn with `InstancedMesh`. Particles (butterflies, fireflies, leaves, snow, ash, foam) are single-colour ⅛-unit cubes moved in the shader, with no structure file.
+- *Scale.* Shaped creatures (deer, squirrels, birds, fish) are ⅛-unit ASCII structures drawn with `InstancedMesh`. Particles (butterflies, fireflies, leaves, snow, ash, foam) are single-colour ⅛-unit cubes moved in the shader, with no structure file.
 - *Sets.* Each Biome has its own creatures, and Day or Night decides which are out:
 
   | Biome | Day | Night |
@@ -189,7 +213,7 @@ None of it can be clicked, none of it hides a Landmark for long, and all of it s
   - Variants come from the Biome's set.
   - Decoration never overlaps a footprint, path, bridge end or the Garden, and never occludes a Landmark.
   - Isle radii fall in the new ranges.
-  - Pinned flowers number at most 6, and flowers plus trees are at most 24.
+  - Pinned flowers number at most 6, trees at most 3, and flowers plus trees at most 9.
 - **Structure files** are tested as data:
   - each parses
   - each uses only known roles

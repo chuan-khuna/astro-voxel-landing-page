@@ -9,7 +9,7 @@
 Spec: `.scratch/voxel-world-polish/spec.md`
 
 - [ ] House, Station, Mailbox and Dock each have one style per Biome and 2–3 Variants per style, as ASCII structures.
-- [ ] Each Variant fills its footprint (House 3×3, Station 2×2, Mailbox 1×1, Dock 2×1 plus jetty), and doors face the path.
+- [ ] Each Variant fills its footprint at ⅛ unit (House 3×3 in its 4×4 plot, Station 2×2 at the centre of its group, Mailbox in the House's yard, Dock 2×1 plus jetty), and doors face the path. The Dock's deck and jetty stay ¼ unit.
 - [ ] Every House Variant in a Biome has a liftable roof and the same interior space.
 - [ ] The generator picks a Variant per Landmark from the Seed. The same Seed gives the same Variants, and Variants always come from the World's Biome. This is tested through `generateWorld` over hundreds of Seeds.
 - [ ] Data tests cover every new structure.

@@ -8,7 +8,8 @@
 
 Spec: `.scratch/voxel-world-polish/spec.md`
 
-- [ ] There are four interior rooms, one per Biome, as ASCII structures. Examples: bamboo furniture in tropical, a fireplace in northern.
+- [ ] The Interior is a scene of its own at 1/16 unit (ADR 0006): the roof lifts in the World, the camera dives in, and the Interior scene takes over. Leaving reverses it.
+- [ ] There are four interior rooms, one per Biome, as 1/16-unit ASCII structures. Examples: bamboo furniture in tropical, a fireplace in northern.
 - [ ] Each room fits the shared interior space of every House Variant in its Biome.
 - [ ] The roof of every House Variant lifts off, and the camera dives into the room.
 - [ ] Every room has the developer at a computer, and clicking the developer opens Team.

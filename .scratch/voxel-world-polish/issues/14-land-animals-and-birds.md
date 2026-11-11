@@ -8,7 +8,7 @@
 
 Spec: `.scratch/voxel-world-polish/spec.md` · ADR: `docs/adr/0005-continuous-render-for-ambient-life.md`
 
-- [ ] Animals and birds are ¼-unit ASCII structures per Biome, drawn with `InstancedMesh`. Examples: deer in the north, squirrels in autumn, seabirds in the tropics, bats at Night. Simple poses (walk, rest, graze, head turn, wing beat) are separate frames or a few shader-driven parts.
+- [ ] Animals and birds are ⅛-unit ASCII structures per Biome, drawn with `InstancedMesh`. Examples: deer in the north, squirrels in autumn, seabirds in the tropics, bats at Night. Simple poses (walk, rest, graze, head turn, wing beat) are separate frames or a few shader-driven parts.
 - [ ] `generateWorld` gives each land animal a rest point and a short route from the Seed. Routes never cross a footprint, a bridge or the Garden, and never stand between the camera and a Landmark, using the Decoration occlusion check.
 - [ ] Each Isle has at most 2–3 animals. The count follows the tier.
 - [ ] At runtime an animal walks its route, then rests, grazes or turns its head, on the shared clock.

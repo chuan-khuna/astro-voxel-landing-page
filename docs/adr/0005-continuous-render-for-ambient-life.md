@@ -11,7 +11,7 @@ We chose this because a World that only moves when touched does not feel alive, 
 
 ## Amendment to ADR 0004
 
-Shaped creatures (deer, squirrels, birds, fish) stay ¼-unit ASCII structures. Particles (butterflies, fireflies, leaves, snow, ash, foam) are single-colour ⅛-unit cubes moved in the shader, with no structure file. ⅛ unit is allowed for particles only. Structures stay at ¼ unit.
+Shaped creatures (deer, squirrels, birds, fish) are ASCII structures. Particles (butterflies, fireflies, leaves, snow, ash, foam) are single-colour ⅛-unit cubes moved in the shader, with no structure file. (The voxel sizes are now set by ADR 0006: creatures and other structures are ⅛ unit too.)
 
 ## Consequences
 

@@ -8,11 +8,11 @@ We chose this because agents draw the models. An agent can write, read, test and
 
 - Around 40+ structures (Landmark styles × Biomes × Variants, plants, boats, ships, Decoration) are text files the user reviews through a dev-only Model Gallery (`/dev/models`), not by opening the files.
 - Structure files can be tested as data: they parse, use known roles, fill their footprint, and have the doors and interior space their Landmark needs.
-- Detail stays at ¼ unit. A House is 12×12 voxels. ADR 0005 allows ⅛-unit cubes for Ambient Life particles only. They have no structure file.
+- ~~Detail stays at ¼ unit. A House is 12×12 voxels.~~ Superseded by ADR 0006: structures are ⅛ unit, bridges and stairs ¼ unit, the House Interior 1/16 unit in a scene of its own.
 - For three.js the source format makes no difference. Repeated structures are drawn with one `InstancedMesh` each, and placed Landmarks are greedy-meshed once.
 
 ## Considered Options
 
 - **MagicaVoxel `.vox` files.** The nicest for drawing by hand, and three.js ships a `VOXLoader`. But they are binary, so diffs are unreadable. An agent cannot see what it draws. Raw palette colours would also need a slot-to-role convention. Rejected, because the user does not plan to draw models by hand.
 - **Parameterised code builders** (the first placeholders). These are flexible but hard to art-direct detail with, and hard to review shape by shape.
-- **⅛-unit detail.** Rejected: about 8× the voxels and file size, heavier on phones, and out of scale with 1-unit terrain.
+- **⅛-unit detail.** Rejected at first: about 8× the voxels and file size, heavier on phones, and out of scale with 1-unit terrain. Later adopted for structures by ADR 0006, after measuring the World at about 3.2k detail voxels.

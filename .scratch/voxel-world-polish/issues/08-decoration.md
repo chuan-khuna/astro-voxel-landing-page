@@ -6,6 +6,8 @@
 
 **Status:** ready-for-agent
 
+Scale: structures are ⅛ unit (ADR 0006). Sizes: `.scratch/voxel-world-polish/README.md`.
+
 Spec: `.scratch/voxel-world-polish/spec.md`
 
 - [ ] Each Biome has a Decoration set as ASCII structures: small trees (a different, smaller species from Project trees), grass, flower clumps, and minor buildings such as sheds, fences, lamps, rock piles and windmills.
