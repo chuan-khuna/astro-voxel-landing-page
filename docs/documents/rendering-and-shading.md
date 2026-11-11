@@ -667,7 +667,12 @@ triangles in the structure mesh (902 on `lighthouse`, tropical; 1,114 on
 `2`, autumn), and its lid (about 2,000–2,400) and the developer (48) are
 meshes of their own (counted in `data-triangles`). The budget is measured
 again as more ⅛-unit structures land (ADR 0006). The 4 buoys (ticket 13) add about 160 to the detail
-mesh; the Night glow (5 window panes, 4 lamp boxes) adds about 60 more. Real tree models and decoration (later tickets) will
+mesh; the Night glow (5 window panes, 4 lamp boxes) adds about 60 more. Polish ticket 02 grew the Isles about 1.5× (about twice the land):
+on the site's own content, `data-triangles` reads 7,830–10,832 over `lighthouse` (8,712),
+`lanternfish`, `42`, `harbour`, `694157692` and `seed-7`. The camera's pan bounds, zoom range
+and Overview framing need no change: they follow `views.overview` and the Isles' bounds;
+the sun's shadow camera covers the larger grid (about 1.35× wider) with the same map, so shadows are
+about three quarters as sharp. Real tree models and decoration (later tickets) will
 add most of the remaining triangles.
 
 ## Not yet built

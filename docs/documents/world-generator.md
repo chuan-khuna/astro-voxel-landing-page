@@ -69,7 +69,7 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `biome` | The Biome: `id` and one OKLCH colour (`{ l, c, h }`) per role (sand, grass, peak, foliage, soil, rock, rockDark, path, bridge, waterShallow, waterDeep, accent). |
 | `terrain` | Row-major grid (`i = z * width + x`): `heights[i]` is the land top in whole voxels (0 = sea); `isle[i]` is the owning Isle id, or -1 for sea; `surface[i]` is the top voxel's kind (`sea`, `sand`, `grass`, `peak`). |
 | `strata` | Cliff layering: `strata[y]` is the layer (`soil`, `rock`, `rockDark`) of every buried voxel at height `y`. |
-| `isles` | One entry per Isle: id, inclusive cell bounds, cell count. |
+| `isles` | One entry per Isle: id, inclusive cell bounds, cell count, and the `radius` it was shaped from (see "How a World is generated"). |
 | `bridges` | Straight bridges over the sea: `from` and `to` Isle ids, the sea `cells` spanned (in order from `from`), and the deck height `y`, which equals the land height at both ends. |
 | `paths` | Walkable paths between Landmarks. For now one: Dock to House, as 4-connected cells over land and bridges. |
 | `stairs` | One per single-step height change along a path: the lower `cell`, its height `y`, and the `facing` the stairs climb towards. |
@@ -97,7 +97,10 @@ Dock and Mailbox. The other two are views derived from the layout:
    northern 3–5, volcanic 4–6).
 2. **Isles.** One to four (weighted towards two and three). The first sits at
    the origin; each next one sits beside an earlier one with a 4–7 cell sea
-   gap. Fewer Isles are larger.
+   gap. Fewer Isles are larger: the radius is 14–18 cells for one Isle,
+   10–14 for two or three, and 9–12 for four (`ISLE_RADIUS` in
+   `terrain.ts`; polish ticket 02 grew them about 1.5× to make room for
+   Landmark Variants, the Garden and Decoration).
 3. **Terrain.** Each Isle is a radial falloff (1 at the centre, 0 at its
    radius) pushed in and out by FBM simplex noise. A cell belongs to the
    Isle with the strongest field. Stray pieces of an Isle are dropped.
@@ -153,19 +156,29 @@ footprints that keep every rule:
   cells and a one-cell margin round them, so footprints keep a cell apart.
   A jetty stays off bridges too. The Dock-to-House path is routed after
   placement and never enters a footprint.
-- **Never hidden by terrain.** The camera never rotates and looks along
+- **Never hidden by terrain or another Landmark.** The camera never rotates and looks along
   −(1, 1, 1) (true isometric). For each ground point of a candidate
   footprint (and jetty) on a ¼-cell grid, the generator follows the ray
   towards the camera, (1, 1, 1), and rejects the footprint if the ray enters
-  a terrain column (or a bridge cell, treated as a column up to its deck)
-  below the column's top. Only columns on the diagonal band ahead of the
+  a terrain column (or a bridge cell, treated as a column up to its deck,
+  or a placed Landmark's model, below) below the column's top. Only columns on the diagonal band ahead of the
   point, up to the highest ground, are checked. Points above the ground (the
   model) are then visible too, because their rays run higher. The check uses
   the terrain as levelled for that footprint. Lowering ground never hides
   anything, and the Station (the only raise) is placed first, so a footprint
   checked once stays in view. The Garden's trees are inside its footprint,
-  so they count as part of the Garden. Landmarks do not count as occluders
-  of each other.
+  so they count as part of the Garden.
+- **Never hidden by another Landmark.** Each placed Landmark's model counts
+  as a column as tall as `LANDMARK_HEIGHT` allows over the cells it stands
+  on: Station 6 units, House 4 (its plot's 3 × 3 only; the yard is ground),
+  Garden 3.5, Dock 1 (over its jetty too), Mailbox 2 (its yard cell, set
+  with the House). The heights leave room for the polish models (a Station
+  of 5–6, Garden trees of 3–3.5); `landmarkModels.test.ts` checks that no
+  model is taller. A candidate must be in view past the models already
+  placed, and its own model must hide none of them (the same ray march,
+  skipped when the model lies wholly west or north of a Landmark, since
+  rays run towards +x and +z). The Mailbox, in the House's own yard, is
+  not an occluder of its House.
 - **The Garden.** Trees shown are `min(projects, 24)`. The layout is pairs of
   tree rows with a path row between them (local rows with `z mod 3 = 2` are
   paths), at least 3 × 3, the smallest area that fits the trees and still
@@ -261,18 +274,25 @@ the buoys lead the way to the Dock. Every one of 200 sampled Worlds gets 4.
 If a rule fails (two Isles touch, an Isle is under 30 cells, an Isle cannot
 be bridged, a Landmark has no valid footprint, or there is no path), the
 layout is redone from a Seed derived from the given one (`<seed>#retry<n>`).
-After 8 noise layouts comes the safe layout: one round Isle of radius 12
-(10 before the House's plot grew to 4 × 4) with no noise and at most 2 terrace steps, flat enough that every footprint,
-even a 24-tree Garden, fits in view (checked over 2,000 runs per Biome). So
+After 8 noise layouts comes the safe layout: one round Isle of radius 14
+(the smallest lone Isle; 10, then 12 before polish ticket 02) with no noise and at most 2 terrace steps, flat enough that every footprint,
+even a 24-tree Garden, fits in view. So
 retry always ends, in at most 9 attempts, and the same input always gives
 the same World.
 
-With up to 6 Projects and 6 or 12 Clients, about 36 in 100 Seeds need a
-retry and the safe layout is reached by under 1 Seed in 1,000; with 24
-trees and 12 boats, about half need a retry and about 1 in 90 reaches the
-safe layout. The berths barely change these rates. Generation takes about
-5 ms on average with 3 Partners (9 ms with 24 trees, 12 boats and 6 ships;
-the ship routes are most of the rise), under 30 ms at worst.
+Measured over Seeds `seed-0` to `seed-999` (polish ticket 02, before →
+after the larger Isles and the Landmark-on-Landmark check):
+
+| Content | Retried | Safe layout | Mean | 95th percentile | Worst |
+|---|---|---|---|---|---|
+| 6 Projects, 6 or 12 Clients, 3 Partners | 56% → 24% | 1.7% → 0 | 9 → 16 ms | 17 → 26 ms | 54 → 70 ms |
+| 24 Projects, 12 Clients, 6 Partners | 74% → 33% | 13% → 0 | 16 → 29 ms | 32 → 58 ms | 58 → 154 ms |
+
+Larger Isles leave more room, so far fewer layouts fail; most retries now
+come from bridges (no straight, level run of at most 12 cells between two
+Isles) and then from Landmarks with no footprint in view. Each World costs
+more: the grid is about twice the area, and the reverse occlusion check
+marches rays for every placed Landmark.
 
 ### Biome colours
 
@@ -300,15 +320,17 @@ Seeds, never snapshots:
 
 - determinism (every sampled Seed), different Seeds differ, no `Math.random`;
 - each placed Landmark exactly once; both derived views, House Interior at
-  the middle of the House's 3×3; every covered cell inside the Overview;
+  the middle of the House's 3×3; every Isle and every covered cell inside the Overview;
 - footprints: rectangles of the right size, on flat land of the named Isle
   at the Landmark's height, never overlapping each other (but the Mailbox,
   which stands on the House's plot), a bridge, a bridge end or the path; out of the sea except the Dock's 2–3 cell straight jetty;
   the Garden holds one cell per tree (capped at 24) plus room for paths and
   grows with the trees; no ground point of any footprint or jetty (¼-cell
   grid) is hidden from the isometric camera by terrain or a bridge (an
-  independent ray march in the test);
-- 1–4 Isles, with every count seen; whole-step heights, sea at 0, mostly
+  independent ray march in the test), nor by another Landmark's model at
+  its `LANDMARK_HEIGHT` (the Mailbox excepted for its own House);
+- 1–4 Isles, with every count seen; each Isle's radius in its range for
+  the count (14–18, 10–14, 9–12) and the Isle at least that wide; whole-step heights, sea at 0, mostly
   three or more land heights; sea all round; each Isle one connected piece
   matching its bounds and cell count;
 - bridges link every Isle, each a straight run of sea between level ends on
@@ -332,7 +354,8 @@ Seeds, never snapshots:
 - ships: one per Partner for 0, 1, 3, 7 and 500; each a closed loop of
   distinct cells, 8-neighbour steps, at least 2 cells from land, bridges,
   the jetty and boats; every loop encloses all the land (so with one Isle it
-  sails round it); over 85% of Worlds with a bridge of 5+ cells sail
+  sails round it; checked on one cell per Isle, since a loop clear of land
+  that goes round one cell of a connected Isle goes round all of it); over 80% of Worlds with a bridge of 5+ cells sail
   through a strait between two Isles; ships sharing a loop start at
   different phases;
 - buoys: at most 4, at sea inside the grid, 1–4 cells off the land, at

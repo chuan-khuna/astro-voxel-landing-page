@@ -4,8 +4,10 @@ import type { Isle, StratumKind, SurfaceKind, Terrain } from './types';
 
 /** Sea margin, in cells, kept around the land on every side. */
 const SEA_MARGIN = 4;
+/** Isle radius range, in cells, by how many Isles the World has: fewer Isles are larger. */
+const ISLE_RADIUS: Record<number, [number, number]> = { 1: [14, 18], 2: [10, 14], 3: [10, 14], 4: [9, 12] };
 /** The safe layout: one round Isle this wide, rising this many steps at most, so every footprint fits. */
-const SAFE_RADIUS = 12;
+const SAFE_RADIUS = 14;
 const SAFE_PEAK = 2;
 /** Smallest Isle, in cells, that a layout may keep. */
 const MIN_ISLE_CELLS = 30;
@@ -93,10 +95,11 @@ export function buildTerrain(rng: Rng, options: TerrainOptions): { terrain: Terr
     heights[i] = 1 + Math.floor(t * (specs[id]!.peak + 1));
   }
 
-  const isles: Isle[] = specs.map((_, id) => ({
+  const isles: Isle[] = specs.map((s, id) => ({
     id,
     bounds: { minX: width, maxX: -1, minZ: depth, maxZ: -1 },
     cellCount: 0,
+    radius: s.radius,
   }));
   for (let i = 0; i < isle.length; i++) {
     const id = isle[i]!;
@@ -124,7 +127,7 @@ function placeIsleSpecs(rng: Rng, options: TerrainOptions): IsleSpec[] | null {
   // Weighted: two and three Isles are the most common.
   const roll = rng();
   const count = roll < 0.2 ? 1 : roll < 0.5 ? 2 : roll < 0.8 ? 3 : 4;
-  const [minR, maxR] = count === 1 ? [9, 12] : count === 4 ? [6, 8] : [7, 10];
+  const [minR, maxR] = ISLE_RADIUS[count]!;
 
   const specs: IsleSpec[] = [];
   for (let k = 0; k < count; k++) {

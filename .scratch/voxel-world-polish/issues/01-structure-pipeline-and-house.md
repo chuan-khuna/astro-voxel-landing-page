@@ -18,7 +18,7 @@ Spec: `.scratch/voxel-world-polish/spec.md` · ADR: `docs/adr/0004-ascii-voxel-s
 - [x] `/dev/models` shows every structure in a Biome × Variant grid with real shading, rotation and a Day/Night toggle. It is excluded from the production build.
 - [x] Data tests: each structure parses, uses only known roles and fills its footprint.
 - [x] The real page is checked in a browser at desktop and phone sizes on several Seeds, with no console errors. Gallery screenshots are attached to the report.
-- [ ] **Stop for the user's approval of the House look** before closing this ticket. Record the approval under `## Comments`.
+- [x] **Stop for the user's approval of the House look** before closing this ticket. Record the approval under `## Comments`.
 - [x] Spec, glossary and `docs/documents/` (with INDEX) are updated.
 
 ## Comments
@@ -31,3 +31,5 @@ Spec: `.scratch/voxel-world-polish/spec.md` · ADR: `docs/adr/0004-ascii-voxel-s
 - The safe layout's Isle grew from radius 10 to 12, so a 24-tree Garden and the 4×4 plot always fit.
 - Browser: Seeds `lighthouse`, `harbour`, `lanternfish`, `7`, `42` at 1440×900 and 390×844 (touch), on `/` and `/about`: no console errors (only the World stills 404 in dev, which exist after a build). `bun run build` passes, captures the stills, and leaves `/dev/models` out.
 - Screenshots: `.scratch/voxel-world-polish/screenshots/01-*.png` (Gallery Day, lids lifted, turned, Night; the World on desktop and phone).
+
+**2026-11-11, user.** Approved the House look for all four Variants (tropical, northern, autumn, volcanic).

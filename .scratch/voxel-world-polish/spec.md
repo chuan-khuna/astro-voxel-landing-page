@@ -150,6 +150,8 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 
 - Camera bounds follow.
 - Mobile uses the same Isles with less Decoration.
+- No Landmark hides another from the camera. Placement treats each Landmark's model as a column as tall as `LANDMARK_HEIGHT` allows (Station 6, House 4, Garden 3.5, Dock 1, Mailbox 2 units), and no model may be taller.
+- Measured sizes, retry rates and generation times (before and after) are in `README.md` and `docs/documents/world-generator.md`.
 
 **Decoration**
 - Each Biome has its own Decoration set: small trees (a different, smaller species from Project trees), grass, flower clumps, and minor buildings such as sheds, fences, lamps, rock piles and windmills.

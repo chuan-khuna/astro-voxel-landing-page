@@ -41,6 +41,12 @@ export interface Isle {
   /** Inclusive cell bounds of the footprint. */
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
   cellCount: number;
+  /**
+   * The radius, in cells, the Isle was shaped from: noise moves its coast up
+   * to 30% of it in or out. Its range depends on how many Isles the World
+   * has (`ISLE_RADIUS` in `terrain.ts`).
+   */
+  radius: number;
 }
 
 /**

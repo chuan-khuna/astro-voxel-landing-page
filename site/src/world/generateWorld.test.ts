@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, MAX_BUOYS, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, HOUSE_CELLS, LANDMARK_HEIGHT, MAX_BUOYS, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -12,7 +12,9 @@ const worldFor = (seed: string): World => {
   return worlds.get(seed)!;
 };
 
-describe('generateWorld', () => {
+// Each rule is checked over hundreds of Worlds, and each Isle is up to 18 cells in radius:
+// a test takes a few seconds, more than Vitest's default 5s when files run in parallel.
+describe('generateWorld', { timeout: 20_000 }, () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -198,6 +200,45 @@ describe('generateWorld', () => {
     }
   });
 
+  it('never hides a Landmark behind another Landmark from the isometric camera', () => {
+    for (const seed of sampledSeeds) {
+      const { landmarks } = worldFor(seed);
+      const hidden: string[] = [];
+      const house = landmarks.find((l) => l.id === 'house')!;
+      // Each Landmark's model as columns: the top it may reach over each cell it stands on.
+      // The House stands on its plot's 3×3; the rest of the plot is yard, at ground level.
+      const columns = (l: World['landmarks'][number]) => {
+        const cells = l.id === 'house' ? l.footprint.cells.filter((c) => c.x - l.footprint.origin.x < HOUSE_CELLS && c.z - l.footprint.origin.z < HOUSE_CELLS) : coveredCells(l);
+        return new Map(cells.map((c) => [key(c), l.y + LANDMARK_HEIGHT[l.id]] as const));
+      };
+      for (const target of landmarks) {
+        for (const other of landmarks) {
+          // The Mailbox stands in the House's own yard: part of its plot, not a Landmark in front of it.
+          if (other === target || (target === house && other.id === 'mailbox')) continue;
+          const tops = columns(other);
+          const reach = Math.max(...tops.values());
+          for (const c of coveredCells(target)) {
+            for (let i = 0; i <= 4; i++) {
+              for (let k = 0; k <= 4; k++) {
+                // March the ray from the ground point towards the camera, (1, 1, 1).
+                const px = c.x + i / 4;
+                const pz = c.z + k / 4;
+                for (let t = 0.001; target.y + t <= reach; t += 0.02) {
+                  const top = tops.get(key({ x: Math.floor(px + t), z: Math.floor(pz + t) }));
+                  if (top !== undefined && target.y + t < top) {
+                    hidden.push(`${other.id} hides ${target.id} at ${px},${pz}`);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      expect(hidden, seed).toEqual([]);
+    }
+  });
+
   it('defines the two derived views, Overview and House Interior', () => {
     for (const seed of sampledSeeds) {
       const { views, landmarks } = worldFor(seed);
@@ -210,10 +251,14 @@ describe('generateWorld', () => {
     }
   });
 
-  it('frames every cell each Landmark covers inside the Overview', () => {
+  it('frames every Isle, and every cell each Landmark covers, inside the Overview', () => {
     for (const seed of sampledSeeds) {
-      const { views, landmarks } = worldFor(seed);
+      const { views, landmarks, isles } = worldFor(seed);
       const { target, radius } = views.overview;
+      for (const { id, bounds } of isles) {
+        for (const x of [bounds.minX, bounds.maxX + 1]) expect(Math.abs(x - target.x), `${seed} Isle ${id}`).toBeLessThanOrEqual(radius);
+        for (const z of [bounds.minZ, bounds.maxZ + 1]) expect(Math.abs(z - target.z), `${seed} Isle ${id}`).toBeLessThanOrEqual(radius);
+      }
       for (const l of landmarks) {
         for (const c of coveredCells(l)) {
           expect(Math.abs(c.x + 0.5 - target.x), `${seed} ${l.id}`).toBeLessThanOrEqual(radius);
@@ -232,6 +277,25 @@ describe('generateWorld', () => {
       seen.add(n);
     }
     expect([...seen].toSorted()).toEqual([1, 2, 3, 4]);
+  });
+
+  it('shapes each Isle from a radius of 14–18 cells alone, 10–14 with one or two others, and 9–12 with three', () => {
+    const ranges: Record<number, [number, number]> = { 1: [14, 18], 2: [10, 14], 3: [10, 14], 4: [9, 12] };
+    for (const seed of sampledSeeds) {
+      const { isles } = worldFor(seed);
+      const [min, max] = ranges[isles.length]!;
+      for (const isle of isles) {
+        expect(isle.radius, `${seed} Isle ${isle.id}`).toBeGreaterThanOrEqual(min);
+        expect(isle.radius, `${seed} Isle ${isle.id}`).toBeLessThanOrEqual(max);
+        // The radius is the land's: noise moves the coast at most 30% of it in or out, so the
+        // Isle is 1.4–2.6 radii across at its widest, and covers π(0.7r)² to π(1.3r)² cells.
+        const across = Math.max(isle.bounds.maxX - isle.bounds.minX, isle.bounds.maxZ - isle.bounds.minZ) + 1;
+        expect(across, `${seed} Isle ${isle.id}`).toBeGreaterThanOrEqual(1.4 * isle.radius);
+        expect(across, `${seed} Isle ${isle.id}`).toBeLessThanOrEqual(2.6 * isle.radius + 1);
+        expect(isle.cellCount, `${seed} Isle ${isle.id}`).toBeGreaterThanOrEqual(Math.PI * (0.7 * isle.radius) ** 2);
+        expect(isle.cellCount, `${seed} Isle ${isle.id}`).toBeLessThanOrEqual(Math.PI * (1.3 * isle.radius) ** 2);
+      }
+    }
   });
 
   it('quantises heights to whole voxel steps, with sea at 0 and stepped land', () => {
@@ -331,7 +395,8 @@ describe('generateWorld', () => {
           [b.from, first, -1],
           [b.to, last, 1],
         ] as const;
-        const candidates = step ? [step] : [{ dx: 1, dz: 0 }, { dx: 0, dz: 1 }];
+        // A one-cell bridge may run any of the four ways.
+        const candidates = step ? [step] : SIDES.map(([sx, sz]) => ({ dx: sx, dz: sz }));
         expect(
           candidates.some(({ dx: sx, dz: sz }) =>
             ends.every(([isle, c, sign]) => {
@@ -597,10 +662,12 @@ describe('generateWorld', () => {
           const next = cells[(i + 1) % cells.length]!;
           expect(Math.max(Math.abs(next.x - c.x), Math.abs(next.z - c.z)), `${seed} step ${key(c)}`).toBe(1);
         });
-        for (const c of cells) {
-          const nearest = Math.min(...hazards.map((h) => Math.max(Math.abs(h.x - c.x), Math.abs(h.z - c.z))));
-          expect(nearest, `${seed} ${key(c)}`).toBeGreaterThanOrEqual(2);
-        }
+        // At least two cells (Chebyshev) from every hazard: none in the 3×3 round each loop cell.
+        const hazardSet = new Set(hazards.map(key));
+        const tooClose = cells.filter((c) =>
+          [-1, 0, 1].some((dz) => [-1, 0, 1].some((dx) => hazardSet.has(key({ x: c.x + dx, z: c.z + dz })))),
+        );
+        expect(tooClose.map(key), seed).toEqual([]);
       }
     }
   });
@@ -610,7 +677,10 @@ describe('generateWorld', () => {
     for (const seed of sampledSeeds) {
       const world = generateWorld(seed, { ...counts, partners: 4 });
       if (world.isles.length === 1) single++;
-      const land = landCells(world);
+      // The loop keeps two cells off land (tested above) and each Isle is connected, so
+      // a loop round one cell of an Isle goes round all of it: test one cell per Isle.
+      const allLand = landCells(world);
+      const land = world.isles.map((isle) => allLand.find((c) => c.owner === isle.id)!);
       for (const { cells } of world.ships) {
         const centres = cells.map((c) => ({ x: c.x + 0.5, z: c.z + 0.5 }));
         for (const c of land) expect(encloses(centres, c.x + 0.5, c.z + 0.5), `${seed} ${key(c)}`).toBe(true);
@@ -639,6 +709,7 @@ describe('generateWorld', () => {
       });
     };
     // A strait can still be too tight where the coasts bulge in: then the ship sails round instead.
+    // Coast noise scales with an Isle's radius, so larger Isles bulge further into the same 4–7 cell gaps.
     let checked = 0;
     let between = 0;
     for (const seed of sampledSeeds) {
@@ -648,7 +719,7 @@ describe('generateWorld', () => {
       if (world.ships[0]!.cells.some((c) => inStrait(world, c))) between++;
     }
     expect(checked).toBeGreaterThan(20);
-    expect(between / checked).toBeGreaterThan(0.85);
+    expect(between / checked).toBeGreaterThan(0.8);
   });
 
   it('spreads ships that share a loop round it', () => {

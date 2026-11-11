@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateWorld, type PlacedLandmark } from '@/world';
+import { LANDMARK_HEIGHT, generateWorld, type PlacedLandmark } from '@/world';
 import { VoxelGrid } from './mesher';
 import { buildLandmark, landmarkExtent, treeExtent } from './landmarkModels';
 import { worldColours } from './worldVoxels';
@@ -77,6 +77,13 @@ describe('landmarkExtent', () => {
       expect([house.max.x, house.max.z], world.seed).toEqual([3, 3]);
       expect(house.max.y, world.seed).toBeGreaterThanOrEqual(3.5);
       expect(house.max.y, world.seed).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it('never stands taller than the generator keeps clear for it (`LANDMARK_HEIGHT`)', () => {
+    // Placement keeps every Landmark in view past the others' models at these heights.
+    for (const world of worlds) {
+      for (const l of world.landmarks) expect(landmarkExtent(l).max.y, `${world.seed} ${l.id}`).toBeLessThanOrEqual(LANDMARK_HEIGHT[l.id]);
     }
   });
 
