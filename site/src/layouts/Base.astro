@@ -1,0 +1,38 @@
+---
+import { site } from '../data/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+const { title = site.seo.title, description = site.seo.description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href="data:," />
+  </head>
+  <body style={`--brand: ${site.brand.colour}; --font: ${site.brand.font};`}>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --ink: oklch(0.28 0.02 250);
+    --paper: oklch(0.97 0.01 230);
+    --surface: oklch(0.92 0.015 230);
+    --on-brand: oklch(0.98 0.005 230);
+  }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    color: var(--ink);
+    background: var(--paper);
+  }
+</style>
