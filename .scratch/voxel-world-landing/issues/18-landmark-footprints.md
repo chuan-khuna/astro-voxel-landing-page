@@ -10,6 +10,8 @@ Spec: `.scratch/voxel-world-landing/spec.md`
 
 Requested by the user on 2026-11-11: "อยากให้ landmark/building มีพื้นที่มากกว่า 1 block. eg house, station, tree, etc" (landmarks and buildings should cover more than one block, e.g. the House, the Station, trees).
 
+Also requested on 2026-11-11: "แต่ละbuilding, landmark ต้องอยู่ในมุมที่ไม่ถูกบดบังจาก terrain (isometric view)" (every building and Landmark must sit where terrain does not hide it in the isometric view).
+
 Default footprints (in 1-unit cells; tune if they don't fit the terrain):
 
 | Landmark | Footprint |
@@ -23,6 +25,7 @@ Default footprints (in 1-unit cells; tune if they don't fit the terrain):
 
 - [ ] World data gives each placed Landmark a footprint (origin cell, width, depth, and the cells it covers), and the Garden lists one cell per tree
 - [ ] Every footprint sits on land of one Isle at one height (the generator levels the terrain under it if needed) and never overlaps another footprint, a bridge end, the Dock-to-House path or the sea (except the Dock's jetty)
+- [ ] **Never hidden by terrain.** From the fixed isometric camera direction, no terrain (or bridge) stands in front of any part of a Landmark: every footprint cell and the full model height is visible. The generator knows the view direction as a constant (the camera never rotates), checks each candidate footprint by marching the height grid toward the camera, and rejects placements that would be occluded (falling back to retry if none fit). The Garden's trees count as part of the Garden.
 - [ ] Existing placement rules still hold: House and Garden share an Isle, the Dock is on the shoreline, the Station is on high ground
 - [ ] Generator tests cover footprints for hundreds of sampled Seeds, through `generateWorld` only
 - [ ] Placeholder ¼-unit models fill their footprints; trees fill their cell

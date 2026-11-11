@@ -202,6 +202,7 @@ Content counts shape the World: every **Project** is a tree in the Garden, every
   - the Station is on high ground
   - all Isles are connected by bridges
   - each placed Landmark stands on a flat, dry footprint of several cells (e.g. House 3×3, Station 2×2, Garden an area with one cell per tree) that overlaps nothing else; see ticket 18
+  - no Landmark is hidden by terrain from the fixed isometric camera direction; see ticket 18
 - **Placed vs derived Landmarks.** There are seven Landmarks in Story Order, but the generator places only five: Station, House, Garden, Dock and Mailbox. The other two are camera views derived from the layout: Overview from the World's bounds, and House Interior from the House's position.
 - **Landmark variants.** Each Landmark starts with one variant. The World data carries a variant field so more can be added later without restructuring.
 - **Seed format.** A Seed is a short string, hashed to drive the PRNG. The dice button rolls a numeric one. An empty Seed or one longer than 32 characters falls back to the default Seed. A rolled Seed follows the visitor across routes (e.g. `/garden?seed=1234`).
@@ -331,6 +332,7 @@ This uses Vitest.
 - The Station is on its Isle's high ground.
 - All Isles are reachable via bridges.
 - Landmark footprints are flat, on land, and never overlap.
+- No Landmark is occluded by terrain from the isometric view direction.
 
 **Content counts**
 - Trees equal Projects.
