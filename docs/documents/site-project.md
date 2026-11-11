@@ -39,7 +39,7 @@ bun run preview  # serve the build (Astro 7 runs it in the background; stop with
 | `src/content.config.ts` | Content collections. Only `pages` for now (MDX): `title` and an optional `landmark` id. |
 | `src/content/pages/home.mdx` | The home hook copy. |
 | `src/world/` | The World generator. See `world-generator.md`. |
-| `src/render/mountWorld.ts` | The basic three.js render of a World. |
+| `src/render/` | The soft-voxel renderer: mesher, TSL material, scene runtime (`mountWorld`). See `rendering-and-shading.md`. |
 | `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order. |
 | `src/layouts/Base.astro` | The HTML shell: title and description from site data. |
 | `src/pages/index.astro` | The home page. |
@@ -58,24 +58,9 @@ Client and Partner collections exist.
 The menu links to every Landmark route, but only `/` exists yet; the other
 routes arrive in ticket 07.
 
-## Basic render
+## Rendering
 
-`mountWorld(canvas, world)` is a placeholder until the soft-voxel renderer (ticket 04):
-
-- `WebGPURenderer` from `three/webgpu`; it falls back to WebGL 2 by itself.
-- An orthographic camera on the true isometric axis (1, 1, 1), framed on the
-  Overview view so every Isle fits at any aspect ratio.
-- Terrain is one instanced box per visible voxel (voxels hidden on all four
-  sides are skipped). The top voxel takes the cell's surface colour (sand,
-  grass or peak) or the path colour on a path cell; buried voxels take
-  their stratum's colour, so cliffs show layered bands. A faint per-voxel
-  lightness change keeps single voxels readable.
-- Bridges are plank decks level with their ends; stairs are two steps on the
-  lower cell, rising towards the higher one.
-- Water is a wide deep-water plane, with shallow-water tiles within 2 cells
-  of land.
-- Every terrain, bridge, path and water colour comes from the World's Biome:
-  OKLCH converted to linear sRGB in the render module (`oklchColour`). The
-  sky and the Landmark placeholder blocks are fixed colours.
-- Node materials only (`MeshLambertNodeMaterial`), lit by a hemisphere light and one directional light.
-- Frames render on demand: once on mount, then again only when the canvas resizes.
+`mountWorld(canvas, world)` renders the World as soft voxels: a mesher with
+culling, baked AO and greedy merging, a TSL material for seams, bevel and
+colour jitter, a static sun shadow map, and frames only on demand. See
+`rendering-and-shading.md`.
