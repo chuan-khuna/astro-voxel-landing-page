@@ -1,7 +1,8 @@
 /**
  * The Partners' ships as three.js objects: one `InstancedMesh` per ship
  * structure (a kind in the World's Biome, `vesselModels.ts`), one instance
- * per Partner of that kind, each moved along its loop by `sail(seconds)`.
+ * per Partner of that kind, each moved along its loop by `sail(seconds)`
+ * and rocking on the swell there (`swell.ts`).
  *
  * Ships cast no shadow: the sun's shadow map is static and would leave a
  * moving ship's shadow behind.
@@ -13,6 +14,7 @@ import { sailingPath, shipPose, type SailingPath } from './shipMotion';
 import { structureInstances } from './structureMeshes';
 import { shipPlacement, vesselStructure } from './vesselModels';
 import { worldColours } from './worldVoxels';
+import { vesselRock } from './swell';
 
 /** Sailing speed, in world units (cells) per second: slow, ambient. */
 export const SHIP_SPEED = 0.45;
@@ -23,7 +25,7 @@ export interface Fleet {
   count: number;
   /** Triangles in all the ships together. */
   triangles: number;
-  /** Put every ship where it is `seconds` after it set off. */
+  /** Put every ship where it is `seconds` after it set off, rocking on the swell there. */
   sail(seconds: number): void;
   dispose(): void;
 }
@@ -48,7 +50,10 @@ export function buildFleet(world: World): Fleet {
   }
 
   const placementsAt = (ships: Array<{ path: SailingPath; start: number }>, seconds: number) =>
-    ships.map(({ path, start }) => shipPlacement(shipPose(path, start + seconds * SHIP_SPEED)));
+    ships.map(({ path, start }) => {
+      const placement = shipPlacement(shipPose(path, start + seconds * SHIP_SPEED));
+      return { ...placement, ...vesselRock(placement.x, placement.z, seconds) };
+    });
   const kinds = [...byStructure].map(([structure, ships]) => {
     const instances = structureInstances(structure, colours, placementsAt(ships, 0));
     instances.mesh.name = 'ships';

@@ -30,14 +30,18 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `frameMeter.ts` | `createFrameMeter()`: FPS and frame time from frame timestamps, smoothed (exponential, 0.1); a gap over 250 ms ends a burst and the next starts afresh; `'idle'` with no frame for 500 ms or only a lone frame. | no |
 | `landmarkModels.ts` | The ¼-unit parts of the Landmarks (the Dock's deck and jetty), and `landmarkExtent(world, landmark)`: the box a Landmark covers, measured from its ¼-unit parts, its Variant's structure and, for the Garden, its plants, and never smaller than its footprint (for the House, the House's 3×3 up to its roof). | no |
 | `gardenPlants.ts` | The Garden's plants (polish ticket 05): `plantStructure` (the Biome's tree; its flowers in turn), `gardenPlantsOf(world)` (every flower and tree with its cell and structure), `plantExtent` (a plant's box, for its link) and `plantedGarden(biome)` (a fence planted full, for the Model Gallery). | no |
-| `garden.ts` | `buildGardenPlants(world)`: one `InstancedMesh` per plant structure, one instance per plant, on the Garden's ground. | yes |
+| `garden.ts` | `buildGardenPlants(world, clock)`: one `InstancedMesh` per plant structure, one instance per plant, on the Garden's ground, swaying in the wind (`windSway.ts`). | yes |
 | `plantLinks.ts` | `plantLinkSize(kind, pxPerUnit)`: a plant link's size on screen, so no link covers another plant (see "Plant links"). | no |
 | `buoyModel.ts` | `drawBuoy(cell, grid, colours)`: a buoy in the detail grid; `buoyLamp(cell)`: its lamp's box, which glows at Night. | no |
 | `houseMotion.ts` | `ROOF_LIFT`, `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame, toward a target from 0 to 1) and `developerPose(seconds)` (typing and reading). | no |
 | `vesselModels.ts` | The boats and ships (polish ticket 06): `vesselStructure` (a kind's structure in a Biome), `boatsOf(world)`, `boatPlacement` and `shipPlacement` (see "Boats and ships"). | no |
-| `boats.ts` | `buildBoats(world)`: one `InstancedMesh` per boat structure, one instance per moored boat. | yes |
+| `boats.ts` | `buildBoats(world)`: one `InstancedMesh` per boat structure, one instance per moored boat; `rock(seconds)` rocks them on the swell. | yes |
 | `decorationModels.ts` | Decoration as structures: `decorationStructure(biome, kind)`, `decorationPlacement(world, piece)` (its cell's middle, on its ground, turned to its facing) and `decorationOf(world, tier)` (every piece on the full tier, every other one on the reduced tier). | no |
-| `decoration.ts` | `buildDecoration(world, tier)`: one `InstancedMesh` per Decoration structure, one instance per piece the tier shows. | yes |
+| `decoration.ts` | `buildDecoration(world, tier, clock)`: one `InstancedMesh` per Decoration structure, one instance per piece the tier shows; its plants sway (`windSway.ts`). | yes |
+| `windSway.ts` | `swayMaterial(structure, clock)`: the soft-voxel material with the wind sway in the vertex shader; `swaysInWind(kind)` (grass, clumps, bushes, small trees) and `MAX_SWAY` (see "Ambient Life: wind, leaves and the swell"). | yes |
+| `swell.ts` | The sea's swell, pure: `SWELL_PERIOD`, `SWELL_STRIDE`, `swellPhase` and `vesselRock(x, z, seconds)` (a vessel's heave, roll and pitch, in step with the water). | no |
+| `fallingLeaves.ts` | Falling leaves, pure: `fallingLeaves(world, tier)` (each leaf's start in a tree's canopy, landing down the wind, colour and timing) and `leavesShown(total, lifeTier)`. | no |
+| `leaves.ts` | `buildLeaves(world, tier, clock)`: one `InstancedMesh` of ⅛-unit cubes moved in the vertex shader on the shared clock; `setLife(tier)` shows the tier's share. | yes |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
 | `guideModel.ts` | The Guide's model: `guideVoxels(colours)` (a 6×6×6 ¼-unit cube centred on its origin, side fins, an antenna, the bezel on +x), `GUIDE_SCREEN` (the screen's rectangle) and `GUIDE_FACES` (a 12 × 10 pixel-eye face per mood, and a blink). | no |
 | `guideMotion.ts` | `guideSpot(world, id)` (where the Guide floats beside a placed Landmark), `voxelFlights` and `flightPoint` (the assembly), `travelPoint` (flying between spots on the Tour), `hoverPose(seconds)` (the bob) and `blinking(seconds)`. | no |
@@ -49,14 +53,14 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
 | `seaModel.ts` | The sea, pure (see "Sea"): `seaModel(world)` (the water voxels' tops and skirts, the flat water beyond them and the seabed, as typed arrays), `coastDistance` and `seaShade`, and `SEA_LEVEL`. | no |
-| `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?)`: the TSL node material, in world space or (for ships) the mesh's own space; `softVoxelLook` is the look on its own (seams, bevel, jitter) for other materials. | yes |
+| `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?, { displace? })`: the TSL node material, in world space or (for instanced and moving meshes) the mesh's own space, optionally moving each vertex (a swaying plant); `softVoxelLook` is the look on its own (seams, bevel, jitter) for other materials. | yes |
 | `ambientClock.ts` | `createAmbientClock()`: the shared Ambient Life clock (`time`, seconds, advanced only while Ambient Life is alive) and wind (`wind`, the World's direction) uniforms; `windAt(clock, position)`: the wind at a world position in the shader, gusts rolling down the wind (see "Ambient Life: loop, clock and tiers"). | yes |
 | `ambientLife.ts` | `createAmbientLife`: whether the World is seen (tab shown, canvas on screen, motion allowed) and alive (seen, at a tier that moves), the life tier watch and the clock, for `mountWorld`'s loop. | DOM only |
 | `seaMaterial.ts` | `seaMaterial(clock)`: the sea's TSL material (the soft-voxel look at 1 unit, shallow to deep colour, opacity, the bob in the vertex shader on the shared clock) and its colour uniforms. | yes |
-| `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, pure maths) and `mergeChunks`. | yes |
+| `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy, optionally with a material of its own), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, plus an optional heave, roll and pitch for a vessel on the swell, pure maths) and `mergeChunks`. | yes |
 | `house.ts` | `buildHouse(world, clock?)`: the House Variant's lid (⅛ unit) as a mesh, the windows' lights, and the House Interior's room at 1/16 unit (furniture, the developer's head and hands, the code screen, the Night lamp worked out in the room's material); `setOpening` lifts the lid and shows the room while it is above 0, `setLights` lights the windows and the lamp, `work(seconds)` poses the developer; `roomTriangles` and `developer` (the developer's box, for their link). | yes |
-| `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships, the developer) where it is at the clock's seconds; `setTheme` recolours the sea and lights the lamps and windows. | yes |
+| `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops, rocking on the swell. | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves; `setTheme` recolours the sea and lights the lamps and windows. | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
 | `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, the render loop (continuous while Ambient Life is alive, else on demand) and the render tier, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
@@ -180,7 +184,14 @@ used as the world normal). Terrain uses `voxelMaterial(1)`, detail
 are fractions of a voxel, so the same look scales to every tier. `voxelMaterial(0.25, 'local')` (the ships) works from
 `positionLocal` and `normalLocal` instead and turns the bent normal into
 view space with `transformNormalToView`, so a mesh may move and turn (not
-scale) and keep its seams.
+scale) and keep its seams. In local space the seams and colour jitter are
+measured on the geometry as meshed (`positionGeometry`, `normalGeometry`),
+so every copy of an `InstancedMesh` keeps them on its voxels' edges however
+it is placed, turned, tilted or swayed (polish ticket 10); the bevel is
+measured after instancing, exact for whole-voxel placements and a little off
+the edges on a heaving or tilted vessel. `displace` moves each vertex in the
+vertex shader (`positionNode`), passed to the fragment stage as a varying,
+and the bevel is measured where the vertex was before it moved.
 
 ### Approved settings
 
@@ -217,14 +228,16 @@ turn with the vessel.
   ship's footprint middle on its path, its bow along its heading (heading
   h is 1 − 2h/π quarter turns; `instanceMatrix` takes a fraction as an
   exact angle).
-- **Boats** (`boats.ts`) are still: one `InstancedMesh` per boat structure,
-  one instance per moored boat. They cast shadows into the static shadow
-  map. A boat's first layer is under the sea (sea level 0.15), so it floats
+- **Boats** (`boats.ts`): one `InstancedMesh` per boat structure, one
+  instance per moored boat, rocking on the swell (`rock(seconds)`, see
+  "Ambient Life: wind, leaves and the swell"). They cast shadows into the
+  static shadow map, which keeps the rest pose. A boat's first layer is under the sea (sea level 0.15), so it floats
   at the waterline.
 - **Ships** (`ships.ts`): one `InstancedMesh` per ship structure, one
   instance per Partner of that kind; `sail(seconds)` resets each
-  instance's placement every frame. They receive shadows but cast none:
-  the static shadow map would leave a moving ship's shadow behind.
+  instance's placement every frame, rocking on the swell where it is. They
+  receive shadows but cast none: the static shadow map would leave a moving
+  ship's shadow behind.
 - **Sailing.** `shipMotion.ts` smooths a ship's loop of cells into a closed
   path through the cell centres (three rounds of Chaikin corner cutting)
   and gives the ship's position and heading any distance along it; the
@@ -482,8 +495,9 @@ built by `seaModel.ts` (pure) and drawn with `seaMaterial.ts`:
   grid), 22,000 on `42` (49×49) and 47,000 on `seed-1` (64×98), the
   largest part of `data-triangles` now.
 
-Boats and ships still stand on the sea floor with their first layer under
-the water; they do not bob. The Model Gallery floats them on an opaque
+Boats and ships stand on the sea floor with their first layer under the
+water, and rock on the same swell (polish ticket 10, `swell.ts`, see
+"Ambient Life: wind, leaves and the swell"). The Model Gallery floats them on an opaque
 1-unit patch of the Biome's shallow water whose top is the sea level.
 
 ## World Web Worker and cache
@@ -623,9 +637,9 @@ stands on. Tickets 10–14 add the motions themselves.
   it every frame.
 - **One clock** (`ambientClock.ts`). `clock.time` is a TSL uniform holding
   seconds of Ambient Life; only `advance` moves it, and only the loop
-  advances it, while alive. Every Ambient Life material reads it (the sea
-  already does), and CPU motion takes `clock.seconds` through
-  `objects.step` (the ships). Stopping the clock stops everything at once.
+  advances it, while alive. Every Ambient Life material reads it (the sea,
+  the swaying plants, the leaves), and CPU motion takes `clock.seconds`
+  through `objects.step` (the ships and boats). Stopping the clock stops everything at once.
   A clock never advanced stays at 0: `buildWorldObjects` makes a frozen
   one by default, the Model Gallery has no clock-driven material yet and
   will pass a frozen clock when it gets one, and the build-time stills are
@@ -650,8 +664,8 @@ stands on. Tickets 10–14 add the motions themselves.
   both ways (`lifeTierShown`). At reduced, ambient frames come at most 30 a
   second; at still nothing moves, the clock freezes and the World renders
   on demand. `share` is the part of each kind of living thing a tier shows
-  (1 at full, 0.5 at reduced and at still, frozen where it stands), for the
-  Ambient Life tickets to use. `canvas.dataset.life`, `view.lifeTier` and the
+  (1 at full, 0.5 at reduced and at still, frozen where it stands); the
+  falling leaves follow it (`objects.setLife`, every frame). `canvas.dataset.life`, `view.lifeTier` and the
   stats overlay's `life` row say which tier is on show.
 - **Measured** (headless Chromium, software GL, `lighthouse`). Desktop
   (1440×900): about 4–6 fps, so the watch drops full to reduced in the
@@ -662,6 +676,60 @@ stands on. Tickets 10–14 add the motions themselves.
   ends. A camera drag measured from the page's own frames costs the same
   with the loop running as at still: 38.5–38.8 ms a frame on the phone and
   184–186 ms on desktop (software GL), so the loop adds no stutter.
+
+### Ambient Life: wind, leaves and the swell
+
+Polish ticket 10 (ADR 0005) puts the shared wind and clock to work:
+
+- **Wind sway** (`windSway.ts`). The Garden's trees and flowers and
+  Decoration's grass, flower clumps, bushes and small trees take
+  `swayMaterial(structure, clock)`, the soft-voxel material with a
+  `displace`: each vertex moves down the wind by `windAt` where it stands
+  (gusts roll across the Isle, so neighbours sway in turn) times how far
+  up the canopy it is (0 over the lower 35% of the plant, its trunk or stem,
+  rising to 1 at the top, from the geometry as meshed).
+  The top moves at most `MAX_SWAY`, half a ⅛-unit voxel (1/16 unit): 0.55 of
+  it a lean with the wind and 0.45 a flutter round it (1.8 s, each copy in
+  its own phase from `instanceIndex`). It is linear above that line, so
+  greedy-merged faces bend exactly unless one spans it. Landmarks, minor buildings, fences, lamps and rocks
+  never sway; the Model Gallery uses the plain material. Plant hotspots are
+  sized from the plant's cell, so they still line up (at most 1/16 unit
+  off). The shadow map is static, so shadows keep the rest pose.
+- **Falling leaves** (`fallingLeaves.ts`, pure; `leaves.ts`). Each tree (the
+  Garden's, and the small trees and bushes the render tier draws) drops 2
+  leaves, autumn's 3, at most 72 a World, from a sequence of the Seed's own
+  (`<seed>/leaves`). A leaf starts on one of its tree's foliage voxels and
+  takes that voxel's colour (the Biome's foliage roles, or autumn's gold),
+  and lands down the wind 0.6–1.3 units per unit it falls (at most 2.5), on
+  land as high as its tree's ground and off every Landmark but its own (the
+  Garden); a way that leaves the land, changes height or crosses a Landmark
+  is shortened in 0.25-unit steps, down to straight below. Its cycle: fade
+  in over 0.4 s, fall at 0.28 units a second (at least 1.5 s), fluttering
+  across the wind and pushed by gusts on the way (0 at either end), tumbling
+  1–3 whole turns about x and half that about z so it lies flat, lie 1.5 s
+  fading, then wait 2–9 s unseen. All of it is in the vertex shader of one
+  `InstancedMesh` (per-leaf instanced attributes; the instance matrices
+  stay identity), so a frozen clock holds every leaf where it is; a gone
+  leaf shrinks to a point. The list is shuffled so the first half covers the
+  World: `setLife` shows `leavesShown` (all at full, half rounded up at
+  reduced and still). Leaves fall in every Biome, by Day and at Night.
+  They are transparent, cast no shadow, are never frustum-culled and never
+  raycast. At most 72 × 12 = 864 triangles.
+- **The swell** (`swell.ts`). The sea's period (4.5 s) and stride (0.55
+  radians a cell along x + z) live here, shared by `seaMaterial` and
+  `vesselRock(x, z, seconds)`: a vessel heaves `SEA_BOB` (0.04) in step with
+  the water voxel of its cell, whose own phase (three's TSL `hash` of the
+  cell) `seaHash` works out on the CPU exactly as the shader does, and
+  rolls up to 0.05 and pitches up to 0.035 radians a quarter swell later.
+  `instanceMatrix` takes the heave, roll (about the vessel's length, its
+  +x side up) and pitch (about its beam, its bow up) in the vessel's own
+  frame. The boats rock in `step` (`boats.rock`), the ships as they sail.
+- **Checked** in headless Chromium (SwiftShader) on `harbour` (tropical),
+  `seed-1` (autumn), `seed-2` (northern) and `seed-3` (volcanic), desktop Day
+  and Night and phone, with no console errors: the leaves fall and lie,
+  the boats roll between frames, seams stay on the voxels. Under reduced
+  motion the clock stays 0 and the canvas does not change
+  (`e2e/ambient-life.spec.ts`).
 
 ## Day and Night
 
@@ -915,4 +983,4 @@ without; the phone tier held 29 fps.
 
 ## Not yet built
 
-Animation of plants and Decoration (wind sway), and boats and ships rocking on the swell.
+Nothing in this document's scope. The other Ambient Life motions (creatures, particles, clouds, shore waves, animals) come with polish tickets 11–14.

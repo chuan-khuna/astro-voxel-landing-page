@@ -10,7 +10,9 @@
  * vertices marked to bob move, by the voxel's swell. The shared Ambient Life
  * clock (`ambientClock.ts`) drives it, so it holds still wherever the clock
  * is frozen: under reduced motion, at the still tier, and at time 0 on a
- * fresh page or in a still (never flat: the voxels keep their steps).
+ * fresh page or in a still (never flat: the voxels keep their steps). The
+ * swell's period and stride are shared with the boats and ships riding it
+ * (`swell.ts`).
  *
  * Seams and bevels are measured at the vertex's place before the bob, so
  * they ride with the voxel.
@@ -20,12 +22,8 @@ import { attribute, hash, mix, normalGeometry, positionGeometry, positionLocal, 
 import { softVoxelLook } from './voxelMaterial';
 import { SEA_BOB, SEA_LEVEL } from './seaModel';
 import { TERRAIN } from './voxelTiers';
+import { SWELL_PERIOD, SWELL_STRIDE } from './swell';
 import type { AmbientClock } from './ambientClock';
-
-/** Seconds a water voxel takes to rise, sink and rise again. */
-export const SWELL_PERIOD = 4.5;
-/** Radians the swell's phase turns per cell along x + z: a slow wave across the sea. */
-const SWELL_STRIDE = 0.55;
 
 export interface SeaMaterial {
   material: THREE.MeshStandardNodeMaterial;
@@ -48,6 +46,7 @@ export function seaMaterial(clock: AmbientClock): SeaMaterial {
   const opacity = shade.y;
   const swell = shade.z;
 
+  // The same seed and phase as `seaCellSeed` and `seaVoxelPhase` (`swell.ts`), which the vessels ride.
   const seed = cellX.add(512).add(cellZ.add(512).mul(1024));
   const phase = hash(seed).mul(Math.PI).add(cellX.add(cellZ).mul(SWELL_STRIDE));
   const bob = sin(time.mul((2 * Math.PI) / SWELL_PERIOD).add(phase)).mul(SEA_BOB).mul(swell).mul(lift);

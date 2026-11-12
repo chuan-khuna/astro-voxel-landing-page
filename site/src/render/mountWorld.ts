@@ -9,8 +9,10 @@
  *   Ambient Life is alive (the tab shown, the canvas on screen, motion
  *   allowed and a tier that moves) the World renders continuously, at most
  *   30 fps on phones or at the reduced life tier, and the shared clock
- *   runs: the sea bobs, the Partners' ships sail and the developer works
- *   in the House (`objects.step`), and the Guide idles. Otherwise it
+ *   runs: the sea bobs, the plants sway, leaves fall, the boats and ships
+ *   rock on the swell, the Partners' ships sail and the developer works
+ *   in the House (`objects.step`), and the Guide idles. Every frame shows
+ *   as many leaves as the life tier allows (`objects.setLife`). Otherwise it
  *   renders on demand: only on request (mount, resize, a new World, a
  *   camera move) and while a one-off motion plays (the House's lid lifting
  *   or lowering, the Guide assembling, dissolving or flying), and an idle
@@ -289,10 +291,12 @@ export async function mountWorld(
       // At most a tenth of a second a frame, so nothing leaps after a pause.
       const dt = lastTick ? Math.min(100, now - lastTick) : 0;
       if (alive) {
-        // The shared clock: the sea bobs, the ships sail, the developer works. Frozen otherwise.
+        // The shared clock: the sea bobs, the plants sway, leaves fall, the vessels rock and the ships sail, the developer works. Frozen otherwise.
         clock.advance(dt / 1000);
         objects?.step(clock.seconds);
       }
+      // As many leaves as the life tier allows (it may have dropped).
+      objects?.setLife(life.tier());
       if (lifting()) {
         opening = openingStep(opening, openTarget, dt, openingMs);
         objects?.house.setOpening(opening);
@@ -384,6 +388,7 @@ export async function mountWorld(
     objects = buildWorldObjects(next, nextMeshed, tier.name, clock);
     objects.setTheme(theme);
     objects.step(clock.seconds);
+    objects.setLife(life.tier());
     objects.house.setOpening(opening);
     scene.add(objects.group);
 

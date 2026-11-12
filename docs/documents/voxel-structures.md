@@ -158,14 +158,17 @@ greedy-meshed once with it, with the soft-voxel material at ⅛ unit.
 
 `render/structureMeshes.ts` draws structures that repeat (the Garden's
 flowers and trees, the boats and ships, the Decoration): `structureInstances(structure,
-colours, placements, { part?, pivot? })` meshes the structure once
+colours, placements, { part?, pivot?, material? })` meshes the structure once
 (`structureGeometry`) and draws every copy as one `InstancedMesh`, in the
-soft-voxel material in local space. A placement is a point in world units
+soft-voxel material in local space (or a material of its own: a swaying
+plant's, `render/windSway.ts`). A placement is a point in world units
 and a number of quarter turns about a pivot (by default the middle of the
-footprint, on the ground); `instanceMatrix` builds its transform (one
-quarter turn takes +z to +x). Copies move by whole voxels and turn by
-quarter turns, so their seams stay on voxel edges; a sailing ship turns by
-any fraction (its heading), its seams turning with it. The Model Gallery
+footprint, on the ground, `structurePivot`), plus an optional heave, roll
+and pitch (a vessel on the swell, `render/swell.ts`); `instanceMatrix`
+builds its transform (one quarter turn takes +z to +x). The seams and
+colour jitter are measured on the geometry as meshed, so they stay on the
+voxels' edges however a copy is placed, turned, tilted or swayed; a sailing
+ship turns by any fraction (its heading). The Model Gallery
 uses it for every model, and the World for the Garden's plants
 (`render/garden.ts`, see "The Garden" below) and the boats and ships
 (`render/boats.ts`, `render/ships.ts`; see "Boats and ships") and the Decoration (`render/decoration.ts`; see "Decoration").

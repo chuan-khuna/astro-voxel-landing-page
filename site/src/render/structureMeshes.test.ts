@@ -24,3 +24,36 @@ describe('instanceMatrix', () => {
     close(apply(twice, [0, 2, 1]), [0, 2, -1]);
   });
 });
+
+describe('instanceMatrix with a tilt (a vessel rocking)', () => {
+  const pivot = { x: 0.5, y: 0, z: 1.5 };
+
+  it('lifts the pivot by the heave and keeps it in place otherwise', () => {
+    const m = instanceMatrix({ x: 4, y: 0, z: 7, turns: 1, heave: 0.03, roll: 0.1, pitch: -0.05 }, pivot);
+    close(apply(m, [0.5, 0, 1.5]), [4, 0.03, 7]);
+  });
+
+  it('rolls about the vessel’s own length: its +x side rises, whichever way it faces', () => {
+    const roll = 0.2;
+    for (const turns of [0, 1, 2, 3, 0.4]) {
+      const m = instanceMatrix({ x: 0, y: 0, z: 0, turns, roll }, { x: 0, y: 0, z: 0 });
+      expect(apply(m, [1, 0, 0])[1]).toBeCloseTo(Math.sin(roll), 9);
+      expect(apply(m, [0, 0, 1])[1]).toBeCloseTo(0, 9);
+    }
+  });
+
+  it('pitches about its beam: its bow (+z) rises, whichever way it faces', () => {
+    const pitch = 0.1;
+    for (const turns of [0, 1, 3]) {
+      const m = instanceMatrix({ x: 0, y: 0, z: 0, turns, pitch }, { x: 0, y: 0, z: 0 });
+      expect(apply(m, [0, 0, 1])[1]).toBeCloseTo(Math.sin(pitch), 9);
+      expect(apply(m, [1, 0, 0])[1]).toBeCloseTo(0, 9);
+    }
+  });
+
+  it('is the plain placement with no tilt', () => {
+    const plain = instanceMatrix({ x: 2, y: 1, z: 3, turns: 2 }, pivot);
+    const zero = instanceMatrix({ x: 2, y: 1, z: 3, turns: 2, heave: 0, roll: 0, pitch: 0 }, pivot);
+    expect(zero).toEqual(plain);
+  });
+});

@@ -1,30 +1,33 @@
 /**
  * The Garden's plants as three.js objects: one `InstancedMesh` per plant
  * structure (the Biome's tree, each of its flowers), one instance per
- * plant, standing in its cell on the Garden's ground (`gardenPlants.ts`).
+ * plant, standing in its cell on the Garden's ground (`gardenPlants.ts`),
+ * swaying in the shared clock's wind (`windSway.ts`).
  * The Garden's fence is in the World's structure grid with the other
  * Landmarks.
  */
 import * as THREE from 'three/webgpu';
 import type { World } from '@/world';
 import type { Structure } from '@/structures';
-import { gardenPlantsOf } from './gardenPlants';
+import { gardenPlantsOf, plantPlacement } from './gardenPlants';
 import { structureInstances, type InstancePlacement } from './structureMeshes';
 import { worldColours } from './worldVoxels';
+import { swayMaterial } from './windSway';
+import type { AmbientClock } from './ambientClock';
 
-export function buildGardenPlants(world: World): { group: THREE.Group; triangles: number; dispose: () => void } {
+export function buildGardenPlants(world: World, clock: AmbientClock): { group: THREE.Group; triangles: number; dispose: () => void } {
   const group = new THREE.Group();
   group.name = 'garden-plants';
-  const garden = world.landmarks.find((l) => l.id === 'garden');
   const byStructure = new Map<Structure, InstancePlacement[]>();
   for (const plant of gardenPlantsOf(world)) {
     const placements = byStructure.get(plant.structure) ?? [];
-    // Each plant's footprint middle goes to its cell's middle, on the ground.
-    placements.push({ x: plant.cell.x + 0.5, y: garden?.y ?? 0, z: plant.cell.z + 0.5, turns: 0 });
+    placements.push(plantPlacement(world, plant));
     byStructure.set(plant.structure, placements);
   }
   const colours = worldColours(world);
-  const meshes = [...byStructure].map(([structure, placements]) => structureInstances(structure, colours, placements));
+  const meshes = [...byStructure].map(([structure, placements]) =>
+    structureInstances(structure, colours, placements, { material: swayMaterial(structure, clock) }),
+  );
   for (const m of meshes) group.add(m.mesh);
   return {
     group,

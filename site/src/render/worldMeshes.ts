@@ -12,10 +12,13 @@
  * at Night; it never moves or adds anything.
  *
  * Everything that moves on its own runs on the shared Ambient Life clock
- * (`ambientClock.ts`): the sea bobs from its time uniform in the shader, and
- * `step(seconds)` puts what moves on the CPU (the Partners' ships, the
- * developer at work in the House) where it is at the clock's `seconds`. Ambient Life parts add their own motion to
- * `step`, or read the clock's uniforms in their materials.
+ * (`ambientClock.ts`): the sea bobs, the plants sway (`windSway.ts`) and the
+ * leaves fall (`leaves.ts`) from its uniforms in the shader, and
+ * `step(seconds)` puts what moves on the CPU (the Partners' ships and the
+ * Clients' boats on the swell, the developer at work in the House) where it
+ * is at the clock's `seconds`. Ambient Life parts add their own motion to
+ * `step`, or read the clock's uniforms in their materials. `setLife` shows
+ * as many living things as the life tier allows.
  */
 import * as THREE from 'three/webgpu';
 import type { World } from '@/world';
@@ -35,17 +38,21 @@ import type { RenderTierName } from '@/lib/renderTier';
 import { seaModel, type SeaMesh } from './seaModel';
 import { seaMaterial } from './seaMaterial';
 import { createAmbientClock, type AmbientClock } from './ambientClock';
+import { buildLeaves } from './leaves';
+import type { LifeTierName } from '@/lib/lifeTier';
 
 export interface WorldObjects {
   group: THREE.Group;
-  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure, boats, ships, the House's lid, the Garden's plants, the Decoration the tier shows) and the sea's water and seabed; not the House's room, drawn only while the lid is up (`house.roomTriangles`). */
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure, boats, ships, the House's lid, the Garden's plants, the Decoration the tier shows, every falling leaf) and the sea's water and seabed; not the House's room, drawn only while the lid is up (`house.roomTriangles`). */
   triangles: number;
   /** The Partners' ships, which sail (`step` moves them). */
   ships: Fleet;
   /** The House's lid, its lights and its room: `house.setOpening` lifts the lid and shows the room. */
   house: HouseParts;
-  /** Put everything that moves on the CPU (the ships, the developer) where it is at the shared clock's `seconds`. */
+  /** Put everything that moves on the CPU (the ships and boats on the swell, the developer) where it is at the shared clock's `seconds`. */
   step: (seconds: number) => void;
+  /** Show as much Ambient Life as the life tier allows (the falling leaves). */
+  setLife: (tier: LifeTierName) => void;
   /** Recolour the sea and light (or put out) the House's windows and lamp and the buoys' lamps. */
   setTheme: (theme: Theme) => void;
   dispose: () => void;
@@ -92,22 +99,26 @@ export function buildWorldObjects(
   group.add(house.group);
   const lamps = buildLamps(world);
   group.add(lamps.group);
-  const plants = buildGardenPlants(world);
+  const plants = buildGardenPlants(world, clock);
   group.add(plants.group);
   const boats = buildBoats(world);
   group.add(boats.group);
-  const decoration = buildDecoration(world, tier);
+  const decoration = buildDecoration(world, tier, clock);
   group.add(decoration.group);
+  const leaves = buildLeaves(world, tier, clock);
+  group.add(leaves.group);
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + sea.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + sea.triangles,
     ships,
     house,
     step: (seconds) => {
       ships.sail(seconds);
+      boats.rock(seconds);
       house.work(seconds);
     },
+    setLife: (life) => leaves.setLife(life),
     setTheme: (theme) => {
       const tokens = THEME_TOKENS[theme].world;
       sea.setTheme(theme);
@@ -124,6 +135,7 @@ export function buildWorldObjects(
       plants.dispose();
       boats.dispose();
       decoration.dispose();
+      leaves.dispose();
     },
   };
 }

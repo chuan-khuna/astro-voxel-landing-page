@@ -15,6 +15,7 @@ import { variantsOf, type Structure } from '@/structures';
 import { structureVoxels, type StructureVoxel } from '@/structures/parse';
 import type { PlantKind } from '@/lib/gardenPlants';
 import type { ModelExtent } from './landmarkModels';
+import type { InstancePlacement } from './structureMeshes';
 
 /** One plant in a World: its structure, its cell and its place among its kind (0 first). */
 export interface PlacedPlant {
@@ -43,6 +44,12 @@ export function gardenPlantsOf(world: Pick<World, 'biome' | 'landmarks'>): Place
   const of = (kind: PlantKind, cells: Cell[]) =>
     cells.map((cell, index) => ({ kind, index, cell, structure: plantStructure(world.biome.id, kind, index) }));
   return [...of('flower', garden.flowers), ...of('tree', garden.trees)];
+}
+
+/** Where a plant stands: its footprint's middle on its cell's middle, on the Garden's ground. */
+export function plantPlacement(world: Pick<World, 'landmarks'>, plant: Pick<PlacedPlant, 'cell'>): InstancePlacement {
+  const garden = world.landmarks.find((l) => l.id === 'garden');
+  return { x: plant.cell.x + 0.5, y: garden?.y ?? 0, z: plant.cell.z + 0.5, turns: 0 };
 }
 
 /**

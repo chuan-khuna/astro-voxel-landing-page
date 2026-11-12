@@ -8,6 +8,8 @@
  * geometry normal is used as the world normal. With `space: 'local'` the
  * look is computed in the mesh's own space instead, so a mesh that moves and
  * turns (a sailing ship) carries its seams with it; it must not be scaled.
+ * An `InstancedMesh` in local space takes its seams from the geometry as
+ * meshed, so every copy carries them (see `voxelMaterial`).
  *
  * `softVoxelLook` is the look on its own, for materials of their own (the
  * sea, `seaMaterial.ts`).
@@ -28,12 +30,14 @@ import {
   normalGeometry,
   normalize,
   normalLocal,
+  positionGeometry,
   positionLocal,
   positionWorld,
   smoothstep,
   transformNormalToView,
   vec3,
   vec4,
+  vertexStage,
 } from 'three/tsl';
 import { LOOK } from './palette';
 
@@ -81,13 +85,37 @@ export function softVoxelLook(voxelSize: number, normal: Vec3Node, position: Vec
   return { normalNode, shade };
 }
 
-/** A node material for voxels `voxelSize` world units wide. */
-export function voxelMaterial(voxelSize: number, space: 'world' | 'local' = 'world'): THREE.MeshStandardNodeMaterial {
+/**
+ * A node material for voxels `voxelSize` world units wide.
+ *
+ * With `space: 'local'` the seams and colour jitter are measured on the
+ * geometry as meshed (`positionGeometry`), so they stay on the voxels'
+ * edges however an instance moves, turns or tilts (a sailing ship, a boat
+ * on the swell). The bevel is measured in the mesh's own space after
+ * instancing: exact for whole-voxel placements, a little off the edges on
+ * a tilted or heaving vessel.
+ *
+ * `displace` (local space only) moves each vertex in the vertex shader (a
+ * plant swaying, `windSway.ts`); the bevel is measured where the vertex was
+ * before it moved, so the voxel carries its look with it.
+ */
+export function voxelMaterial(
+  voxelSize: number,
+  space: 'world' | 'local' = 'world',
+  options: { displace?: THREE.Node<'vec3'> } = {},
+): THREE.MeshStandardNodeMaterial {
   const inLocal = space === 'local';
-  const look = softVoxelLook(voxelSize, inLocal ? normalLocal : normalGeometry, inLocal ? positionLocal : positionWorld, inLocal);
   const material = new THREE.MeshStandardNodeMaterial({ roughness: LOOK.roughness, metalness: 0 });
+  let rest: Vec3Node = positionLocal;
+  if (inLocal && options.displace) {
+    const moved = vertexStage(options.displace);
+    material.positionNode = positionLocal.add(moved);
+    rest = positionLocal.sub(moved);
+  }
+  const look = inLocal ? softVoxelLook(voxelSize, normalLocal, rest, true) : softVoxelLook(voxelSize, normalGeometry, positionWorld);
+  const shade = inLocal ? softVoxelLook(voxelSize, normalGeometry, positionGeometry).shade : look.shade;
   material.normalNode = look.normalNode;
   // Vertex colour already carries the baked AO.
-  material.colorNode = Fn(() => vec4(look.shade(attribute('color', 'vec3')), 1))();
+  material.colorNode = Fn(() => vec4(shade(attribute('color', 'vec3')), 1))();
   return material;
 }
