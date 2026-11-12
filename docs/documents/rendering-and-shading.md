@@ -49,14 +49,16 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
 | `seaModel.ts` | The sea, pure (see "Sea"): `seaModel(world)` (the water voxels' tops and skirts, the flat water beyond them and the seabed, as typed arrays), `coastDistance` and `seaShade`, and `SEA_LEVEL`. | no |
 | `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?)`: the TSL node material, in world space or (for ships) the mesh's own space; `softVoxelLook` is the look on its own (seams, bevel, jitter) for other materials. | yes |
-| `seaMaterial.ts` | `seaMaterial()`: the sea's TSL material (the soft-voxel look at 1 unit, shallow to deep colour, opacity, the bob in the vertex shader) and its `time` and colour uniforms. | yes |
+| `ambientClock.ts` | `createAmbientClock()`: the shared Ambient Life clock (`time`, seconds, advanced only while Ambient Life is alive) and wind (`wind`, the World's direction) uniforms; `windAt(clock, position)`: the wind at a world position in the shader, gusts rolling down the wind (see "Ambient Life: loop, clock and tiers"). | yes |
+| `ambientLife.ts` | `createAmbientLife`: whether the World is seen (tab shown, canvas on screen, motion allowed) and alive (seen, at a tier that moves), the life tier watch and the clock, for `mountWorld`'s loop. | DOM only |
+| `seaMaterial.ts` | `seaMaterial(clock)`: the sea's TSL material (the soft-voxel look at 1 unit, shallow to deep colour, opacity, the bob in the vertex shader on the shared clock) and its colour uniforms. | yes |
 | `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, pure maths) and `mergeChunks`. | yes |
 | `house.ts` | `buildHouse(world)`: the House Variant's lid (⅛ unit) as a mesh and the windows' lights; `setOpening` lifts the lid, `setLights` lights the windows. | yes |
 | `interior.ts` | `buildInterior(world)`: the House Interior scene: the House's shell and ground, the room at 1/16 unit, the developer's head and hands as meshes, the screen's code shader, its own lights; `work(seconds)` animates the developer and the screen, `setTheme` lights it for Day or Night. | yes |
 | `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?)`: chunk meshes plus the sea (water and seabed), the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `swell(seconds)` bobs the sea; `setTheme` recolours the sea and lights the lamps and windows. | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships) where it is at the clock's seconds; `setTheme` recolours the sea and lights the lamps and windows. | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
-| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, render on demand and the render tier, the sea's bob, sailing ships, opening the House and handing over to the House Interior scene, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
+| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, the render loop (continuous while Ambient Life is alive, else on demand) and the render tier, opening the House and handing over to the House Interior scene, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it (`onInput` hears that input). | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
@@ -466,13 +468,12 @@ built by `seaModel.ts` (pure) and drawn with `seaMaterial.ts`:
   edges) rises and falls 0.04 units (`SEA_BOB`) round the sea level every
   4.5 s (`SWELL_PERIOD`), out of step with its neighbours (a hash of its
   cell) and with a slow swell running across the sea (its x + z),
-  scaled by its `swell`. The `time` uniform is the runtime's seconds of
-  swell (`objects.swell`): it advances only while the World (not the House
-  Interior) is on show, motion is allowed and the page visible, so under
-  reduced motion the water holds still where it is (a fresh page and the
-  build's World still show the bob at time 0, the voxels' steps frozen).
-  The bob keeps frames coming at the tier's ambient rate (30 fps on
-  phones), like the ships.
+  scaled by its `swell`. Its time is the shared Ambient Life clock's
+  `time` uniform (polish ticket 09, "Ambient Life: loop, clock and
+  tiers"): it advances only while Ambient Life is alive, so under reduced
+  motion, at the still tier, on a hidden page or with the canvas off
+  screen the water holds still where it is (a fresh page and the build's
+  World still show the bob at time 0, the voxels' steps frozen).
 - **Night** darkens both water colours and the seabed (`seaColour`: the
   `waterShift` token, −0.12 OKLCH lightness).
 - **Triangles.** Two for each top, two for each skirt, eight for the flat
@@ -504,8 +505,8 @@ the water; they do not bob. The Model Gallery floats them on an opaque
 ## Scene runtime
 
 `mountWorld(canvas, world, meshed?, ui?)` returns a `WorldView`
-`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), setViewCentre(at), setInterior(open, ms), setTheme(theme), guide, onFrame(listener), backend, dispose() }`. `ui` is
-`{ frame, hotspots, cards?, theme?, guide? }`: the element round the canvas that takes pan and zoom
+`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), setViewCentre(at), setInterior(open, ms), setTheme(theme), guide, onFrame(listener), backend, tier, lifeTier, dispose() }`. `ui` is
+`{ frame, hotspots, cards?, theme?, guide?, onExplore?, tierOverride?, lifeOverride? }`: the element round the canvas that takes pan and zoom
 input, the Landmark hotspot links inside it, the Data Cards, the theme of the first frame and the Guide's
 button, speech bubble and the boxes its bubble avoids (default: the canvas's
 parent, no hotspots, no cards, Day, no Guide button or bubble). `guide` is the Guide's
@@ -544,44 +545,42 @@ camera to a Landmark (see "Landmark focus and flights").
   sun and its shadow camera, gives the camera rig the new World's bounds and
   cuts it to the Overview, moves the hotspots onto the new Landmarks, and
   requests one frame. The renderer, scene, lights and camera are kept.
-- **Render on demand:** `requestRender()` schedules at most one frame. Mount,
-  `show`, canvas resizes and camera moves request frames. While the World
-  has ships, the page is visible and the visitor has not asked for reduced
-  motion, every frame first moves the ships (`sail(seconds)`) and then asks
-  for the next, so ships sail at the display's frame rate; seconds sailed
-  advance at most 0.1 s a frame, so ships never leap after a pause. With no
-  ships, under `prefers-reduced-motion: reduce` (ships keep still where they
-  are) or on a hidden page, nothing renders while idle; a change to either
-  setting requests a frame. The House keeps frames coming too: while its
-  lid moves (the page cuts it under reduced motion), and while the House
-  Interior shows, the page visible and motion allowed, when every frame
-  advances the developer and the screen (`work`). Elapsed time is shared:
-  at most 0.1 s a frame for ships and the developer alike. Under reduced
-  motion the House Interior renders once and goes idle, the developer in
-  their pose of the moment. The Guide keeps frames coming while it assembles,
-  dissolves or flies on the Tour, and while it idles (bobbing and blinking) with the page
-  visible and motion allowed; idling is why, like the ships, an idle World
-  with motion allowed renders every frame (ADR 0005). Under reduced motion
-  it re-forms by a cut and keeps still.
-  The sea bobs while the World (not the House Interior) is on show, the
-  page visible and motion allowed (`swell(seconds)` advances its shader's
-  time), so it keeps frames coming too; under reduced motion it holds still.
+- **Render loop, two modes (ADR 0005):** while Ambient Life is alive (see
+  "Ambient Life: loop, clock and tiers" below) every frame asks for the
+  next: the World renders continuously and the shared clock runs. Each
+  frame advances the clock by the frame's elapsed time (at most 0.1 s, so
+  nothing leaps after a pause), then `objects.step(clock.seconds)` sails
+  the ships, the sea bobs from the clock's uniform, the developer works in
+  the House Interior while it shows (`work(clock.seconds)`) and the Guide
+  idles (bobbing and blinking). Otherwise the World renders on demand:
+  `requestRender()` schedules at most one frame, and frames keep coming
+  only while a one-off motion plays (the House's lid lifting or lowering,
+  which the page cuts under reduced motion; the Guide assembling,
+  dissolving or flying on the Tour). An idle World then schedules no
+  `requestAnimationFrame` at all, and the clock stays where it stopped:
+  under reduced motion the House Interior renders once, the developer in
+  their pose of the moment, and the Guide re-forms by a cut and keeps
+  still. The tab coming back, the canvas scrolling back on screen or
+  reduced motion turning off requests a frame, which starts the loop again.
   Frames come two ways: `requestRender()` (mount, `show`, resizes, camera
   moves and flights, a theme change) marks the frame as asked for, and it
   renders on the next animation frame; a frame that only ambient motion
-  wants (the sea, the ships, the Guide, the developer, the lid) renders only when
-  `ambientFrameDue(now, lastTick, tier.ambientFps)` says so, otherwise it
-  waits for the next animation frame. On the full tier that is every frame;
-  on the reduced tier at most 30 a second, while the camera still moves at
-  the display's rate. Elapsed time is measured between rendered frames, so
-  motion keeps its speed. Each frame first updates the camera's matrices, re-places the hotspots
-  and the Data Cards, then renders.
+  wants renders only when `ambientFrameDue(now, lastTick, life.ambientFps())`
+  says so, otherwise it waits for the next animation frame. That rate is
+  the stricter of the render tier's and the life tier's: every frame on a
+  desktop at the full life tier; at most 30 a second on phones (the
+  reduced render tier) and at the reduced life tier, while the camera
+  still moves at the display's rate. Elapsed time is measured between
+  rendered frames, so motion keeps its speed. Each frame first updates the
+  camera's matrices, re-places the hotspots and the Data Cards, then renders.
   three's `render()` also starts the renderer's internal animation loop,
   which would then tick `requestAnimationFrame` forever (it only advances
   node time, which nothing here uses); `mountWorld` stops it after each
   frame through the internal `renderer._animation`, guarded in case it
   disappears, so an idle page schedules no `requestAnimationFrame` at all.
-  Other animation should request frames only while it moves, like the ships.
+  Ambient Life motion runs on the shared clock (its uniforms in the
+  shader, or `objects.step` on the CPU); a one-off motion requests frames
+  only while it plays, like the lid.
 - **Frame reports:** `onFrame(listener)` (returns an unsubscribe) is told
   after each frame renders: its `requestAnimationFrame` time, triangles and
   draw calls from `renderer.info.render`. Those counts are the frame's own:
@@ -593,9 +592,68 @@ camera to a Landmark (see "Landmark focus and flights").
   (`webgpu` or `webgl2`), `data-frames` (frames rendered so far),
   `data-interior` (`open`, `shut` or `moving`: the House's lid),
   `data-scene` (`world` or `interior`: the scene on show; the frame gets it
-  too), `data-interior-triangles` (the House Interior scene's triangles) and
+  too), `data-interior-triangles` (the House Interior scene's triangles),
+  `data-tier` (the render tier), `data-life` (the Ambient Life tier on
+  show), `data-clock` (the shared clock's seconds, at the last frame) and
   `data-camera` (target x, target z, zoom) for checks in a browser. The page
   adds `data-generate-ms`.
+
+### Ambient Life: loop, clock and tiers
+
+Polish ticket 09 (ADR 0005) laid the ground every Ambient Life motion
+stands on. Tickets 10–14 add the motions themselves.
+
+- **Seen and alive** (`ambientLife.ts`). The World is *seen* while the tab
+  is shown (`visibilitychange`), the canvas is on screen (an
+  `IntersectionObserver` on it) and the visitor has not asked for reduced
+  motion. It is *alive* while it is seen and the life tier on show moves.
+  Alive, it renders continuously; otherwise it renders on demand (above).
+  One-off animations (the Guide assembling on a new World) play when the
+  World is seen and cut otherwise. Reduced motion is heard on a
+  `MediaQueryList` of its own: Chromium fires no `change` on a list whose
+  `matches` was read between the change and the event, and the loop reads
+  it every frame.
+- **One clock** (`ambientClock.ts`). `clock.time` is a TSL uniform holding
+  seconds of Ambient Life; only `advance` moves it, and only the loop
+  advances it, while alive. Every Ambient Life material reads it (the sea
+  already does), and CPU motion takes `clock.seconds` through
+  `objects.step` (the ships). Stopping the clock stops everything at once.
+  A clock never advanced stays at 0: `buildWorldObjects` makes a frozen
+  one by default, the Model Gallery has no clock-driven material yet and
+  will pass a frozen clock when it gets one, and the build-time stills are
+  captured under reduced motion, so at time 0.
+- **One wind.** `World.wind.direction` is a unit vector across the ground
+  that `generateWorld` draws from the Seed's own sequence (`<seed>/wind`,
+  `world/wind.ts`): the same Seed always blows the same way, and the
+  layout and content counts never change it. `show` puts it in
+  `clock.wind`. `windAt(clock, position)` gives the wind at a world
+  position in the shader: the direction times a strength from 0.35
+  (`WIND_CALM`) to 1, raised by gusts that roll down the wind at 2.2 units
+  a second, about 9 units apart, in two bands so they never repeat exactly.
+- **Tiers** (`lib/lifeTier.ts`, pure). `full`, `reduced` and `still`. A
+  desktop starts at full and a phone (the reduced render tier) at reduced;
+  `?life=full|reduced|still` (`ui.lifeOverride`) starts at one and pins it,
+  for measuring. The watch averages the time between continuous frames over
+  windows of 3 s (`TIER_WINDOW_MS`); a window averaging under 40 fps at full,
+  or under 20 fps at reduced, drops one tier, and the tier never climbs back
+  during the visit. A gap over 1 s (a hidden tab, an idle World) is not a
+  frame, and one hitch (a shader compiling) does not tip a window. Reduced
+  motion shows still whatever the watch says, and follows the media query
+  both ways (`lifeTierShown`). At reduced, ambient frames come at most 30 a
+  second; at still nothing moves, the clock freezes and the World renders
+  on demand. `share` is the part of each kind of living thing a tier shows
+  (1 at full, 0.5 at reduced and at still, frozen where it stands), for the
+  Ambient Life tickets to use. `canvas.dataset.life`, `view.lifeTier` and the
+  stats overlay's `life` row say which tier is on show.
+- **Measured** (headless Chromium, software GL, `lighthouse`). Desktop
+  (1440×900): about 4–6 fps, so the watch drops full to reduced in the
+  first 3 s and to still 3 s later; `data-frames` then stops climbing and
+  the clock stays put. Phone (393×852 at 3×, reduced): a steady 27–30 fps,
+  no drop. Hidden tab, canvas off screen and reduced motion: no frames and
+  a frozen clock, at desktop and phone sizes; each picks up again when it
+  ends. A camera drag measured from the page's own frames costs the same
+  with the loop running as at still: 38.5–38.8 ms a frame on the phone and
+  184–186 ms on desktop (software GL), so the loop adds no stutter.
 
 ## Day and Night
 

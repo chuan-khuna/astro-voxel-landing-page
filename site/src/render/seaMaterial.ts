@@ -7,10 +7,10 @@
  * The bob: each voxel rises and falls `SEA_BOB` round the sea level, once
  * every `SWELL_PERIOD` seconds, out of step with its neighbours (a hash of
  * its cell) and with a slow swell running across the sea (its x + z). Only
- * vertices marked to bob move, by the voxel's swell. `time` drives it; the
- * runtime advances it only while motion is allowed, so under reduced motion
- * the sea holds still (at time 0 on a fresh page, never flat: the voxels
- * keep their steps).
+ * vertices marked to bob move, by the voxel's swell. The shared Ambient Life
+ * clock (`ambientClock.ts`) drives it, so it holds still wherever the clock
+ * is frozen: under reduced motion, at the still tier, and at time 0 on a
+ * fresh page or in a still (never flat: the voxels keep their steps).
  *
  * Seams and bevels are measured at the vertex's place before the bob, so
  * they ride with the voxel.
@@ -20,6 +20,7 @@ import { attribute, hash, mix, normalGeometry, positionGeometry, positionLocal, 
 import { softVoxelLook } from './voxelMaterial';
 import { SEA_BOB, SEA_LEVEL } from './seaModel';
 import { TERRAIN } from './voxelTiers';
+import type { AmbientClock } from './ambientClock';
 
 /** Seconds a water voxel takes to rise, sink and rise again. */
 export const SWELL_PERIOD = 4.5;
@@ -28,15 +29,13 @@ const SWELL_STRIDE = 0.55;
 
 export interface SeaMaterial {
   material: THREE.MeshStandardNodeMaterial;
-  /** Seconds of swell: set it to move the water. */
-  time: { value: number };
   /** The Biome's shallow and deep water, in linear RGB (set them for the theme). */
   shallow: { value: THREE.Vector3 };
   deep: { value: THREE.Vector3 };
 }
 
-export function seaMaterial(): SeaMaterial {
-  const time = uniform(0);
+export function seaMaterial(clock: AmbientClock): SeaMaterial {
+  const { time } = clock;
   const shallow = uniform(new THREE.Vector3());
   const deep = uniform(new THREE.Vector3());
   const cell = attribute('seaCell', 'vec3');
@@ -60,5 +59,5 @@ export function seaMaterial(): SeaMaterial {
   material.normalNode = look.normalNode;
   material.colorNode = look.shade(mix(shallow, deep, deepness));
   material.opacityNode = opacity;
-  return { material, time, shallow, deep };
+  return { material, shallow, deep };
 }

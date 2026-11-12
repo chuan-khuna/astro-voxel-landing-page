@@ -33,7 +33,7 @@ Scenery that stands for nothing and cannot be clicked: small trees, grass, flowe
 _Avoid_: props, scatter, filler
 
 **Ambient Life**:
-Everything in the World that moves without standing for anything: animals, birds, fish, butterflies, fireflies, falling leaves, clouds, wind in the plants and waves on the shore. Each Biome has its own creatures, and Day or Night decides which are out. Like Decoration it cannot be clicked, and it never hides a Landmark for long. It stands still under reduced motion.
+Everything in the World that moves without standing for anything: animals, birds, fish, butterflies, fireflies, falling leaves, clouds, wind in the plants and waves on the shore. Each Biome has its own creatures, and Day or Night decides which are out. Like Decoration it cannot be clicked, and it never hides a Landmark for long. It all runs on one shared clock and one wind, and scales down through three tiers (full, reduced, still) on slow devices. It stands still under reduced motion.
 _Avoid_: critters, wildlife, effects
 
 **Story Order**:

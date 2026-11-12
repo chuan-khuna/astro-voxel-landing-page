@@ -7,6 +7,7 @@ import { sailingRoutes } from './ships';
 import { BOAT_KINDS, SHIP_KINDS, vesselIds, vesselKind } from './vessels';
 import { placeBuoys } from './buoys';
 import { placeDecoration } from './decoration';
+import { windFor } from './wind';
 import { buildStrata, buildTerrain } from './terrain';
 import { site } from '@/data/site';
 import {
@@ -84,6 +85,7 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
       buoys: placeBuoys(terrain, bridges, landmarks.find((l) => l.id === 'dock'), boats.map((b) => b.cell), ships),
       decoration: placeDecoration(seed, biome.id, terrain, bridges, paths, landmarks),
       views: deriveViews(isles, landmarks, boats),
+      wind: windFor(seed),
     };
   }
   throw new Error(`generateWorld: the safe layout broke a rule for Seed "${seed}"`);

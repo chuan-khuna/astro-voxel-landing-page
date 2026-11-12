@@ -9,7 +9,13 @@
  * the buoys' lamps. The House Interior is a
  * scene of its own (`interior.ts`).
  * `setTheme` recolours the sea and lights the lamps and the House's windows
- * at Night; it never moves or adds anything. `swell(seconds)` bobs the sea.
+ * at Night; it never moves or adds anything.
+ *
+ * Everything that moves on its own runs on the shared Ambient Life clock
+ * (`ambientClock.ts`): the sea bobs from its time uniform in the shader, and
+ * `step(seconds)` puts what moves on the CPU (the Partners' ships) where it
+ * is at the clock's `seconds`. Ambient Life parts add their own motion to
+ * `step`, or read the clock's uniforms in their materials.
  */
 import * as THREE from 'three/webgpu';
 import type { World } from '@/world';
@@ -28,17 +34,18 @@ import { buildDecoration } from './decoration';
 import type { RenderTierName } from '@/lib/renderTier';
 import { seaModel, type SeaMesh } from './seaModel';
 import { seaMaterial } from './seaMaterial';
+import { createAmbientClock, type AmbientClock } from './ambientClock';
 
 export interface WorldObjects {
   group: THREE.Group;
   /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure and room, boats, ships, the House's lid, the Garden's plants, the Decoration the tier shows) and the sea's water and seabed. */
   triangles: number;
-  /** The Partners' ships, which sail: `ships.sail(seconds)` moves them. */
+  /** The Partners' ships, which sail (`step` moves them). */
   ships: Fleet;
   /** The House's lid and its lights: `house.setOpening` lifts the lid. */
   house: HouseParts;
-  /** Bob the sea's water voxels to where they are after this many seconds. */
-  swell: (seconds: number) => void;
+  /** Put everything that moves on the CPU (the ships) where it is at the shared clock's `seconds`. */
+  step: (seconds: number) => void;
   /** Recolour the sea and light (or put out) the House's windows and the buoys' lamps. */
   setTheme: (theme: Theme) => void;
   dispose: () => void;
@@ -47,9 +54,15 @@ export interface WorldObjects {
 /**
  * Build the World's three.js objects. Pass `meshed` when it was meshed
  * elsewhere (the Web Worker). The render tier only thins the Decoration
- * (`decorationModels.ts`); every Landmark is the same on every tier.
+ * (`decorationModels.ts`); every Landmark is the same on every tier. `clock`
+ * is the shared Ambient Life clock; by default a clock of its own, frozen at 0.
  */
-export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(world), tier: RenderTierName = 'full'): WorldObjects {
+export function buildWorldObjects(
+  world: World,
+  meshed: MeshedWorld = meshWorld(world),
+  tier: RenderTierName = 'full',
+  clock: AmbientClock = createAmbientClock(),
+): WorldObjects {
   const { terrain, detail, structure, voxelSizes } = meshed;
   const group = new THREE.Group();
   const materials = voxelSizes.map((size) => voxelMaterial(size));
@@ -71,7 +84,7 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
   addChunks(detail, materials[1]!, 'detail');
   addChunks(structure, materials[2]!, 'structure');
 
-  const sea = buildSea(world);
+  const sea = buildSea(world, clock);
   group.add(sea.group);
   const ships = buildFleet(world);
   group.add(ships.group);
@@ -91,7 +104,7 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
     triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + sea.triangles,
     ships,
     house,
-    swell: sea.swell,
+    step: (seconds) => ships.sail(seconds),
     setTheme: (theme) => {
       const tokens = THEME_TOKENS[theme].world;
       sea.setTheme(theme);
@@ -164,12 +177,11 @@ const SEABED_SHIFT = -0.1;
 /**
  * The sea: a 1-unit voxel layer of water (`seaModel.ts`) that bobs in the
  * shader (`seaMaterial.ts`), and the seabed seen through its shallows.
- * Darker at Night. `swell(seconds)` moves the water.
+ * Darker at Night. The water bobs on the shared clock.
  */
-function buildSea(world: World): {
+function buildSea(world: World, clock: AmbientClock): {
   group: THREE.Group;
   triangles: number;
-  swell: (seconds: number) => void;
   setTheme: (theme: Theme) => void;
   dispose: () => void;
 } {
@@ -193,7 +205,7 @@ function buildSea(world: World): {
     group.add(object);
     return geometry;
   };
-  const water = seaMaterial();
+  const water = seaMaterial(clock);
   const waterGeometry = addMesh(model.water, water.material, 'water');
   const seabedMaterial = new THREE.MeshStandardNodeMaterial({ roughness: 0.9, metalness: 0 });
   const seabedGeometry = addMesh(model.seabed, seabedMaterial, 'seabed');
@@ -201,9 +213,6 @@ function buildSea(world: World): {
   return {
     group,
     triangles: model.water.triangles + model.seabed.triangles,
-    swell: (seconds) => {
-      water.time.value = seconds;
-    },
     setTheme: (theme) => {
       water.shallow.value.set(...oklchToLinear(seaColour(world.biome, 'waterShallow', theme)));
       water.deep.value.set(...oklchToLinear(seaColour(world.biome, 'waterDeep', theme)));

@@ -1,17 +1,25 @@
 /**
- * The scene runtime: renderer, camera, lights and the render-on-demand loop.
+ * The scene runtime: renderer, camera, lights and the render loop.
  * The World's meshes come from `worldMeshes.ts` (mesher + soft-voxel material).
  *
  * - `WebGPURenderer` with the automatic WebGL 2 fallback.
  * - One directional light (the sun) whose shadow map renders only when the
  *   World changes, plus a hemisphere sky light.
- * - Frames render only on request (mount, resize, a new World, a camera move),
- *   and every frame while something moves: the sea bobbing (while the World,
- *   not the House Interior, is on show), the Partners' ships sailing, the
- *   House's lid lifting or lowering, the developer at work in the House
- *   Interior, the Guide assembling, dissolving or idling. With nothing moving, under reduced motion or on a hidden page
- *   nothing renders while idle. Each frame bumps `canvas.dataset.frames` and
- *   writes `canvas.dataset.camera` (target x, z and zoom), for checks.
+ * - The render loop has two modes (ADR 0005, `ambientLife.ts`). While
+ *   Ambient Life is alive (the tab shown, the canvas on screen, motion
+ *   allowed and a tier that moves) the World renders continuously, at most
+ *   30 fps on phones or at the reduced life tier, and the shared clock
+ *   runs: the sea bobs, the Partners' ships sail (`objects.step`), the
+ *   developer works in the House Interior and the Guide idles. Otherwise it
+ *   renders on demand: only on request (mount, resize, a new World, a
+ *   camera move) and while a one-off motion plays (the House's lid lifting
+ *   or lowering, the Guide assembling, dissolving or flying), and an idle
+ *   World schedules no `requestAnimationFrame` at all. Each continuous
+ *   frame's time feeds the life tier watch (`lib/lifeTier.ts`), which drops
+ *   full to reduced to still on a slow device; `canvas.dataset.life` says
+ *   which tier is on show. Each frame bumps `canvas.dataset.frames` and
+ *   writes `canvas.dataset.clock` (the clock's seconds) and
+ *   `canvas.dataset.camera` (target x, z and zoom), for checks.
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
  *   Landmark hotspots (`landmarkHotspots.ts`) and Data Cards (`dataCards.ts`)
  *   follow the camera.
@@ -35,8 +43,7 @@
  *   Station's spot (`guideSpot`) when the World mounts and dissolves and
  *   re-forms there on every `show` (a cut under reduced motion or on a
  *   hidden page). Frames render while it assembles or dissolves, and while
- *   it idles (bobbing and blinking) if motion is allowed and the page
- *   visible. `guide.say(lines)` talks in its speech bubble; on the Tour
+ *   it idles (bobbing and blinking) while Ambient Life is alive. `guide.say(lines)` talks in its speech bubble; on the Tour
  *   `guide.flyTo(guideSpot(id), ms)` sends it ahead to each Landmark,
  *   rendering frames while it flies.
  * - `setTheme(theme)` switches Day and Night (`data/theme.ts`): the sky,
@@ -48,7 +55,8 @@
  *   MSAA, a 1024 px shadow map, ambient motion at 30 fps, half the
  *   Decoration); camera moves always render every frame. A tier never
  *   removes a Landmark, plant, boat, ship or buoy.
- *   `ui.tierOverride` (`?tier=full|reduced`) picks one for measuring;
+ *   `ui.tierOverride` (`?tier=full|reduced`) picks one for measuring, and
+ *   `ui.lifeOverride` (`?life=full|reduced|still`) pins a life tier;
  *   `canvas.dataset.tier` and `WorldView.tier` say which is on.
  * - `ui.onExplore` hears the visitor pan, zoom or tab to a Landmark off
  *   screen: free exploration, which stops the Tour.
@@ -76,6 +84,8 @@ import type { Rect, ScreenOffset } from './freeArea';
 import { createGuide, type GuideView } from './guide';
 import { guideSpot } from './guideMotion';
 import { ambientFrameDue, pixelRatio, renderTier, type Device, type RenderTierName } from '@/lib/renderTier';
+import type { LifeTierName } from '@/lib/lifeTier';
+import { createAmbientLife } from './ambientLife';
 
 export type { ScreenOffset, GuideView };
 
@@ -142,6 +152,8 @@ export interface WorldView {
   readonly backend: 'webgpu' | 'webgl2';
   /** The render tier on this device (`lib/renderTier.ts`). */
   readonly tier: RenderTierName;
+  /** The Ambient Life tier on show (`lib/lifeTier.ts`): it may drop during the visit, and is still under reduced motion. */
+  readonly lifeTier: LifeTierName;
   dispose(): void;
 }
 
@@ -170,6 +182,8 @@ export interface WorldFrame {
   onExplore?: () => void;
   /** `?tier=full` or `?tier=reduced`: that render tier whatever the device (for measuring); anything else is ignored. */
   tierOverride?: string | null;
+  /** `?life=full`, `?life=reduced` or `?life=still`: that Ambient Life tier, never dropped (for measuring); anything else is ignored. */
+  lifeOverride?: string | null;
 }
 
 /** Closest zoom: about this many world units from the centre to the edge of the frame. */
@@ -225,33 +239,23 @@ export async function mountWorld(
    */
   const idleRenderer = () => (renderer as unknown as { _animation?: { stop?: () => void } })._animation?.stop?.();
 
-  // Render on demand: a request schedules at most one frame.
+  // Two modes (ADR 0005). While Ambient Life is alive (the World seen, motion allowed, a tier that
+  // moves) every frame asks for the next: the World renders continuously. Otherwise it renders on
+  // demand: a request schedules at most one frame, and an idle World schedules none.
   let frame = 0;
   let frames = 0;
   /** A frame was asked for (a camera move, a new World, a resize): it renders at once, whatever the tier. */
   let asked = false;
-  // Ships sail while the page is visible and the visitor has not asked for reduced motion:
-  // then every frame asks for the next. Otherwise they keep still where they are.
-  const stillness = window.matchMedia('(prefers-reduced-motion: reduce)');
-  /** Motion is allowed and the page visible: anything that loops may move. */
-  const idling = () => !stillness.matches && document.visibilityState === 'visible';
-  const sailing = () => !!objects && objects.ships.count > 0 && idling();
-  /** Seconds sailed so far. */
-  let sailed = 0;
-  // The sea bobs while the World is on show and motion is allowed; otherwise it holds still where it is.
-  const swelling = () => !!objects && !interiorShown && idling();
-  /** Seconds of swell so far. */
-  let swelled = 0;
-  /** The House: open or shut, how far its lid is lifted (0–1), how long a lift takes, and seconds worked inside. */
+  // Seen again (the tab shown, the canvas back on screen, motion allowed): start the loop. Unseen: it stops by itself.
+  const life = createAmbientLife({ canvas, render: tier, override: ui.lifeOverride, onChange: () => life.seen() && requestRender() });
+  const { clock } = life;
+  /** The House: open or shut, how far its lid is lifted (0–1) and how long a lift takes. */
   let interior = false;
   let opening = 0;
   let openingMs = 0;
-  let worked = 0;
   const lifting = () => opening !== (interior ? 1 : 0);
-  // The developer works while the House Interior is on show, the page visible and motion allowed.
-  const working = () => interiorShown && idling();
-  // The Guide assembles and dissolves whenever it does; it bobs and blinks only while idling.
-  const moving = () => sailing() || swelling() || lifting() || working() || guide.moving(idling());
+  // The Guide assembles and dissolves whenever it does; it bobs and blinks only while Ambient Life is alive.
+  const moving = () => life.alive() || lifting() || guide.moving(life.alive());
   /** The time of the last frame while something moved (0 when nothing did). */
   let lastTick = 0;
   const frameListeners = new Set<(frame: FrameInfo) => void>();
@@ -264,20 +268,21 @@ export async function mountWorld(
     if (frame) return;
     frame = requestAnimationFrame((now) => {
       frame = 0;
-      if (!asked && !ambientFrameDue(now, lastTick, tier.ambientFps)) {
+      if (!asked && !ambientFrameDue(now, lastTick, life.ambientFps())) {
         if (moving()) schedule();
         return;
       }
       asked = false;
+      const alive = life.alive();
+      // A continuous frame's time tells the tier watch how this device keeps up.
+      if (alive && lastTick) life.frame(now - lastTick);
       // At most a tenth of a second a frame, so nothing leaps after a pause.
       const dt = lastTick ? Math.min(100, now - lastTick) : 0;
-      if (sailing()) {
-        sailed += dt / 1000;
-        objects!.ships.sail(sailed);
-      }
-      if (swelling()) {
-        swelled += dt / 1000;
-        objects!.swell(swelled);
+      if (alive) {
+        // The shared clock: the sea bobs, the ships sail, the developer works. Frozen otherwise.
+        clock.advance(dt / 1000);
+        objects?.step(clock.seconds);
+        if (interiorShown) interiorScene?.work(clock.seconds);
       }
       if (lifting()) {
         opening = openingStep(opening, interior, dt, openingMs);
@@ -299,11 +304,7 @@ export async function mountWorld(
             room: roomOnScreen.copy(interiorScene.centre).project(camera),
           }),
       );
-      if (working()) {
-        worked += dt / 1000;
-        interiorScene!.work(worked);
-      }
-      guide.step(dt, idling());
+      guide.step(dt, life.alive());
       lastTick = moving() ? now : 0;
       hotspots.place(camera);
       cards.place(camera, rig.state, viewCentre);
@@ -316,14 +317,12 @@ export async function mountWorld(
         for (const listener of frameListeners) listener(info);
       }
       canvas.dataset.frames = String(++frames);
+      canvas.dataset.clock = clock.seconds.toFixed(2);
       const { target, zoom } = rig.state;
       canvas.dataset.camera = `${target.x.toFixed(2)} ${target.z.toFixed(2)} ${zoom.toFixed(3)}`;
       if (moving()) schedule();
     });
   };
-  const wake = () => requestRender();
-  stillness.addEventListener('change', wake);
-  document.addEventListener('visibilitychange', wake);
   const rig = createCameraRig({ element: ui.frame, camera, onChange: requestRender, onInput: () => ui.onExplore?.() });
   const hotspots = createLandmarkHotspots(ui.frame, ui.hotspots, (target) => {
     rig.jumpTo({ target, zoom: rig.state.zoom });
@@ -393,16 +392,17 @@ export async function mountWorld(
       scene.remove(objects.group);
       objects.dispose();
     }
-    objects = buildWorldObjects(next, nextMeshed, tier.name);
+    clock.setWind(next.wind);
+    objects = buildWorldObjects(next, nextMeshed, tier.name, clock);
     objects.setTheme(theme);
-    objects.swell(swelled);
+    objects.step(clock.seconds);
     objects.house.setOpening(opening);
     scene.add(objects.group);
     setInside(false);
     interiorScene?.dispose();
     interiorScene = next.landmarks.some((l) => l.id === 'house') ? buildInterior(next) : null;
     interiorScene?.setTheme(theme);
-    interiorScene?.work(worked);
+    interiorScene?.work(clock.seconds);
 
     const { width, depth } = next.terrain;
     const centre = new THREE.Vector3(width / 2, 0, depth / 2);
@@ -417,7 +417,7 @@ export async function mountWorld(
     hotspots.setInterior(interior);
     cards.setWorld(next);
     // The Guide (dis)assembles in flight only where it can be seen; otherwise it is simply there.
-    guide.formAt(guideSpot(next, 'station'), idling());
+    guide.formAt(guideSpot(next, 'station'), life.seen());
     rig.reset(
       {
         minX: Math.min(...next.isles.map((i) => i.bounds.minX)),
@@ -478,6 +478,9 @@ export async function mountWorld(
     },
     backend,
     tier: tier.name,
+    get lifeTier() {
+      return life.tier();
+    },
     setViewCentre: (at) => {
       viewCentre = at;
       lookAtViewCentre();
@@ -486,8 +489,7 @@ export async function mountWorld(
     dispose: () => {
       cancelAnimationFrame(frame);
       frameListeners.clear();
-      stillness.removeEventListener('change', wake);
-      document.removeEventListener('visibilitychange', wake);
+      life.dispose();
       rig.dispose();
       hotspots.dispose();
       guide.dispose();

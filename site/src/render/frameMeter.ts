@@ -3,8 +3,9 @@
  * that render anyway. Pure: the caller passes each frame's timestamp
  * (`requestAnimationFrame` time, ms) and reads when it likes.
  *
- * The World renders on demand, so frames come in bursts (ships sailing, the
- * House opening, a drag) with idle gaps between. A gap longer than
+ * The World renders continuously while Ambient Life is alive and on demand
+ * otherwise, so frames can come in bursts (the House opening, a drag at the
+ * still tier) with idle gaps between. A gap longer than
  * `maxGapMs` is not a frame time: it ends the burst, and the next burst
  * starts its average afresh. With no frame for `idleAfterMs`, or no
  * interval measured yet in this burst (a lone on-demand frame), the

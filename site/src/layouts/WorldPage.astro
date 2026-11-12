@@ -571,6 +571,8 @@ const stillAlt = site.seo.imageAlt;
             onExplore: () => endTour('explore'),
             // `?tier=full|reduced` picks a render tier whatever the device, for measuring.
             tierOverride: new URL(location.href).searchParams.get('tier'),
+            // `?life=full|reduced|still` pins an Ambient Life tier, for measuring.
+            lifeOverride: new URL(location.href).searchParams.get('life'),
           });
           view = await mounting;
           mounted = true;

@@ -520,6 +520,19 @@ describe('generateWorld', { timeout: 20_000 }, () => {
     }
   });
 
+  it('gives every World one wind direction, a unit vector across the ground, decided by the Seed alone', () => {
+    const directions = new Set<string>();
+    for (const seed of sampledSeeds) {
+      const { wind } = worldFor(seed);
+      expect(Math.hypot(wind.direction.x, wind.direction.z), seed).toBeCloseTo(1, 9);
+      // The content counts never turn the wind.
+      expect(generateWorld(seed, { projects: 24, clients: 12, partners: 6 }).wind, seed).toEqual(wind);
+      directions.add(`${wind.direction.x.toFixed(2)},${wind.direction.z.toFixed(2)}`);
+    }
+    // Seeds blow every which way, not one fixed wind.
+    expect(directions.size).toBeGreaterThan(sampledSeeds.length / 2);
+  });
+
   it('puts the House and the Garden on the same Isle', () => {
     for (const seed of sampledSeeds) {
       const { landmarks } = worldFor(seed);

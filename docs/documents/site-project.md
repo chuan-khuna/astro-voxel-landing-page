@@ -73,6 +73,7 @@ build` skips the capture the same way.
 | `src/lib/gardenPlants.ts` | `projectOrder(projects)`: Projects in Garden order (Pinned Projects, then the rest, each by id). `gardenCountsOf(projects)`: the Project and Pinned Project counts the World generator gets. `plantedProjects(projects)`: the Projects that get a plant, and which kind (the first six Pinned Projects flowers, the next three trees). `gardenPlants(world, projects)`: the World's flower and tree cells, each paired with its Project. Tested in `gardenPlants.test.ts`; see `content-model.md`, "Projects". |
 | `src/lib/contactDetails.ts` | `contactDetails(company)`: the Contact panel's details, from `site.company`: email, phone, address, then each social, each with a label, the text shown and a link (none for the address). Tested in `contactDetails.test.ts`. |
 | `src/lib/renderTier.ts` | The render tier: `renderTier(device, override)` (`reduced` for a touch device whose screen's shorter side is under 600px, `full` otherwise; `?tier=full` or `?tier=reduced` overrides), `pixelRatio(device)` (the DPR cap) and `ambientFrameDue` (the 30 fps gate for ambient frames). Tested in `renderTier.test.ts`. See "Phones and the render tier". |
+| `src/lib/lifeTier.ts` | The Ambient Life tier (polish 09): `startingLifeTier(renderTier, override)` (full on desktops, reduced on phones; `?life=` overrides), `createLifeTierWatch` (drops one tier after a 3 s window of slow frames, never climbs back), `lifeTierShown` (still under reduced motion) and `LIFE_TIERS`. Tested in `lifeTier.test.ts`. |
 | `src/lib/worldStill.ts` | The World still's files: `STILL_SIZE` (1600×1000), `STILL_WIDTHS` (800, 1600), `stillPath(theme, width)` (`/stills/world-<theme>-<width>.webp`), `stillSrcset`, `stripStills(html)` (a page without its still), and the OG image: `OG_IMAGE` (`/stills/og-world-day.jpg`, 1200×630 JPEG), `OG_CROP` (the part of the still it shows) and `stripOgStill(html)` (a page without the OG still's tags). Tested in `worldStill.test.ts`. See "World still". |
 | `src/integrations/worldStills.ts` | The `worldStills` Astro integration (in `astro.config.mjs`): after the build, captures the World still by Day and by Night, and the OG image, with Playwright. See "World still" and "SEO and link previews". |
 | `src/lib/landmarkRoutes.ts` | `landmarkForPath(pathname)`: the Landmark a route belongs to, from the Landmark list. A trailing slash and `index.html` are ignored, `/garden/<slug>` belongs to the Garden, and any other route gives `null`. `routeView(id)`: what the World shows for it: the Landmark the camera goes to, and whether the House is open (About and Team both open it and go to the House Interior). Tested in `landmarkRoutes.test.ts`. |
@@ -243,11 +244,17 @@ sailing, the Guide idling, the developer working) at most 30 a second. Camera mo
 (drags, pinches, flights) always render every frame. The tier changes how
 the World is drawn, and the reduced tier shows every other piece of
 Decoration (polish 08); every Landmark, plant, boat, ship and buoy is there
-in both. Ambient Life (polish) will read the tier for its density too. The DPR cap stays 1.5 on touch devices and
-2 elsewhere.
+in both. Phones also start Ambient Life at its reduced tier (polish 09,
+`lib/lifeTier.ts`; see `rendering-and-shading.md`, "Ambient Life: loop,
+clock and tiers"): it drops to still on a device that cannot keep 20 fps,
+and a desktop that cannot keep 40 fps drops from full to reduced. The DPR
+cap stays 1.5 on touch devices and 2 elsewhere.
 
 - `?tier=full` or `?tier=reduced` forces a tier, to compare on one device;
   `canvas.dataset.tier` and the stats card's `tier` row say which is on.
+- `?life=full`, `?life=reduced` or `?life=still` starts Ambient Life at that
+  tier and never drops it, for measuring; `canvas.dataset.life` and the
+  stats card's `life` row say which is on show.
 - Measured (ticket 16, phone viewport 393×852, DPR 2.75 capped to 1.5):
   with Chromium's software renderer (SwiftShader, a stand-in for a weak
   GPU) the Tour's camera flights ran at 13 fps on the full tier and 28 on
@@ -260,7 +267,9 @@ in both. Ambient Life (polish) will read the tier for its density too. The DPR c
 Under `prefers-reduced-motion: reduce` every move is a cut and nothing
 loops: camera flights and the Tour's steps (the camera and the Guide), the
 House's lid, the Guide assembling and re-forming; the sea's bob, the ships,
-the Guide's idling and the developer stand still, so nothing renders while idle; the
+the Guide's idling and the developer stand still (Ambient Life's tier
+is still and its shared clock frozen, and the media query is followed
+while the page is open), so nothing renders while idle; the
 panel, Data Card, hotspot label and bubble fades are off. Checked in the
 built site (ticket 16): no frames over 2 s idle, and each Tour step and
 opening About render a single frame.
@@ -430,7 +439,7 @@ plain CSS import would be hoisted onto every page).
 - **What it shows:** FPS and frame time (`frameMeter.ts`; `idle` when no
   frame has rendered for 0.5 s or only a lone on-demand frame did),
   triangles and draw calls of the last frame (the renderer's info), the
-  backend (WebGPU or WebGL 2), the render tier (`full` or `reduced`), the Seed and Biome, the generate time (from
+  backend (WebGPU or WebGL 2), the render tier (`full` or `reduced`), the Ambient Life tier (`life`: `full`, `reduced` or `still`), the Seed and Biome, the generate time (from
   the worker; `cached` on a cache hit) and retries (`attempts - 1`), and
   voxels in total and by kind (`countVoxels`, once per World shown, only
   while the card is on).

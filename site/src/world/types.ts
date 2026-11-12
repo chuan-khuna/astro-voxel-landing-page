@@ -249,6 +249,11 @@ export interface Decoration {
   facing: Facing;
 }
 
+/** The World's wind (`wind.ts`): which way it blows across the ground, a unit vector in x and z. Gusts are added at runtime. */
+export interface Wind {
+  direction: { x: number; z: number };
+}
+
 /** A camera view: what to look at and how much of the World to fit. */
 export interface View {
   target: Vec3;
@@ -277,5 +282,7 @@ export interface World {
   buoys: Cell[];
   /** Decoration, in the order it was placed (`decoration.ts`): never on a footprint, a path, a bridge end or in the Garden, never in front of a Landmark. */
   decoration: Decoration[];
+  /** The wind, from the Seed alone: Ambient Life sways and drifts with it. */
+  wind: Wind;
   views: Record<ViewLandmarkId, View>;
 }
