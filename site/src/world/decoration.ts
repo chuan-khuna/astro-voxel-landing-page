@@ -13,7 +13,7 @@
  */
 import { LANDMARK_MIN_HEIGHT } from './landmarks';
 import { createRng } from './prng';
-import { forEachRayColumn, SAMPLES_PER_CELL } from './sightline';
+import { sightClearance } from './sightline';
 import type { BiomeId, Bridge, Cell, Decoration, DecorationKind, Facing, Path, PlacedLandmark, Terrain } from './types';
 
 /**
@@ -85,21 +85,7 @@ export function placeDecoration(
   // How tall a column may stand over each cell and leave every Landmark in view: the lowest any
   // Landmark's sight line runs through it (the same check as Landmark placement).
   const tallest = Math.max(...Object.values(DECORATION_HEIGHT));
-  const highest = Math.max(...heights) + tallest;
-  const clearance = new Float64Array(width * depth).fill(Infinity);
-  for (const { landmark, cells } of covered) {
-    const reach = highest - landmark.y + 2;
-    for (const c of cells) {
-      for (let i = 0; i <= SAMPLES_PER_CELL; i++) {
-        for (let k = 0; k <= SAMPLES_PER_CELL; k++) {
-          forEachRayColumn(c.x + i / SAMPLES_PER_CELL, c.z + k / SAMPLES_PER_CELL, reach, (cx, cz, enter) => {
-            if (inGrid(cx, cz)) clearance[index(cx, cz)] = Math.min(clearance[index(cx, cz)]!, landmark.y + enter);
-            return false;
-          });
-        }
-      }
-    }
-  }
+  const clearance = sightClearance(terrain, covered.map(({ landmark, cells }) => ({ y: landmark.y, cells })), Math.max(...heights) + tallest);
 
   /** How tall a piece may stand by the nearest Landmark (the lowest, if several are as near). */
   const capAt = (cell: Cell) => {

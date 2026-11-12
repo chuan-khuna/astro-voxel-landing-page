@@ -249,6 +249,33 @@ export interface Decoration {
   facing: Facing;
 }
 
+/**
+ * The kinds of Ambient Life particle (ADR 0005): single-colour ⅛-unit cubes
+ * moved in the shader, with no structure file. Which are out depends on the
+ * Biome and on Day or Night (`PARTICLE_SETS` in `particles.ts`). Leaves are
+ * particles too, but fall from the trees (`render/fallingLeaves.ts`).
+ */
+export const PARTICLE_KINDS = ['butterfly', 'firefly', 'snow', 'ash'] as const;
+export type ParticleKind = (typeof PARTICLE_KINDS)[number];
+
+/**
+ * Where a swarm of one kind of particle lives: a box of air over the land.
+ * Its particles never leave it. Across the ground it is the square
+ * `centre` ± `radius` (world units); upwards it runs from `floor` to `top`
+ * (absolute heights, in units). It covers no footprint or jetty, no sea, no
+ * bridge and nothing taller than its floor, and no Landmark's sight line
+ * to the camera passes below its top.
+ */
+export interface ParticleArea {
+  kind: ParticleKind;
+  centre: { x: number; z: number };
+  radius: number;
+  /** The ground under its centre: no cell under the box is higher. */
+  ground: number;
+  floor: number;
+  top: number;
+}
+
 /** The World's wind (`wind.ts`): which way it blows across the ground, a unit vector in x and z. Gusts are added at runtime. */
 export interface Wind {
   direction: { x: number; z: number };
@@ -282,6 +309,8 @@ export interface World {
   buoys: Cell[];
   /** Decoration, in the order it was placed (`decoration.ts`): never on a footprint, a path, a bridge end or in the Garden, never in front of a Landmark. */
   decoration: Decoration[];
+  /** Where the Biome's particles live (`particles.ts`): by Day and at Night; the renderer shows the ones out. */
+  particles: ParticleArea[];
   /** The wind, from the Seed alone: Ambient Life sways and drifts with it. */
   wind: Wind;
   views: Record<ViewLandmarkId, View>;

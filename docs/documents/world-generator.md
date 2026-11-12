@@ -49,7 +49,8 @@ imports, so the generator stays pure.
 | `ships.ts` | The Partners' sailing routes: loops through open sea. |
 | `buoys.ts` | The buoys: sea marks just off the Isles, nearest the Dock first. |
 | `decoration.ts` | Decoration: `placeDecoration`, `DECORATION_HEIGHT` and `MINOR_BUILDINGS`: pieces of scenery on free land, each below the nearest Landmark and out of every Landmark's sight line. |
-| `sightline.ts` | `forEachRayColumn`: the columns the camera's ray from a ground point passes through, the occlusion check shared by Landmark placement and Decoration. |
+| `particles.ts` | Particles' spawn areas: `placeParticles`, `PARTICLE_SETS` (which particles each Biome has by Day and at Night) and `PARTICLE_AREA` (each kind's box and cap). |
+| `sightline.ts` | `forEachRayColumn`: the columns the camera's ray from a ground point passes through, the occlusion check shared by Landmark placement, Decoration and particles; `sightClearance`: how high anything may stand over each cell and leave every Landmark in view. |
 | `vessels.ts` | Boat and ship kinds: `BOAT_KINDS`, `SHIP_KINDS`, `vesselKind(id, kinds)` (a stable hash of the id) and the stand-in ids. |
 | `terrain.ts` | Isle layout, noise heights, surface kinds, cliff strata. |
 | `noise.ts` | Seeded 2D simplex noise and FBM. |
@@ -87,6 +88,8 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `ships` | One per Partner, in Partner order: `cells`, a closed loop of sea cells (each an 8-neighbour of the one before, the last of the first) sailed in order, `phase` (0–1), how far round it the ship starts, and its `kind` (1 to `SHIP_KINDS`, from its Partner's id). Cells may lie past the grid's edge. |
 | `buoys` | Up to 4 (`MAX_BUOYS`) sea cells, each with a buoy (its lamp glows at Night; see `rendering-and-shading.md`). Inside the grid, clear of the ships, boats, jetty and bridges. |
 | `decoration` | Decoration, in placement order (row by row): each piece's `kind` (`DECORATION_KINDS`), land `cell` and `facing` (its structure is drawn facing south; see "Decoration"). |
+| `particles` | Spawn areas of the Biome's particles, by Day and at Night: each a `kind` (`PARTICLE_KINDS`), a box of air (`centre`, `radius` across the ground, `floor` and `top` heights) over land no higher than its `ground` (see "Particles"). |
+| `wind` | The wind's `direction` across the ground, a unit vector, from the Seed alone. |
 | `views` | The two derived Landmarks, as camera views (`target`, `radius`): `overview` and `house-interior`. |
 
 ### Placed vs derived Landmarks
@@ -140,8 +143,10 @@ Dock and Mailbox. The other two are views derived from the layout:
 9. **Ships.** One sailing route per Partner (see "Ships" below). No
    randomness: the loops follow from the layout, so they draw nothing from
    the PRNG.
-10. **Decoration.** After everything else, each Biome places its own
-    Decoration over the Isles (see "Decoration" below).
+10. **Decoration.** Each Biome places its own Decoration over the Isles
+    (see "Decoration" below).
+11. **Particles.** After everything else, the spawn areas of the Biome's
+    particles (see "Particles" below).
 
 ### Landmark footprints
 
@@ -319,7 +324,7 @@ weights among the kinds that fit there. A piece:
   Garden;
 - never stands between the camera and a Landmark: every Landmark's ground
   points (the ¼-cell grid of its footprint and jetty) cast the same sight
-  line as Landmark placement (`sightline.ts`, `forEachRayColumn`), and a
+  line as Landmark placement (`sightline.ts`, `sightClearance`), and a
   cell's piece must stay below the lowest sight line through it;
 - if a minor building, faces the camera (south or east), keeps 3 cells
   from other minor buildings, and the World holds at most 5 fences, 4
@@ -328,6 +333,39 @@ weights among the kinds that fit there. A piece:
 Over `seed-0`–`seed-399` (8 Projects) a World gets 46–369 pieces, 181 on
 average; placing it takes under 1 ms (at most about 3). The reduced render
 tier draws every other piece (`rendering-and-shading.md`).
+
+### Particles
+
+Polish ticket 11 (`particles.ts`). Ambient Life's particles (butterflies,
+fireflies, snow and ash: single-colour ⅛-unit cubes the renderer moves in
+the shader, `rendering-and-shading.md`) live in spawn areas:
+`World.particles`. Each Biome has its own, and Day or Night decides which
+are out (`PARTICLE_SETS`): tropical butterflies by Day and fireflies at
+Night; northern snow by Day and fireflies and snow at Night; autumn
+fireflies at Night (by Day its falling leaves); volcanic ash by Day and at
+Night. The World holds the areas of both; the renderer shows the ones out.
+
+`placeParticles` runs after Decoration and draws from a sequence of the
+Seed's own (`<seed>/particles`), so it never moves the layout or the
+Decoration. For each kind it shuffles the cells a swarm may be centred on
+(a flower clump's cell or one of its 8 neighbours for butterflies; grass
+cells for fireflies; any land for snow and ash) and takes them in turn
+while the box fits, keeping areas of one kind 2.5 units apart, up to the
+kind's cap. A box (`PARTICLE_AREA`: butterflies 0.9 either side, 0.55–1.4
+units up, at most 6; fireflies 1.1, 0.55–1.1, 8; snow and ash 1.4,
+0.55–3.5, 14 and 12) fits when every cell under it:
+
+- is land no higher than the centre cell's ground, never a footprint, the
+  Dock's jetty or a bridge, so the swarm never flies into the Landmarks or
+  the ground;
+- holds no Decoration taller than the box's floor (only grass, clumps and
+  rocks, 0.5 units, may stand under a swarm);
+- lies below no Landmark sight line under the box's top
+  (`sightClearance`, as Decoration), so no particle comes between the
+  camera and a Landmark.
+
+Over the 200 test Seeds every World gets each of its Biome's kinds, almost
+always at the cap.
 
 ### Buoys
 
@@ -484,6 +522,14 @@ Seeds, never snapshots:
   `LANDMARK_MIN_HEIGHT`; no Landmark ground point hidden by a piece's
   column (an independent ray march); minor buildings face south or east,
   3 cells apart;
+- particles: areas only for the kinds of the Biome's Day and Night sets,
+  and every kind of each Biome occurs; the table itself; the same Seed
+  gives the same areas, and nearly every World has every kind its Biome
+  has; every cell under a box is land no higher than its ground (the
+  centre's exactly), never a footprint, the jetty or a bridge, with no
+  Decoration taller than its floor; no Landmark ground point hidden by any
+  box's top (an independent ray march); butterflies centred on or beside a
+  clump, fireflies over grass and at most 1.25 units up;
 
 ```sh
 cd site && bun run test

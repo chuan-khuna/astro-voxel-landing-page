@@ -42,6 +42,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `swell.ts` | The sea's swell, pure: `SWELL_PERIOD`, `SWELL_STRIDE`, `swellPhase` and `vesselRock(x, z, seconds)` (a vessel's heave, roll and pitch, in step with the water). | no |
 | `fallingLeaves.ts` | Falling leaves, pure: `fallingLeaves(world, tier)` (each leaf's start in a tree's canopy, landing down the wind, colour and timing) and `leavesShown(total, lifeTier)`. | no |
 | `leaves.ts` | `buildLeaves(world, tier, clock)`: one `InstancedMesh` of ⅛-unit cubes moved in the vertex shader on the shared clock; `setLife(tier)` shows the tier's share. | yes |
+| `swarms.ts` | The Biome's particles, pure: `swarms(world)` (each butterfly's, firefly's, snowflake's and ash flake's path, colour and timing inside its spawn area), `particlesOut(world, theme)`, `swarmShown(total, lifeTier)` and `SWARM_WOBBLE` (see "Ambient Life: butterflies, fireflies, snow and ash"). | no |
+| `particles.ts` | `buildParticles(world, clock)`: one `InstancedMesh` of ⅛-unit cubes per particle kind, moved in the vertex shader on the shared clock and wind; `setTheme(theme)` shows the kinds out, `setLife(tier)` the tier's share. | yes |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
 | `guideModel.ts` | The Guide's model: `guideVoxels(colours)` (a 6×6×6 ¼-unit cube centred on its origin, side fins, an antenna, the bezel on +x), `GUIDE_SCREEN` (the screen's rectangle) and `GUIDE_FACES` (a 12 × 10 pixel-eye face per mood, and a blink). | no |
 | `guideMotion.ts` | `guideSpot(world, id)` (where the Guide floats beside a placed Landmark), `voxelFlights` and `flightPoint` (the assembly), `travelPoint` (flying between spots on the Tour), `hoverPose(seconds)` (the bob) and `blinking(seconds)`. | no |
@@ -60,7 +62,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy, optionally with a material of its own), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, plus an optional heave, roll and pitch for a vessel on the swell, pure maths) and `mergeChunks`. | yes |
 | `house.ts` | `buildHouse(world, clock?)`: the House Variant's lid (⅛ unit) as a mesh, the windows' lights, and the House Interior's room at 1/16 unit (furniture, the developer's head and hands, the code screen, the Night lamp worked out in the room's material); `setOpening` lifts the lid and shows the room while it is above 0, `setLights` lights the windows and the lamp, `work(seconds)` poses the developer; `roomTriangles` and `developer` (the developer's box, for their link). | yes |
 | `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops, rocking on the swell. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves; `setTheme` recolours the sea and lights the lamps and windows. | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves, the Biome's particles and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves and particles; `setTheme` recolours the sea, lights the lamps and windows and shows the particles out by Day or at Night. | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
 | `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, the render loop (continuous while Ambient Life is alive, else on demand) and the render tier, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
@@ -731,6 +733,56 @@ Polish ticket 10 (ADR 0005) puts the shared wind and clock to work:
   motion the clock stays 0 and the canvas does not change
   (`e2e/ambient-life.spec.ts`).
 
+### Ambient Life: butterflies, fireflies, snow and ash
+
+Polish ticket 11 (ADR 0005) gives each Biome its own flying particles.
+Each is a single-colour ⅛-unit cube with no structure file, and Day or
+Night decides which are out (`PARTICLE_SETS`, `world/particles.ts`):
+
+| Biome | Day | Night |
+|---|---|---|
+| tropical | butterflies | fireflies |
+| northern | snow | fireflies, snow |
+| autumn | (the falling leaves) | fireflies |
+| volcanic | ash | ash |
+
+- **Spawn areas** come from `generateWorld` (`World.particles`, see
+  `world-generator.md`, "Particles"): boxes of air over the land, off every
+  footprint and out of every Landmark's sight line. The World holds the
+  areas of both Day's and Night's kinds, so switching theme never rebuilds.
+- **Paths** (`swarms.ts`, pure, from a sequence of the Seed's own,
+  `<seed>/swarms`): 3 butterflies an area, 5 fireflies, 8 snowflakes, 7
+  ash flakes. Each moves about its `centre` by at most `sweep` on each axis,
+  plus `SWARM_WOBBLE` (what the shader adds, and half the cube), so it never
+  leaves its area. Butterflies and fireflies wander round a loose loop
+  (`centre + sweep × (sin a, sin(1.7a + 1), sin(0.6a + 2))`, 5–9 s round for
+  a butterfly, 9–15 s for a firefly). Snow and ash fall from the top of the
+  box to its floor (snow 0.35 units a second, ash 0.25), drifting down the
+  wind 0.3–0.6 (snow) or 0.5–0.9 (ash) units per unit they fall, as far as
+  the box allows, then start again. The list is ordered round the areas,
+  so the life tier's share (`swarmShown`: all at full, half rounded up at
+  reduced and still) reaches every area.
+- **The shader** (`particles.ts`): one `InstancedMesh` per kind, all
+  motion in the vertex shader on the shared clock (per-particle instanced
+  attributes; the instance matrices stay identity). A butterfly folds
+  across to a third and back as it flaps (0.18–0.28 s) and bobs 0.06; its
+  colour is one of five bright ones. A firefly is unlit
+  (`MeshBasicNodeMaterial`), warm yellow-green, and blinks every 2–4.5 s,
+  dim (40%, 15% opaque) between blinks. Snow (white) and ash (greys, one in
+  four an ember) sway 0.1 across the wind, are pushed up to 0.15 by its
+  gusts (`windAt`), turn slowly, and fade in over the first 8% of the fall
+  and out over the last 12%. A frozen clock holds every particle where it
+  is. `setTheme` shows the kinds out; `setLife` the tier's share.
+- **Never in the way.** Particles cast no shadow, are never frustum-culled
+  and never raycast (`raycast` is a no-op), and Landmark and plant hotspots
+  are HTML over the canvas, so pointers reach them through the particles.
+  At most 6 × 3 butterflies, 8 × 5 fireflies, 14 × 8 snowflakes or 12 × 7
+  ash flakes a World: at most (40 + 112) × 12 = 1,824 triangles (northern).
+- **Checked** in headless Chromium (SwiftShader) on `harbour` (tropical),
+  `seed-1` (autumn), `seed-2` (northern) and `seed-3` (volcanic), desktop
+  and phone, Day and Night, with no console errors
+  (`e2e/ambient-life.spec.ts` runs all four by Day and at Night).
+
 ## Day and Night
 
 The theme (`site-project.md`, "Day and Night") reaches the World through
@@ -983,4 +1035,4 @@ without; the phone tier held 29 fps.
 
 ## Not yet built
 
-Nothing in this document's scope. The other Ambient Life motions (creatures, particles, clouds, shore waves, animals) come with polish tickets 11–14.
+Nothing in this document's scope. The other Ambient Life motions (clouds, shore waves and fish, animals and birds, including bats and seabirds) come with polish tickets 12–14.

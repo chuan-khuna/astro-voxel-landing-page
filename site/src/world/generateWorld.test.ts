@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -1013,6 +1013,130 @@ describe('generateWorld', { timeout: 20_000 }, () => {
           for (const other of buildings.slice(n + 1)) expect(chebyshev(b.cell, other.cell), seed).toBeGreaterThanOrEqual(3);
         });
       }
+    });
+  });
+
+  describe('Particles', () => {
+    it('gives each World spawn areas only for the particles its Biome has by Day or at Night, and each Biome all of its own', () => {
+      const seen = new Map<string, Set<string>>();
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const sets = PARTICLE_SETS[world.biome.id];
+        const out = new Set([...sets.day, ...sets.night]);
+        for (const area of world.particles) expect(out.has(area.kind), `${seed} ${world.biome.id} ${area.kind}`).toBe(true);
+        const kinds = seen.get(world.biome.id) ?? new Set<string>();
+        for (const area of world.particles) kinds.add(area.kind);
+        seen.set(world.biome.id, kinds);
+      }
+      for (const biome of BIOME_IDS) {
+        const sets = PARTICLE_SETS[biome];
+        expect([...(seen.get(biome) ?? [])].toSorted(), biome).toEqual([...new Set([...sets.day, ...sets.night])].toSorted());
+      }
+    });
+
+    /** Every cell under an area's box. */
+    const boxCells = (a: World['particles'][number]) => {
+      const cells: Array<{ x: number; z: number }> = [];
+      for (let z = Math.floor(a.centre.z - a.radius); z <= Math.floor(a.centre.z + a.radius); z++)
+        for (let x = Math.floor(a.centre.x - a.radius); x <= Math.floor(a.centre.x + a.radius); x++) cells.push({ x, z });
+      return cells;
+    };
+
+    it('is deterministic: the same Seed and counts give the same areas, on most Worlds of every Biome', () => {
+      expect(generateWorld('harbour', counts).particles).toEqual(generateWorld('harbour', counts).particles);
+      const withAreas = new Map<string, number>();
+      const total = new Map<string, number>();
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        total.set(world.biome.id, (total.get(world.biome.id) ?? 0) + 1);
+        const sets = PARTICLE_SETS[world.biome.id];
+        // Every kind the Biome has, by Day and at Night, gets at least one area.
+        const kinds = new Set(world.particles.map((a) => a.kind));
+        if ([...sets.day, ...sets.night].every((k) => kinds.has(k))) withAreas.set(world.biome.id, (withAreas.get(world.biome.id) ?? 0) + 1);
+      }
+      for (const biome of BIOME_IDS) expect(withAreas.get(biome) ?? 0, biome).toBeGreaterThanOrEqual((total.get(biome) ?? 0) * 0.9);
+    });
+
+    it('keeps every area over land no higher than its ground: never a footprint, the jetty, a bridge or the sea, nor Decoration taller than its floor', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const { width, depth, heights, isle } = world.terrain;
+        const covered = new Set(world.landmarks.flatMap(coveredCells).map(key));
+        const bridges = new Set(world.bridges.flatMap((b) => b.cells.map(key)));
+        const decoration = new Map(world.decoration.map((d) => [key(d.cell), d.kind] as const));
+        for (const area of world.particles) {
+          const at = `${seed} ${area.kind} ${area.centre.x},${area.centre.z}`;
+          expect(area.floor, at).toBeGreaterThan(area.ground);
+          expect(area.top, at).toBeGreaterThan(area.floor);
+          expect(heights[Math.floor(area.centre.z) * width + Math.floor(area.centre.x)], at).toBe(area.ground);
+          for (const c of boxCells(area)) {
+            expect(c.x >= 0 && c.z >= 0 && c.x < width && c.z < depth, at).toBe(true);
+            const i = c.z * width + c.x;
+            expect(isle[i], at).not.toBe(-1);
+            expect(heights[i], at).toBeLessThanOrEqual(area.ground);
+            expect(covered.has(key(c)), at).toBe(false);
+            expect(bridges.has(key(c)), at).toBe(false);
+            const kind = decoration.get(key(c));
+            if (kind) expect(area.ground + DECORATION_HEIGHT[kind], at).toBeLessThanOrEqual(area.floor);
+          }
+        }
+      }
+    });
+
+    it('never puts a particle between the camera and a Landmark', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        // The highest a particle may be over each cell: the top of every box over it.
+        const tops = new Map<string, number>();
+        for (const a of world.particles) for (const c of boxCells(a)) tops.set(key(c), Math.max(tops.get(key(c)) ?? -Infinity, a.top));
+        const reach = Math.max(0, ...tops.values());
+        const hidden: string[] = [];
+        for (const l of world.landmarks) {
+          for (const c of coveredCells(l)) {
+            for (let i = 0; i <= 4; i++) {
+              for (let k = 0; k <= 4; k++) {
+                const px = c.x + i / 4;
+                const pz = c.z + k / 4;
+                for (let t = 0.001; l.y + t <= reach; t += 0.02) {
+                  const top = tops.get(key({ x: Math.floor(px + t), z: Math.floor(pz + t) }));
+                  if (top !== undefined && l.y + t < top) {
+                    hidden.push(`${l.id} at ${px},${pz}`);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+        expect(hidden, seed).toEqual([]);
+      }
+    });
+
+    it('lets butterflies flutter round a flower clump (on it or next to it) and fireflies hang low over grass', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const { width, surface } = world.terrain;
+        const clumps = world.decoration.filter((d) => d.kind === 'clump').map((d) => d.cell);
+        for (const area of world.particles) {
+          const centre = key({ x: Math.floor(area.centre.x), z: Math.floor(area.centre.z) });
+          const at = `${seed} ${area.kind} ${centre}`;
+          const cell = { x: Math.floor(area.centre.x), z: Math.floor(area.centre.z) };
+          if (area.kind === 'butterfly') expect(clumps.some((c) => Math.max(Math.abs(c.x - cell.x), Math.abs(c.z - cell.z)) <= 1), at).toBe(true);
+          if (area.kind === 'firefly') {
+            expect(surface[Math.floor(area.centre.z) * width + Math.floor(area.centre.x)], at).toBe('grass');
+            expect(area.top - area.ground, at).toBeLessThanOrEqual(1.25);
+          }
+        }
+      }
+    });
+
+    it('follows the Biome × Day/Night table: butterflies by Day in the tropics, fireflies at Night, snow in the north, ash on volcanic Isles', () => {
+      expect(PARTICLE_SETS).toEqual({
+        tropical: { day: ['butterfly'], night: ['firefly'] },
+        northern: { day: ['snow'], night: ['firefly', 'snow'] },
+        autumn: { day: [], night: ['firefly'] },
+        volcanic: { day: ['ash'], night: ['ash'] },
+      });
     });
   });
 });

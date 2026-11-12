@@ -34,3 +34,36 @@ export function forEachRayColumn(px: number, pz: number, reach: number, visit: (
   }
   return false;
 }
+
+/**
+ * How high anything may stand over each cell and leave every Landmark in
+ * view: for each column, the lowest height (absolute, in units) at which a
+ * Landmark's sight line enters it, from every point of its ground on the
+ * ¼-cell grid; Infinity where none passes. `top` is the highest anything
+ * placed will reach. Shared by Decoration and particles.
+ */
+export function sightClearance(
+  terrain: { width: number; depth: number },
+  landmarks: ReadonlyArray<{ y: number; cells: ReadonlyArray<{ x: number; z: number }> }>,
+  top: number,
+): Float64Array {
+  const { width, depth } = terrain;
+  const clearance = new Float64Array(width * depth).fill(Infinity);
+  for (const landmark of landmarks) {
+    const reach = top - landmark.y + 2;
+    for (const c of landmark.cells) {
+      for (let i = 0; i <= SAMPLES_PER_CELL; i++) {
+        for (let k = 0; k <= SAMPLES_PER_CELL; k++) {
+          forEachRayColumn(c.x + i / SAMPLES_PER_CELL, c.z + k / SAMPLES_PER_CELL, reach, (cx, cz, enter) => {
+            if (cx >= 0 && cz >= 0 && cx < width && cz < depth) {
+              const i = cz * width + cx;
+              clearance[i] = Math.min(clearance[i]!, landmark.y + enter);
+            }
+            return false;
+          });
+        }
+      }
+    }
+  }
+  return clearance;
+}

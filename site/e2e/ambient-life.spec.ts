@@ -1,21 +1,25 @@
 /**
  * Ambient Life in the browser: with life on, the shared clock runs (the plants sway, leaves fall, boats
- * rock) and nothing logs an error; under reduced motion the clock stays frozen and the World never changes.
+ * rock, butterflies, fireflies, snow and ash fly) in every Biome, by Day and at Night, and nothing logs an error; under reduced motion the clock stays frozen and the World never changes.
  */
 import { expect, test } from '@playwright/test';
 import { collectErrors, worldReady } from './world';
 
 const clock = async (page: import('@playwright/test').Page) => Number(await page.locator('#world-canvas').getAttribute('data-clock'));
 
-for (const seed of ['harbour', 'seed-1']) {
-  test(`Ambient Life runs on the Garden of ${seed} with no errors`, async ({ page }) => {
-    const errors = collectErrors(page);
-    await page.goto(`/garden?seed=${seed}&life=full`);
-    await worldReady(page);
-    const before = await clock(page);
-    await expect.poll(() => clock(page), { timeout: 30_000 }).toBeGreaterThan(before + 0.5);
-    expect(errors).toEqual([]);
-  });
+// One Seed per Biome: tropical, autumn, northern, volcanic.
+for (const seed of ['harbour', 'seed-1', 'seed-2', 'seed-3']) {
+  for (const theme of ['day', 'night'] as const) {
+    test(`Ambient Life runs on the Garden of ${seed} by ${theme} with no errors`, async ({ page }) => {
+      const errors = collectErrors(page);
+      await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+      await page.goto(`/garden?seed=${seed}&life=full`);
+      await worldReady(page);
+      const before = await clock(page);
+      await expect.poll(() => clock(page), { timeout: 30_000 }).toBeGreaterThan(before + 0.5);
+      expect(errors).toEqual([]);
+    });
+  }
 }
 
 test('under reduced motion nothing sways, falls or rocks', async ({ page }) => {

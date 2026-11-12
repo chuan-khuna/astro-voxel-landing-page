@@ -8,6 +8,7 @@ import { BOAT_KINDS, SHIP_KINDS, vesselIds, vesselKind } from './vessels';
 import { placeBuoys } from './buoys';
 import { placeDecoration } from './decoration';
 import { windFor } from './wind';
+import { placeParticles } from './particles';
 import { buildStrata, buildTerrain } from './terrain';
 import { site } from '@/data/site';
 import {
@@ -69,6 +70,7 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
     const paths: Path[] = [{ from: 'dock', to: 'house', cells: route }];
     const routes = sailingRoutes(terrain, isles, bridges, [...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)], counts.partners);
     const ships = withKinds(routes, counts.partnerIds, 'partner', SHIP_KINDS);
+    const decoration = placeDecoration(seed, biome.id, terrain, bridges, paths, landmarks);
     return {
       seed,
       attempts: attempt + 1,
@@ -83,7 +85,8 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
       boats,
       ships,
       buoys: placeBuoys(terrain, bridges, landmarks.find((l) => l.id === 'dock'), boats.map((b) => b.cell), ships),
-      decoration: placeDecoration(seed, biome.id, terrain, bridges, paths, landmarks),
+      decoration,
+      particles: placeParticles(seed, biome.id, terrain, bridges, landmarks, decoration),
       views: deriveViews(isles, landmarks, boats),
       wind: windFor(seed),
     };
