@@ -99,6 +99,26 @@ export const STRUCTURE_ROLES = {
   fishRed: { fixed: 'petalRed', dl: 0.04 },
   fishDark: { fixed: 'fishDark' },
   fishEmber: { fixed: 'fishEmber' },
+  // The land animals, birds and bats (polish 14): their heads and wings are parts of their own that move.
+  furBrown: { fixed: 'furBrown' },
+  furDark: { fixed: 'furDark' },
+  furCream: { fixed: 'furCream' },
+  furRed: { fixed: 'furRed' },
+  furGrey: { fixed: 'furGrey' },
+  antler: { fixed: 'antler' },
+  horn: { fixed: 'horn' },
+  eye: { fixed: 'eye' },
+  /** A volcanic bat's glowing eye. */
+  emberEye: { fixed: 'fishEmber' },
+  beak: { fixed: 'beak' },
+  comb: { fixed: 'comb' },
+  plumeGold: { fixed: 'plumeGold' },
+  plumeDark: { fixed: 'plumeDark' },
+  featherWhite: { fixed: 'featherWhite' },
+  featherGrey: { fixed: 'featherGrey' },
+  featherBlack: { fixed: 'featherBlack' },
+  batBody: { fixed: 'batBody' },
+  batWing: { fixed: 'batWing' },
   // The House Interior's rooms (1/16 unit) and the developer at work.
   /** The computer's screen: the glowing code is drawn over its +x face (`interiorModel.ts`). */
   screen: { fixed: 'screenDark' },
@@ -121,11 +141,15 @@ export const isStructureRole = (role: string): role is StructureRole => Object.h
 export const DEVELOPER_PARTS = ['head', 'leftHand', 'rightHand'] as const;
 export type DeveloperPart = (typeof DEVELOPER_PARTS)[number];
 
+/** A flying creature's wings (`bird/`, `bat/`), each beating about its side of the body. */
+export const WING_PARTS = ['wingLeft', 'wingRight'] as const;
+
 /**
  * The parts a structure's voxels belong to, each its own mesh where it moves:
  * `lid` lifts off (the House's roof and front walls); `head`, `leftHand` and
- * `rightHand` are the developer's moving parts (`developer/any-1`);
- * everything else is `base`.
+ * `rightHand` are the developer's moving parts (`developer/any-1`), and
+ * `head` a land animal's too (it turns and dips about the neck); `wingLeft`
+ * and `wingRight` a bird's or bat's; everything else is `base`.
  */
-export const STRUCTURE_PARTS = ['base', 'lid', ...DEVELOPER_PARTS] as const;
+export const STRUCTURE_PARTS = ['base', 'lid', ...DEVELOPER_PARTS, ...WING_PARTS] as const;
 export type StructurePart = (typeof STRUCTURE_PARTS)[number];

@@ -24,7 +24,8 @@
  *   `canvas.dataset.camera` (target x, z and zoom) and
  *   `canvas.dataset.clouds` (how much of the clouds shows at that zoom,
  *   0–1: they fade out in a Landmark's close-up), for checks;
- *   `canvas.dataset.fish` says how many fish the life tier shows.
+ *   `canvas.dataset.fish`, `.animals` and `.birds` say how many fish, land
+ *   animals and birds (or bats) the life tier (and theme) shows.
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
  *   Landmark hotspots (`landmarkHotspots.ts`) and Data Cards (`dataCards.ts`)
  *   follow the camera.
@@ -75,7 +76,7 @@ import { createLandmarkHotspots } from './landmarkHotspots';
 import { createDataCards } from './dataCards';
 import { landmarkFocus } from './landmarkFocus';
 import { stateShowing, type CameraState } from './cameraMath';
-import { buildWorldObjects, type WorldObjects } from './worldMeshes';
+import { buildWorldObjects, type LifeShown, type WorldObjects } from './worldMeshes';
 import { openingStep } from './houseMotion';
 import type { MeshedWorld } from './worldVoxels';
 import type { Rect, ScreenOffset } from './freeArea';
@@ -299,7 +300,7 @@ export async function mountWorld(
         objects?.step(clock.seconds);
       }
       // As many leaves as the life tier allows (it may have dropped).
-      if (objects) canvas.dataset.fish = String(objects.setLife(life.tier()));
+      if (objects) showLife(objects.setLife(life.tier()));
       // The clouds fade as the camera zooms in on a Landmark.
       if (objects) canvas.dataset.clouds = objects.setZoom(rig.state.zoom).toFixed(2);
       if (lifting()) {
@@ -381,6 +382,12 @@ export async function mountWorld(
   };
 
   let objects: WorldObjects | null = null;
+  /** Say how many fish, land animals and birds (or bats) show, for checks. */
+  const showLife = ({ fish, animals, birds }: LifeShown) => {
+    canvas.dataset.fish = String(fish);
+    canvas.dataset.animals = String(animals);
+    canvas.dataset.birds = String(birds);
+  };
   let current = world;
   const show = (next: World, nextMeshed?: MeshedWorld) => {
     current = next;
@@ -393,7 +400,7 @@ export async function mountWorld(
     objects = buildWorldObjects(next, nextMeshed, tier.name, clock);
     objects.setTheme(theme);
     objects.step(clock.seconds);
-    canvas.dataset.fish = String(objects.setLife(life.tier()));
+    showLife(objects.setLife(life.tier()));
     objects.house.setOpening(opening);
     scene.add(objects.group);
 

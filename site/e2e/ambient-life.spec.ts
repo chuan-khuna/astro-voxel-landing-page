@@ -1,6 +1,6 @@
 /**
  * Ambient Life in the browser: with life on, the shared clock runs (the plants sway, leaves fall, boats
- * rock, butterflies, fireflies, snow and ash fly, clouds drift, surf breaks and fish swim) in every Biome, by Day and at Night, and nothing logs an error; under reduced motion the clock stays frozen and the World never changes. Clouds show at the Overview and are gone in a close-up. The fish follow the life tier.
+ * rock, butterflies, fireflies, snow and ash fly, clouds drift, surf breaks, fish swim, animals walk and birds or bats fly) in every Biome, by Day and at Night, and nothing logs an error; under reduced motion the clock stays frozen and the World never changes. Clouds show at the Overview and are gone in a close-up. The fish, animals and birds follow the life tier (and the animals and birds the theme).
  */
 import { expect, test } from '@playwright/test';
 import { THEME_STORAGE_KEY } from '../src/lib/theme';
@@ -66,5 +66,31 @@ test('the fish swim in every World, as many schools as the life tier allows', as
   const reduced = await fish();
   expect(reduced).toBeGreaterThan(0);
   expect(reduced).toBeLessThan(all);
+  expect(errors).toEqual([]);
+});
+
+test('land animals walk and birds fly by Day, bats at Night where the Biome has them, as many as the life tier allows', async ({ page }) => {
+  const errors = collectErrors(page);
+  const canvas = page.locator('#world-canvas');
+  const count = async (what: 'animals' | 'birds') => Number(await canvas.getAttribute(`data-${what}`));
+  const open = async (seed: string, theme: 'day' | 'night', life: string) => {
+    await page.addInitScript(([key, t]) => localStorage.setItem(key, t), [THEME_STORAGE_KEY, theme] as const);
+    await page.goto(`/dock?seed=${seed}&life=${life}`);
+    await worldReady(page);
+  };
+  // Tropical (harbour) by Day: junglefowl and seabirds; at Night neither.
+  await open('harbour', 'day', 'full');
+  const animals = await count('animals');
+  expect(animals).toBeGreaterThan(0);
+  expect(await count('birds')).toBeGreaterThan(0);
+  await open('seed-1', 'day', 'reduced');
+  const reduced = await count('animals');
+  await open('seed-1', 'day', 'full');
+  expect(reduced).toBeGreaterThan(0);
+  expect(reduced).toBeLessThan(await count('animals'));
+  // Autumn (seed-1) at Night: the squirrels rest out of sight and bats fly.
+  await open('seed-1', 'night', 'full');
+  expect(await count('animals')).toBe(0);
+  expect(await count('birds')).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });

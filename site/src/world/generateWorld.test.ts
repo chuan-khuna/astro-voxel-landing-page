@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, MAX_SCHOOLS, FISH_AREA, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, MAX_SCHOOLS, FISH_AREA, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, CREATURE_SETS, ANIMAL_HEIGHT, ANIMAL_SPECIES, MAX_ANIMALS_PER_ISLE, MAX_BIRDS, BIRD_REACH, BIRD_BELOW, BIRD_ABOVE, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -1323,6 +1323,197 @@ describe('generateWorld', { timeout: 20_000 }, () => {
         for (const school of world.fish) for (const c of schoolCells(school)) expect(banned.has(key(c)), `${seed} ${key(c)}`).toBe(false);
         for (const [i, a] of world.fish.entries())
           for (const b of world.fish.slice(i + 1)) expect(Math.hypot(a.centre.x - b.centre.x, a.centre.z - b.centre.z), seed).toBeGreaterThanOrEqual(3);
+      }
+    });
+  });
+
+  describe('Land animals', () => {
+    const chebyshev = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+    const neighbours = (c: { x: number; z: number }) => [-1, 0, 1].flatMap((dz) => [-1, 0, 1].map((dx) => ({ x: c.x + dx, z: c.z + dz })));
+
+    it('is deterministic: the same Seed and counts give the same animals', () => {
+      expect(generateWorld('harbour', counts).animals).toEqual(generateWorld('harbour', counts).animals);
+      for (const seed of sampledSeeds.slice(0, 20)) expect(generateWorld(seed, counts).animals, seed).toEqual(worldFor(seed).animals);
+    });
+
+    it('gives nearly every World a few animals of its Biome\'s species, never more than 3 an Isle', () => {
+      let some = 0;
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        if (world.animals.length >= 2) some++;
+        for (const isle of world.isles) expect(world.animals.filter((a) => a.isle === isle.id).length, seed).toBeLessThanOrEqual(3);
+        for (const a of world.animals) expect(a.species, seed).toBe(ANIMAL_SPECIES[world.biome.id]);
+      }
+      expect(MAX_ANIMALS_PER_ISLE).toBe(3);
+      expect(some).toBeGreaterThanOrEqual(sampledSeeds.length * 0.9);
+    });
+
+    it('starts each route at its rest point and walks 2–5 steps to neighbouring cells, never back on itself, on level land of its Isle', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const { width, heights, isle } = world.terrain;
+        for (const a of world.animals) {
+          expect(a.route[0], seed).toEqual(a.rest);
+          expect(a.route.length, seed).toBeGreaterThanOrEqual(3);
+          expect(a.route.length, seed).toBeLessThanOrEqual(6);
+          expect(new Set(a.route.map(key)).size, seed).toBe(a.route.length);
+          for (const [i, c] of a.route.entries()) {
+            expect(isle[c.z * width + c.x], `${seed} ${key(c)}`).toBe(a.isle);
+            expect(heights[c.z * width + c.x], `${seed} ${key(c)}`).toBe(a.y);
+            if (i > 0) expect(Math.abs(c.x - a.route[i - 1]!.x) + Math.abs(c.z - a.route[i - 1]!.z), seed).toBe(1);
+          }
+        }
+      }
+    });
+
+    it('keeps every route off and clear of footprints and the jetty (so out of the Garden), off paths, bridges and their ends, and clear of tall Decoration', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const { width, heights, isle } = world.terrain;
+        const path = new Set(world.paths.flatMap((p) => p.cells.map(key)));
+        const bridge = new Set(world.bridges.flatMap((b) => b.cells.flatMap((c) => [c, ...SIDES.map(([dx, dz]) => ({ x: c.x + dx, z: c.z + dz }))]).map(key)));
+        const covered = world.landmarks.flatMap(coveredCells);
+        const standing = new Map(world.decoration.map((d) => [key(d.cell), DECORATION_HEIGHT[d.kind]] as const));
+        for (const a of world.animals) {
+          for (const c of a.route) {
+            const at = `${seed} ${key(c)}`;
+            expect(path.has(key(c)), at).toBe(false);
+            expect(bridge.has(key(c)), at).toBe(false);
+            for (const f of covered) expect(chebyshev(f, c), at).toBeGreaterThanOrEqual(2);
+            // Nothing on the cell but grass and flower clumps; nothing over ½ unit beside it, no wall, no drop to the sea.
+            expect(['grass', 'clump', undefined], at).toContain(world.decoration.find((d) => key(d.cell) === key(c))?.kind);
+            for (const n of neighbours(c)) {
+              expect(standing.get(key(n)) ?? 0, at).toBeLessThanOrEqual(0.5);
+              expect(isle[n.z * width + n.x], at).not.toBe(-1);
+              expect(heights[n.z * width + n.x], at).toBeLessThanOrEqual(a.y);
+            }
+          }
+        }
+      }
+    });
+
+    it('keeps animals apart: no two routes share a cell or touch', () => {
+      for (const seed of sampledSeeds) {
+        const { animals } = worldFor(seed);
+        for (const [i, a] of animals.entries())
+          for (const b of animals.slice(i + 1)) for (const c of a.route) for (const d of b.route) expect(chebyshev(c, d), seed).toBeGreaterThanOrEqual(2);
+      }
+    });
+
+    it('never puts an animal between the camera and a Landmark, anywhere along its route', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const tall = ANIMAL_HEIGHT[world.animals[0]?.species ?? 'deer'];
+        // An animal's body may reach over the cells beside its route.
+        const tops = new Map<string, number>();
+        for (const a of world.animals) for (const c of a.route) for (const n of neighbours(c)) tops.set(key(n), a.y + tall);
+        const reach = Math.max(0, ...tops.values());
+        const hidden: string[] = [];
+        for (const l of world.landmarks) {
+          for (const c of coveredCells(l)) {
+            for (let i = 0; i <= 4; i++) {
+              for (let k = 0; k <= 4; k++) {
+                const px = c.x + i / 4;
+                const pz = c.z + k / 4;
+                for (let t = 0.001; l.y + t <= reach; t += 0.02) {
+                  const top = tops.get(key({ x: Math.floor(px + t), z: Math.floor(pz + t) }));
+                  if (top !== undefined && l.y + t < top) {
+                    hidden.push(`${l.id} at ${px},${pz}`);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+        expect(hidden, seed).toEqual([]);
+      }
+    });
+
+    it('follows the Biome × Day/Night table: a land animal by Day in every Biome, seabirds or gulls by Day, bats at Night', () => {
+      expect(ANIMAL_SPECIES).toEqual({ tropical: 'junglefowl', northern: 'deer', autumn: 'squirrel', volcanic: 'goat' });
+      expect(CREATURE_SETS).toEqual({
+        tropical: { day: ['animal', 'bird'], night: [] },
+        northern: { day: ['animal', 'bird'], night: [] },
+        autumn: { day: ['animal'], night: ['bat'] },
+        volcanic: { day: ['animal'], night: ['bat'] },
+      });
+    });
+  });
+
+  describe('Birds', () => {
+    /** Where a bird is `a` radians round its circle. */
+    const at = (b: World['birds'][number], a: number) => ({ x: b.centre.x + b.radius * Math.cos(a), z: b.centre.z + b.radius * Math.sin(a) });
+
+    it('is deterministic: the same Seed and counts give the same birds', () => {
+      expect(generateWorld('harbour', counts).birds).toEqual(generateWorld('harbour', counts).birds);
+      for (const seed of sampledSeeds.slice(0, 20)) expect(generateWorld(seed, counts).birds, seed).toEqual(worldFor(seed).birds);
+    });
+
+    it('gives nearly every World a few birds (or bats) of its Biome, never more than the cap', () => {
+      let some = 0;
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        expect(world.birds.length, seed).toBeLessThanOrEqual(MAX_BIRDS);
+        if (world.birds.length >= 2) some++;
+        const sets = CREATURE_SETS[world.biome.id];
+        for (const b of world.birds) expect([...sets.day, ...sets.night], seed).toContain(b.kind);
+      }
+      expect(some).toBeGreaterThanOrEqual(sampledSeeds.length * 0.9);
+    });
+
+    it('circles each bird over an Isle, 1.5–3 units round, higher than every Landmark and lower than every cloud', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const { width, depth, isle } = world.terrain;
+        const tallest = Math.max(...world.landmarks.map((l) => l.y + LANDMARK_HEIGHT[l.id]));
+        for (const b of world.birds) {
+          const cx = Math.floor(b.centre.x);
+          const cz = Math.floor(b.centre.z);
+          expect(cx >= 0 && cz >= 0 && cx < width && cz < depth && isle[cz * width + cx] !== -1, `${seed} centre over land`).toBe(true);
+          expect(b.radius, seed).toBeGreaterThanOrEqual(1.5);
+          expect(b.radius, seed).toBeLessThanOrEqual(3);
+          expect(b.height - BIRD_BELOW, seed).toBeGreaterThan(tallest);
+          expect(b.height + BIRD_ABOVE, seed).toBeLessThan(tallest + 2);
+          for (const c of world.clouds) expect(b.height + BIRD_ABOVE, seed).toBeLessThan(c.base);
+          expect(Math.abs(b.turn), seed).toBeGreaterThan(0);
+        }
+      }
+    });
+
+    it('never flies through the camera\'s view of a Landmark, all the way round its circle', () => {
+      // A coarser march than the generator's check, on a third of the Seeds: it is slow.
+      for (const seed of sampledSeeds.slice(0, 70)) {
+        const world = worldFor(seed);
+        const hidden: string[] = [];
+        for (const b of world.birds) {
+          for (let s = 0; s < 24; s++) {
+            const p = at(b, (s / 24) * 2 * Math.PI);
+            for (const l of world.landmarks) {
+              const top = l.y + LANDMARK_HEIGHT[l.id];
+              for (const c of coveredCells(l)) {
+                for (let i = 0; i <= 2; i++) {
+                  for (let k = 0; k <= 2; k++) {
+                    for (let y = l.y; y <= top; y += 0.5) {
+                      // The ray from this point of the Landmark climbs (1, 1, 1): it is level with the bird's body for t in [lo, hi].
+                      const lo = b.height - BIRD_BELOW - y;
+                      const hi = b.height + BIRD_ABOVE - y;
+                      const px = c.x + i / 2;
+                      const pz = c.z + k / 2;
+                      for (let t = Math.max(0, lo); t <= hi; t += 0.1) {
+                        if (Math.abs(px + t - p.x) < BIRD_REACH && Math.abs(pz + t - p.z) < BIRD_REACH) {
+                          hidden.push(`${l.id} from ${px},${y},${pz}`);
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        expect(hidden.slice(0, 3), seed).toEqual([]);
       }
     });
   });

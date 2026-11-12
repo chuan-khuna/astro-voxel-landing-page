@@ -6,8 +6,9 @@
  * (`boats.ts`), both instanced, the House's moving parts (`house.ts`:
  * its lid, its lights and the House Interior's room at 1/16 unit, shown
  * while the lid is up), the Garden's plants (`garden.ts`, instanced), the
- * Decoration (`decoration.ts`, instanced, thinned on the reduced tier) and
- * the buoys' lamps.
+ * Decoration (`decoration.ts`, instanced, thinned on the reduced tier), the
+ * land animals and birds or bats (`creatureMeshes.ts`, instanced by part)
+ * and the buoys' lamps.
  * `setTheme` recolours the sea, lights the lamps and the House's windows
  * at Night and shows the particles out (butterflies by Day, fireflies at
  * Night); it never moves or adds anything.
@@ -18,7 +19,8 @@
  * and ash fly (`particles.ts`) and the clouds drift over the sea
  * (`clouds.ts`) from its uniforms in the shader, and
  * `step(seconds)` puts what moves on the CPU (the Partners' ships and the
- * Clients' boats on the swell, the developer at work in the House) where it
+ * Clients' boats on the swell, the developer at work in the House, the
+ * land animals on their routes and the birds or bats circling) where it
  * is at the clock's `seconds` (and the clouds' shadows, `cloudShadow.ts`,
  * how far they have drifted). `setZoom` fades the clouds as the camera
  * zooms in. Ambient Life parts add their own motion to
@@ -48,22 +50,30 @@ import { buildLeaves } from './leaves';
 import { buildParticles } from './particles';
 import { buildClouds } from './clouds';
 import { buildFish } from './fish';
+import { buildCreatures } from './creatureMeshes';
 import { CLOUD_SHADOW, cloudShade } from './cloudShadow';
 import { cloudShadowDrift, cloudShadowStrength } from './cloudMath';
 import type { LifeTierName } from '@/lib/lifeTier';
 
+/** How many of the counted living things the life tier (and, for animals and birds, the theme) shows. */
+export interface LifeShown {
+  fish: number;
+  animals: number;
+  birds: number;
+}
+
 export interface WorldObjects {
   group: THREE.Group;
-  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure, boats, ships, the House's lid, the Garden's plants, the Decoration the tier shows, every falling leaf, every particle of the Biome's by Day and at Night) and the sea's water and seabed; not the House's room, drawn only while the lid is up (`house.roomTriangles`). */
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure, boats, ships, the House's lid, the Garden's plants, the Decoration the tier shows, every falling leaf, every particle of the Biome's by Day and at Night, every land animal and bird or bat) and the sea's water and seabed; not the House's room, drawn only while the lid is up (`house.roomTriangles`). */
   triangles: number;
   /** The Partners' ships, which sail (`step` moves them). */
   ships: Fleet;
   /** The House's lid, its lights and its room: `house.setOpening` lifts the lid and shows the room. */
   house: HouseParts;
-  /** Put everything that moves on the CPU (the ships and boats on the swell, the developer) where it is at the shared clock's `seconds`. */
+  /** Put everything that moves on the CPU (the ships and boats on the swell, the developer, the land animals and birds) where it is at the shared clock's `seconds`. */
   step: (seconds: number) => void;
-  /** Show as much Ambient Life as the life tier allows (the falling leaves, the Biome's particles, the clouds, the fish and their spray); returns how many fish show. */
-  setLife: (tier: LifeTierName) => number;
+  /** Show as much Ambient Life as the life tier allows (the falling leaves, the Biome's particles, the clouds, the fish and their spray, the land animals and the birds or bats); returns how many fish, animals and birds (or bats) show. */
+  setLife: (tier: LifeTierName) => LifeShown;
   /** Fade the clouds for the camera's zoom (gone in a Landmark's close-up); returns how much of them shows, 0–1. */
   setZoom: (zoom: number) => number;
   /** Recolour the sea, light (or put out) the House's windows and lamp and the buoys' lamps, show the particles out by Day or at Night, and colour the clouds (their shadows by Day only). */
@@ -126,16 +136,19 @@ export function buildWorldObjects(
   group.add(clouds.group);
   const fish = buildFish(world, clock);
   group.add(fish.group);
+  const creatures = buildCreatures(world);
+  group.add(creatures.group);
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + particles.triangles + clouds.triangles + fish.triangles + sea.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + particles.triangles + clouds.triangles + fish.triangles + creatures.triangles + sea.triangles,
     ships,
     house,
     step: (seconds) => {
       ships.sail(seconds);
       boats.rock(seconds);
       house.work(seconds);
+      creatures.step(seconds);
       const drift = cloudShadowDrift(world.wind, seconds);
       CLOUD_SHADOW.drift.value.set(drift.x, drift.z);
     },
@@ -143,7 +156,7 @@ export function buildWorldObjects(
       leaves.setLife(life);
       particles.setLife(life);
       clouds.setLife(life);
-      return fish.setLife(life);
+      return { fish: fish.setLife(life), ...creatures.setLife(life) };
     },
     setZoom: (zoom) => clouds.setZoom(zoom),
     setTheme: (theme) => {
@@ -152,6 +165,7 @@ export function buildWorldObjects(
       particles.setTheme(theme);
       clouds.setTheme(theme);
       fish.setTheme(theme);
+      creatures.setTheme(theme);
       CLOUD_SHADOW.strength.value = cloudShadowStrength(theme);
       house.setLights(tokens);
       lamps.setLights(tokens);
@@ -170,6 +184,7 @@ export function buildWorldObjects(
       particles.dispose();
       clouds.dispose();
       fish.dispose();
+      creatures.dispose();
       // The shadows' uniforms are the page's: leave none behind.
       CLOUD_SHADOW.strength.value = 0;
     },

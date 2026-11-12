@@ -55,7 +55,7 @@ layers 2-7
 | `interior` | Optional: a box of voxels (min x y z, then max x y z, max exclusive) that must stay empty, for a room. |
 | `scale` | Optional: voxels a unit, `8` (the default, ⅛ unit) or `16` (1/16 unit: the House Interior's rooms and the developer). |
 | `developer` | Optional, a room's: the voxel (x y z) where the seated developer's anchor goes. |
-| `key:` | One line per character: the character, a colour role, and optionally a part (`lid`, `head`, `leftHand`, `rightHand`; the default is `base`). |
+| `key:` | One line per character: the character, a colour role, and optionally a part (`lid`, `head`, `leftHand`, `rightHand`, `wingLeft`, `wingRight`; the default is `base`). |
 | `layer N` / `layers A-B` | One block of rows for layer N, or the same block for every layer A to B. Every layer from 0 to the top appears exactly once. |
 
 In a block, rows run north to south (z = 0 first) and the characters of a
@@ -95,7 +95,9 @@ House's `lid` is its roof and its two front walls (high x and high z, the
 faces the camera sees): it lifts off as a mesh of its own, leaving the room
 open to the camera like a doll's house. The developer's `head`,
 `leftHand` and `rightHand` are their moving parts, each a mesh of its own
-in the World while the House is open.
+in the World while the House is open. A land animal's `head` turns and
+dips about its neck, and a bird's or bat's `wingLeft` (−x) and `wingRight`
+(+x) beat about the body's sides (polish ticket 14).
 
 ## Build-time parsing
 
@@ -394,6 +396,33 @@ still show through the water's tint.
 | autumn | a koi: gold with red patches |
 | volcanic | a black fish of the hot springs with ember spots |
 
+## Land animals, birds and bats
+
+Polish ticket 14. Each Biome has one land animal, `animal/<biome>-1`, and
+one bird (`bird/<biome>-1`, the tropics and the north, out by Day) or bat
+(`bat/<biome>-1`, autumn and volcanic, out at Night), at ⅛ unit with the
+anchor `0 0 0`. Everything faces +z (south): an animal's head and a bird's
+beak are its southmost voxels. The renderer moves them by parts
+(`render/creatureMeshes.ts`; see `rendering-and-shading.md`, "Ambient
+Life: land animals, birds and bats"): an animal's `head` part (neck, head,
+antlers, horns, comb) turns and dips about the back of its lowest layer;
+a bird's `wingLeft` and `wingRight` beat about their inner edges. Their
+colours are fixed roles (`furBrown`, `furDark`, `furCream`, `furRed`,
+`furGrey`, `antler`, `horn`, `eye`, `emberEye`, `beak`, `comb`,
+`plumeGold`, `plumeDark`, `featherWhite`, `featherGrey`, `featherBlack`,
+`batBody`, `batWing`).
+
+| Biome | Animal (w×l×h, ⅛ voxels) | Flying |
+|---|---|---|
+| tropical | a red junglefowl: gold hackles, dark arched tail, red comb (2×8×6, 1×1) | a tropicbird: white, black wing bars and tips, yellow beak, long tail (span 10, 2×1) |
+| northern | a deer: brown, pale belly and tail, small antlers (4×10×10, 1×2) | a gull: white, grey wings, black tips (span 10, 2×1) |
+| autumn | a red squirrel, bushy tail curled up (2×7×5, 1×1) | a brown bat (span 6, 1×1) |
+| volcanic | a mountain goat: ash grey, pale belly and beard, swept-back horns (4×8×9, 1×1) | a sooty bat with ember eyes (span 6, 1×1) |
+
+A bird's body is 4 long and 2 wide (2 layers), its wings in its top layer;
+a bat's body 2×2. The squirrel is 7 long rather than the README's 4, to
+fit its tail.
+
 ## The House Interior rooms
 
 One room per Biome (polish ticket 04), drawn at 1/16 unit (`scale: 16`,
@@ -473,6 +502,16 @@ own; that each is 1×1, anchored on the ground, one ⅛-unit voxel tall;
 cell's middle; and that its nose (one voxel) is the southmost row and its
 tail (two) the northmost.
 
+For the land animals, birds and bats, `structures.test.ts` checks one
+animal per Biome and a bird or bat for each kind its Biome has out
+(`CREATURE_SETS`), each its own look; that each animal stands on the
+ground, no taller than `ANIMAL_HEIGHT` (and within a voxel of it), every
+corner within a unit of its middle; the deer is 4×10×10 and the squirrel
+2 wide and at most 7 long; each animal has a `head` part, its front row;
+and that each bird's or bat's wings are parts either side of its body,
+the same size, 10 voxels across for a bird and 6 for a bat, within
+`BIRD_REACH` of its middle and at most 3 voxels tall.
+
 ## The Model Gallery
 
 `/dev/models` shows every structure of one kind (a picker) in a grid:
@@ -490,7 +529,9 @@ planted full, six flowers and three trees, as a World lays them out
 (`plantedGarden`); boats and ships float on a patch of their Biome's
 shallow sea (darker at Night), its top at sea level as in the World, the
 boats packed closer so each shows larger; the fish lie on such a patch,
-its top at their underside, framed close; the Decoration kinds sit in a
+its top at their underside, framed close; the land animals stand on
+their grass and the birds and bats hang a unit over it, packed closer;
+the Decoration kinds sit in a
 group of their own in the picker, packed closer still; **Night**
 switches the light, and the page's own colours follow (the site's theme
 tokens and fonts). On a phone the buttons show icons only (their names stay

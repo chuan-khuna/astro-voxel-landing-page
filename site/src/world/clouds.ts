@@ -28,7 +28,7 @@ import type { Cell, Cloud, PlacedLandmark, Terrain, View, Wind } from './types';
 /** The most clouds a World has. */
 export const MAX_CLOUDS = 8;
 /** Units a cloud's underside floats above the tallest Landmark's top, at least (and up to 2 more). */
-const CLOUD_LIFT = 2;
+export const CLOUD_LIFT = 2;
 /** Units a cloud drifts from start to end: least and most. */
 const DRIFT_LENGTH = [6, 14] as const;
 /** Units a cloud drifts a second: least and most. */

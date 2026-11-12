@@ -52,6 +52,8 @@ imports, so the generator stays pure.
 | `particles.ts` | Particles' spawn areas: `placeParticles`, `PARTICLE_SETS` (which particles each Biome has by Day and at Night) and `PARTICLE_AREA` (each kind's box and cap). |
 | `clouds.ts` | The clouds: `placeClouds` and `MAX_CLOUDS`: masses of 1-unit voxels shaped from the Seed, drifting down the wind high over the sea, never over an Isle nor between the camera and one. |
 | `fish.ts` | The fish schools: `placeFish`, `MAX_SCHOOLS` and `FISH_AREA`: 2×2-cell squares of open shallow water, clear of the jetty, the boats, bridges, buoys and the ships. |
+| `animals.ts` | The land animals: `placeAnimals`, `ANIMAL_SPECIES` (each Biome's animal), `ANIMAL_HEIGHT`, `MAX_ANIMALS_PER_ISLE` and `CREATURE_SETS` (which creatures each Biome has out by Day and at Night): a rest point and a short route on level land, clear of footprints, paths, bridges, tall Decoration and every Landmark's sight line. |
+| `birds.ts` | The birds (or bats): `placeBirds`, `MAX_BIRDS`, `BIRD_REACH`, `BIRD_BELOW` and `BIRD_ABOVE`: circles over the Isles above every Landmark and below the clouds, never through the camera's view of a Landmark. |
 | `coast.ts` | `coastDistance(terrain, ring)`: each cell's distance to the nearest land cell (a chamfer), shared by the fish's shallows and the sea's shade and surf (`render/seaModel.ts`). |
 | `sightline.ts` | `forEachRayColumn`: the columns the camera's ray from a ground point passes through, the occlusion check shared by Landmark placement, Decoration and particles; `sightClearance`: how high anything may stand over each cell and leave every Landmark in view. |
 | `vessels.ts` | Boat and ship kinds: `BOAT_KINDS`, `SHIP_KINDS`, `vesselKind(id, kinds)` (a stable hash of the id) and the stand-in ids. |
@@ -94,6 +96,8 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `particles` | Spawn areas of the Biome's particles, by Day and at Night: each a `kind` (`PARTICLE_KINDS`), a box of air (`centre`, `radius` across the ground, `floor` and `top` heights) over land no higher than its `ground` (see "Particles"). |
 | `clouds` | Up to 8 (`MAX_CLOUDS`) clouds: each one's `voxels` (1-unit cells of its box, `size` across, up and across, from its corner) and `base` (its underside's height), and its drift down the wind: `from` and `to` (its box's corner at the start and end), `period` (seconds a drift takes) and `phase` (0–1, how far through at time 0). See "Clouds". |
 | `fish` | Up to 6 (`MAX_SCHOOLS`) fish schools: each one's `centre` (a grid corner), `radius` (1: the square of water it keeps to, 2×2 cells) and `size` (3–5 fish). See "Fish". |
+| `animals` | The land animals, at most 3 an Isle (`MAX_ANIMALS_PER_ISLE`), round-robin by Isle: each one's `species` (the Biome's), `isle`, `rest` cell, `route` (4-connected cells from `rest`, 3–6 of them) and `y` (the level ground under the whole route). See "Land animals". |
+| `birds` | Up to 5 (`MAX_BIRDS`) birds or bats: each one's `kind` (`bird` or `bat`, whichever the Biome has), circle (`centre`, `radius`), `height` (its middle), `turn` (radians a second, signed) and `phase` (radians at time 0). See "Birds". |
 | `wind` | The wind's `direction` across the ground, a unit vector, from the Seed alone. |
 | `views` | The two derived Landmarks, as camera views (`target`, `radius`): `overview` and `house-interior`. |
 
@@ -151,7 +155,9 @@ Dock and Mailbox. The other two are views derived from the layout:
 10. **Decoration.** Each Biome places its own Decoration over the Isles
     (see "Decoration" below).
 11. **Particles.** After everything else, the spawn areas of the Biome's
-    particles (see "Particles" below).
+    particles (see "Particles" below), then the clouds, the fish, the land
+    animals and the birds (each from its own sequence of the Seed, so none
+    moves the layout).
 
 ### Landmark footprints
 
@@ -439,6 +445,73 @@ The fitting corners are shuffled and taken in turn, each school at least
 3 units from the others, up to 6 (`MAX_SCHOOLS`), each with 3–5 fish.
 Over the 200 test Seeds every World gets all 6.
 
+### Land animals
+
+Polish ticket 14 (`animals.ts`). Each Biome has one land animal
+(`ANIMAL_SPECIES`): a junglefowl in the tropics, a deer in the north, a
+squirrel in autumn and a mountain goat on volcanic Isles. The renderer
+walks each one along its route and back, resting, looking round and
+grazing (see `rendering-and-shading.md`, "Ambient Life: land animals, birds
+and bats"). `World.animals` holds where each one rests and walks.
+
+`placeAnimals` runs after Decoration and draws from a sequence of the
+Seed's own (`<seed>/animals`), so it never moves the layout. Each Isle
+wants 2 or 3 animals (`MAX_ANIMALS_PER_ISLE` is 3). Its land cells are
+shuffled and tried in turn as rest points; from one, the route takes 2–5
+steps to 4-neighbours (keeping straight on two times in three), stopping
+early where it cannot go on, and is kept if it has at least 2. A cell can
+be on a route when:
+
+- **it is level land** of the rest point's Isle, at the rest point's height;
+- **it is clear**: not on or beside (8-neighbour) a footprint or the Dock's
+  jetty (so never in the Garden), not on a path, a bridge or a bridge's
+  end; nothing on it but grass or a flower clump;
+- **its neighbours are safe for the body** (an animal reaches over the next
+  cell as it turns): all 8 are land no higher than it (no wall, no drop to
+  the sea), with no Decoration taller than ½ unit;
+- **it hides no Landmark**: over the cell and its 8 neighbours, no
+  Landmark's sight line passes below the animal's top (`ANIMAL_HEIGHT`:
+  0.75, 1.25, 0.625 and 1.125 units), the Decoration check
+  (`sightClearance`);
+- **it keeps apart**: no cell of another animal's route on or beside it.
+
+The animals are listed round-robin by Isle (each Isle's first, then each
+one's second...), so a life tier that shows only the first few still has
+one on each Isle. Over the 200 test Seeds a World has 5–6 animals on
+average.
+
+Which creatures are out depends on the Biome and on Day or Night
+(`CREATURE_SETS`): land animals by Day in every Biome (at Night they rest
+out of sight), birds by Day in the tropics (seabirds) and the north
+(gulls), bats at Night in autumn and on volcanic Isles. The spec's table
+had seabirds, deer, squirrels and bats; the junglefowl, the goat and the
+gulls were added so every Biome has an animal and something flying.
+
+### Birds
+
+Polish ticket 14 (`birds.ts`). Birds by Day, or bats at Night (whichever
+the Biome has; one kind a World), circle over the Isles. `placeBirds`
+draws from a sequence of the Seed's own (`<seed>/birds`). Up to 200 tries,
+taking the Isles in turn: a circle 1.5–3 units round a land cell's middle,
+at a height between 0.6 units above the tallest Landmark's top and
+0.7 units below the clouds (which float at least 2 units above it,
+`CLOUD_LIFT`), flying round at 0.6–0.95 units a second (a bat 0.9–1.3),
+either way. It is kept when:
+
+- **it hides no Landmark, all the way round**: at 96 points round the
+  circle, the bird's body (`BIRD_REACH`, 0.7 units either way across the
+  ground, and a tenth more for the gaps between the points; `BIRD_BELOW`
+  0.5 under its middle to `BIRD_ABOVE` 0.6 over it) is never on a
+  Landmark's sight line. A sight line climbs (1, 1, 1) from each point of a
+  Landmark (its footprint, or the jetty, from its ground to its top), so it
+  meets the bird's body a known distance across from where it started; the
+  check is interval arithmetic on the Landmark's rectangles;
+- **it keeps apart**: from every bird within 0.3 units of its height, its
+  circle is clear of theirs;
+- an Isle has at most 2, a World at most 5 (`MAX_BIRDS`).
+
+Over the 200 test Seeds a World has about 4.
+
 ### Buoys
 
 `buoys.ts` sets out up to 4 buoys after the ships, from the layout alone
@@ -617,6 +690,21 @@ Seeds, never snapshots:
   the grid with land within 2 cells (an independent measure); none on or
   beside the jetty or a boat, on a bridge, a buoy or a ship's loop, and
   schools 3 units apart;
+- land animals: the same Seed gives the same animals; at least 2 on 90% of
+  Worlds, never more than 3 an Isle, every one of the Biome's species;
+  each route starts at its rest point and takes 2–5 steps to 4-neighbours
+  without coming back on itself, on level land of its Isle; no route cell
+  on a path, a bridge or its end, or within a cell of a footprint or the
+  jetty; nothing but grass or a clump on it, and every neighbour land no
+  higher with nothing over ½ unit; routes a cell apart; no Landmark ground
+  point hidden by an animal's top over its route or beside it (an
+  independent ray march); the `ANIMAL_SPECIES` and `CREATURE_SETS` tables;
+- birds: the same Seed gives the same birds; at least 2 on 90% of Worlds,
+  never over 5, each of a kind its Biome has; each circle centred over
+  land, 1.5–3 round, its lowest wingtip above the tallest Landmark and its
+  highest below every cloud (and below 2 over that Landmark); none on a
+  Landmark's sight line at 24 points round its circle (an independent
+  march over 70 Seeds);
 
 ```sh
 cd site && bun run test

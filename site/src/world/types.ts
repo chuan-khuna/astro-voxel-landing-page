@@ -310,6 +310,49 @@ export interface FishSchool {
   size: number;
 }
 
+/**
+ * The land animals, one species a Biome (`ANIMAL_SPECIES` in `animals.ts`),
+ * each a ⅛-unit structure (`structures/animal/<biome>-1`).
+ */
+export const ANIMAL_SPECIES_IDS = ['junglefowl', 'deer', 'squirrel', 'goat'] as const;
+export type AnimalSpecies = (typeof ANIMAL_SPECIES_IDS)[number];
+
+/**
+ * A land animal (`animals.ts`): it rests at `rest`, walks its short `route`
+ * (4-connected cells, `route[0]` is `rest`) to the end and back, grazing or
+ * looking round on the way. Every cell of the route is level land of its
+ * Isle at height `y`.
+ */
+export interface LandAnimal {
+  species: AnimalSpecies;
+  isle: number;
+  rest: Cell;
+  route: Cell[];
+  /** The ground under its whole route, in units. */
+  y: number;
+}
+
+/** Which kinds of creature are out (`CREATURE_SETS`): the land animals, birds or bats. */
+export type CreatureKind = 'animal' | 'bird' | 'bat';
+
+/**
+ * A bird (or a bat) circling over an Isle (`birds.ts`): round the circle
+ * `centre` ± `radius` (world units) at `height`, higher than every Landmark
+ * and lower than every cloud.
+ */
+export interface BirdFlight {
+  /** A bird by Day, or a bat at Night: whichever its Biome has. */
+  kind: 'bird' | 'bat';
+  centre: { x: number; z: number };
+  radius: number;
+  /** The middle of its body, in units. */
+  height: number;
+  /** Radians a second it goes round (its sign, which way). */
+  turn: number;
+  /** Where round the circle it is at time 0, radians. */
+  phase: number;
+}
+
 /** The World's wind (`wind.ts`): which way it blows across the ground, a unit vector in x and z. Gusts are added at runtime. */
 export interface Wind {
   direction: { x: number; z: number };
@@ -349,6 +392,10 @@ export interface World {
   clouds: Cloud[];
   /** The fish schools (`fish.ts`): in the shallows, clear of the jetty, the boats and the ships. */
   fish: FishSchool[];
+  /** The land animals (`animals.ts`): at most 3 an Isle, round-robin by Isle, so the first few are on different Isles. */
+  animals: LandAnimal[];
+  /** The birds or bats (`birds.ts`): circling over the Isles, above every Landmark, out of every Landmark's view. */
+  birds: BirdFlight[];
   /** The wind, from the Seed alone: Ambient Life sways and drifts with it. */
   wind: Wind;
   views: Record<ViewLandmarkId, View>;

@@ -48,6 +48,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `clouds.ts` | `buildClouds(world, clock)`: every cloud meshed from its 1-unit voxels and merged into one translucent mesh, drifted in the vertex shader on the shared clock; `setTheme`, `setZoom` (the fade) and `setLife` (the tier's share). | yes |
 | `schools.ts` | The fish, pure: `schoolFish(world)` (each fish's loop, lane, speed, wiggle and leap timing in its school), `fishAt(fish, seconds)` (where it is, its heading and pitch, whether it is leaping), `sprayDrops` and `sprayAt` (the spray its leaps throw up), `fishShown` and `sprayShown` (the life tier's share), `FISH_REACH`. | no |
 | `fish.ts` | `buildFish(world, clock)`: one `InstancedMesh` of the Biome's fish structure and one of ⅛-unit spray cubes, both moved in the vertex shader on the shared clock by `schools.ts`' sums; `setLife(tier)` (returns the fish shown), `setTheme(theme)` (the spray takes the foam's colour). | yes |
+| `creatures.ts` | Land animals, birds and bats, pure: `walkingAnimals(world)` (each animal's round: rest, look, walk out, graze, walk back, seeded start), `animalAt(animal, seconds)` (where it is, its heading, its head's turn and dip, what it is doing), `birdAt(flight, seconds)` (round its circle, banked, its wings' beat), `creaturesShown` (the life tier's share), `ANIMAL_GAITS` and `FLIGHTS`. | no |
+| `creatureMeshes.ts` | `buildCreatures(world)`: the Biome's animal and its bird or bat as `InstancedMesh`es by part (body and head; body and each wing), placed on the CPU each `step(seconds)` from `creatures.ts`; `setTheme` (the kinds out by Day or at Night), `setLife` (returns the animals and birds shown); `headPivot`, `wingHinge`. | yes |
 | `surf.ts` | The shore's surf, pure: `surfFoam(d, u)` and `surfGlow(d, u)` (foam and glow at a distance from the coastline, part-way through a wave), `surfFront`, `SURF_PERIOD`, `SURF_RUN`, `SURF_BREAK`; `seaMaterial` does the same sums per ⅛-unit square. | no |
 | `cloudShadow.ts` | `CLOUD_SHADOW` (the shared `drift` and `strength` uniforms) and `cloudShade(position)`: the clouds' soft shadows, a drifting noise mask every voxel material and the sea take into their colour. | yes |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
@@ -68,7 +70,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy, optionally with a material of its own), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, plus an optional heave, roll and pitch for a vessel on the swell, pure maths) and `mergeChunks`. | yes |
 | `house.ts` | `buildHouse(world, clock?)`: the House Variant's lid (⅛ unit) as a mesh, the windows' lights, and the House Interior's room at 1/16 unit (furniture, the developer's head and hands, the code screen, the Night lamp worked out in the room's material); `setOpening` lifts the lid and shows the room while it is above 0, `setLights` lights the windows and the lamp, `work(seconds)` poses the developer; `roomTriangles` and `developer` (the developer's box, for their link). | yes |
 | `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops, rocking on the swell. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves, the Biome's particles, the clouds, the fish and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer, the clouds' shadows' drift) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves, particles, clouds and fish (and returns how many fish show); `setZoom(zoom)` fades the clouds; `setTheme` recolours the sea and the clouds, lights the lamps and windows, shows the particles out and sets the clouds' shadows (none at Night). | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves, the Biome's particles, the clouds, the fish, the land animals, birds or bats and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer, the animals and birds, the clouds' shadows' drift) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves, particles, clouds, fish, animals and birds (and returns how many fish, animals and birds show); `setZoom(zoom)` fades the clouds; `setTheme` recolours the sea and the clouds, lights the lamps and windows, shows the particles, animals and birds out and sets the clouds' shadows (none at Night). | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
 | `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, the render loop (continuous while Ambient Life is alive, else on demand) and the render tier, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
@@ -931,6 +933,66 @@ Night the breaking surf glows faintly.
   (`screenshots/13-*`); `e2e/ambient-life.spec.ts` checks `data-fish`
   follows the life tier.
 
+### Ambient Life: land animals, birds and bats
+
+Polish ticket 14 (ADR 0005). Each Biome's animal walks short routes on the
+Isles, rests, grazes and looks round; birds circle high above by Day, or
+bats at Night, never in front of a Landmark.
+
+- **Which are out** (`CREATURE_SETS`, see `world-generator.md`, "Land
+  animals"): land animals by Day in every Biome (a junglefowl, a deer, a
+  squirrel, a goat; at Night they rest out of sight), seabirds by Day in
+  the tropics and gulls in the north, bats at Night in autumn and on
+  volcanic Isles. `setTheme` shows the kinds out.
+- **Land animals** (`creatures.ts`, pure; `creatureMeshes.ts`).
+  `generateWorld` gives each a rest point and a short route
+  (`World.animals`). A round: it rests 5–9 s at its rest point (lying
+  down, `lieDown` 0–0.375 units, glancing about), stands and looks round
+  2–3.5 s (its head turns up to 0.7–0.9 rad either way), walks its route
+  cell middle to cell middle, turning in place at each corner (4 rad a
+  second), grazes 4–7 s at the end (its head dips 0.6–1.1 rad, nibbling),
+  turns, walks back and turns to face the way it set out, so a round ends
+  where the next starts. It walks 0.45–0.9 units a second by species,
+  bobbing (a squirrel hops 0.12 units). Each starts at its own point of
+  its round (`<seed>/creatures`). The structure (`animal/<biome>-1`, see
+  `voxel-structures.md`) is two `InstancedMesh`es, its body (`base`) and
+  its `head`, which turns and dips about the neck: the middle of the head
+  part's lowest layer across, at its back (`headPivot`).
+- **Birds and bats.** `generateWorld` places their circles
+  (`World.birds`). `birdAt`: round the circle at its height, bobbing 0.03
+  (a bat 0.05), facing the way it flies and banked 0.12 rad into the turn.
+  A bird beats its wings (±0.45 rad, 2.5 a second) in bursts and glides,
+  wings a little up, between them (a 6 s cycle); a bat beats all the time
+  (±0.7 rad, 7 a second) and flutters 0.15 units in and out from its
+  circle. Three `InstancedMesh`es: the body and each wing (`wingLeft`,
+  `wingRight`), which beats about its hinge, the inner edge of the wing
+  halfway up it (`wingHinge`). The World keeps room for the wingtips and
+  the flutter (`BIRD_BELOW`, `BIRD_ABOVE`, `BIRD_REACH`; tested in
+  `creatures.test.ts`).
+- **On the CPU.** Unlike the fish and particles, the parts are placed on
+  the CPU: `step(seconds)` sets each part's instance matrix from its pose
+  (a dozen animals and a few birds, two or three parts each), so the poses
+  are plain, tested functions and the head and wings turn about their own
+  pivots. A frozen clock calls `step` with the same seconds, so nothing
+  moves. The meshes use the soft-voxel material in local space at ⅛ unit,
+  cast no shadow (the shadow map is static), are never frustum-culled and
+  never raycast, so pointers reach the Landmarks through them.
+- **Tiers.** `setLife` shows the life tier's share of each (all at full,
+  half rounded up at reduced and still); the animals are round-robin by
+  Isle, so a reduced tier still has one on each Isle.
+  `canvas.dataset.animals` and `canvas.dataset.birds` say how many show
+  (0 for a kind not out).
+- **Triangles.** By species, body plus head: junglefowl 122, deer 202,
+  squirrel 122, goat 206; body plus wings: tropicbird 124, gull 84, bat 88.
+  `harbour` adds 614 (3 junglefowl, 2 tropicbirds), `seed-1` 1,782
+  (11 squirrels, 5 bats), in `data-triangles`.
+- **Checked** in headless Chromium (SwiftShader), desktop and phone, with
+  no console errors: all four Biomes by Day and at Night at the Overview,
+  and close-ups (`seed-1`'s Garden, `seed-2`'s Station), with a recording
+  of the squirrels and the deer walking (`screenshots/14-*`);
+  `e2e/ambient-life.spec.ts` checks `data-animals` and `data-birds`
+  follow the theme and the life tier.
+
 ## Day and Night
 
 The theme (`site-project.md`, "Day and Night") reaches the World through
@@ -1185,4 +1247,4 @@ without; the phone tier held 29 fps.
 
 ## Not yet built
 
-Nothing in this document's scope. The other Ambient Life motions (shore waves and fish, animals and birds, including bats and seabirds) come with polish tickets 13–14.
+Nothing in this document's scope. Every Ambient Life motion of the polish spec is built (polish tickets 09–14).

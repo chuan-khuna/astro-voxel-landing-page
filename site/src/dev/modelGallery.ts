@@ -9,6 +9,7 @@
  * (`furnishedRoom`), at its own 1/16 unit; a Garden fence shows planted
  * full, six flowers and three trees (`plantedGarden`); boats and ships float on
  * a patch of their Biome's sea, as in the World, and the fish lie on one;
+ * birds and bats hang a unit over their grass, wings spread;
  * each kind of Decoration shows
  * its piece in every Biome, closer together. Renders on demand. Dev only
  * (`/dev/models`).
@@ -168,6 +169,9 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
   const afloat = (s: Structure) => s.kind === 'boat' || s.kind === 'ship';
   /** A fish shows on a patch of its Biome's shallow water, on top of it (in the World it swims under the water). */
   const swims = (s: Structure) => s.kind === 'fish';
+  /** Birds and bats hang a unit over their patch of grass, their shadows under them. */
+  const FLYING = 1;
+  const flies = (s: Structure) => s.kind === 'bird' || s.kind === 'bat';
   /**
    * A patch of a Biome's grass under a model, one cell wider each side than
    * its footprint; for a boat or ship, a patch of its Biome's shallow sea
@@ -227,8 +231,10 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
       columns.push(list.filter((s) => s.biome === null));
       const used = columns.filter((column) => column.length > 0);
       const decoration = (DECORATION_KINDS as readonly string[]).includes(kind);
-      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'boat' ? BOAT_SPACING : kind === 'garden' ? GARDEN_SPACING : kind === 'fish' ? FISH_SPACING : decoration ? DECORATION_SPACING : SPACING;
-      const margin = kind === 'fish' ? 1.6 : kind === 'room' || kind === 'boat' || decoration ? 2 : 4;
+      // The land animals, birds and bats are small: closer together, framed close.
+      const creature = kind === 'animal' || kind === 'bird' || kind === 'bat';
+      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'boat' ? BOAT_SPACING : kind === 'garden' ? GARDEN_SPACING : kind === 'fish' ? FISH_SPACING : decoration || creature ? DECORATION_SPACING : SPACING;
+      const margin = kind === 'fish' || creature ? 1.6 : kind === 'room' || kind === 'boat' || decoration ? 2 : 4;
       const rows = Math.max(1, ...used.map((column) => column.length));
       used.forEach((column, c) => {
         column.forEach((s, r) => {
@@ -236,14 +242,14 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
           const band = laidOutPortrait ? Math.floor(c / PORTRAIT_COLUMNS) : 0;
           const across = laidOutPortrait ? c % PORTRAIT_COLUMNS : c;
           const down = (band * rows + r) * ROW_GAP;
-          const at = new THREE.Vector3((down + across) * spacing, 0, (down - across) * spacing);
+          const at = new THREE.Vector3((down + across) * spacing, flies(s) ? FLYING : 0, (down - across) * spacing);
           const colours = coloursOf(s);
           const hasLid = s.palette.some((p) => p.part === 'lid');
           const base = structureInstances(s, colours, [placementOf(at)], hasLid ? { part: 'base' } : {});
           scene.add(base.mesh);
           const lid = hasLid ? structureInstances(s, colours, [placementOf(at, lifted ? LID_LIFT : 0)], { part: 'lid' }) : undefined;
           if (lid) scene.add(lid.mesh);
-          groundPatch(s, colours, at);
+          groundPatch(s, colours, at.clone().setY(0));
           shown.push({ structure: s, at, base, lid });
         });
       });

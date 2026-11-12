@@ -106,6 +106,24 @@ export const FIXED_COLOURS = {
   fishGold: oklch(0.84, 0.15, 85),
   fishDark: oklch(0.32, 0.02, 30),
   fishEmber: oklch(0.66, 0.2, 35),
+  // The land animals, birds and bats (polish 14).
+  furBrown: oklch(0.52, 0.07, 55),
+  furDark: oklch(0.34, 0.04, 45),
+  furCream: oklch(0.88, 0.03, 85),
+  furRed: oklch(0.56, 0.12, 45),
+  furGrey: oklch(0.6, 0.012, 250),
+  antler: oklch(0.8, 0.03, 80),
+  horn: oklch(0.42, 0.02, 60),
+  eye: oklch(0.18, 0.01, 260),
+  beak: oklch(0.8, 0.12, 85),
+  comb: oklch(0.52, 0.16, 28),
+  plumeGold: oklch(0.68, 0.12, 60),
+  plumeDark: oklch(0.3, 0.04, 165),
+  featherWhite: oklch(0.96, 0.005, 240),
+  featherGrey: oklch(0.72, 0.015, 245),
+  featherBlack: oklch(0.24, 0.01, 260),
+  batBody: oklch(0.44, 0.04, 40),
+  batWing: oklch(0.34, 0.03, 30),
 } as const satisfies Record<string, Oklch>;
 
 export type FixedColour = keyof typeof FIXED_COLOURS;

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BIOME_IDS, BOAT_KINDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, PLACED_LANDMARK_IDS, SHIP_KINDS } from '@/world';
+import { ANIMAL_HEIGHT, ANIMAL_SPECIES, BIRD_REACH, CREATURE_SETS, BIOME_IDS, BOAT_KINDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, PLACED_LANDMARK_IDS, SHIP_KINDS } from '@/world';
 import { GROUND_DETAIL, INTERIOR, STRUCTURE } from '@/render/voxelTiers';
 import { STRUCTURES, STRUCTURE_FILES, variantsOf } from './index';
 import { FISH_REACH } from '@/render/schools';
@@ -462,6 +462,78 @@ describe('the fish', () => {
       const row = (z: number) => voxels.filter((v) => v.z === z).length;
       expect(row(Math.max(...zs)), s.name).toBe(1);
       expect(row(Math.min(...zs)), s.name).toBe(2);
+    }
+  });
+});
+
+describe('the land animals, birds and bats', () => {
+  /** How far a voxel's farthest corner lies from the structure's pivot (the middle of its footprint) across the ground, in units. */
+  const reach = (s: Structure) =>
+    Math.max(
+      ...[...structureVoxels(s)].map((v) => {
+        const mx = s.size.x / 2;
+        const mz = s.size.z / 2;
+        return Math.hypot(Math.max(Math.abs(v.x - mx), Math.abs(v.x + 1 - mx)), Math.max(Math.abs(v.z - mz), Math.abs(v.z + 1 - mz))) / s.scale;
+      }),
+    );
+  const partsOf = (s: Structure) => new Set([...structureVoxels(s)].map((v) => v.part));
+
+  it('gives every Biome one land animal, and a bird or a bat for each kind it has out by Day or at Night', () => {
+    for (const biome of BIOME_IDS) {
+      expect(variantsOf('animal', biome).map((s) => s.variant), biome).toEqual([1]);
+      const out = [...CREATURE_SETS[biome].day, ...CREATURE_SETS[biome].night];
+      for (const kind of ['bird', 'bat'] as const) expect(variantsOf(kind, biome).map((s) => s.variant), `${biome} ${kind}`).toEqual(out.includes(kind) ? [1] : []);
+    }
+    const looks = new Set(STRUCTURES.filter((s) => ['animal', 'bird', 'bat'].includes(s.kind)).map((s) => `${[...s.voxels].join('')}|${s.palette.map((p) => p.role).join()}`));
+    expect(looks.size).toBe(STRUCTURES.filter((s) => ['animal', 'bird', 'bat'].includes(s.kind)).length);
+  });
+
+  it('stands each land animal on the ground, its head up no taller than the generator keeps clear for it (`ANIMAL_HEIGHT`), and within a unit of its middle', () => {
+    for (const biome of BIOME_IDS) {
+      for (const s of variantsOf('animal', biome)) {
+        expect(s.scale, s.name).toBe(STRUCTURE);
+        expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
+        expect(Math.min(...[...structureVoxels(s)].map((v) => v.y)), s.name).toBe(0);
+        expect(s.size.y / STRUCTURE, s.name).toBeLessThanOrEqual(ANIMAL_HEIGHT[ANIMAL_SPECIES[biome]]);
+        expect(s.size.y / STRUCTURE, s.name).toBeGreaterThan(ANIMAL_HEIGHT[ANIMAL_SPECIES[biome]] - 1 / STRUCTURE);
+        expect(reach(s), s.name).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('keeps to the README: a deer 4×10×10, a squirrel 2 wide and at most 7 long, every animal small', () => {
+    const deer = variantsOf('animal', 'northern')[0]!;
+    const span = (s: Structure, axis: 'x' | 'z') => {
+      const values = [...structureVoxels(s)].map((v) => v[axis]);
+      return Math.max(...values) - Math.min(...values) + 1;
+    };
+    expect([span(deer, 'x'), span(deer, 'z'), deer.size.y]).toEqual([4, 10, 10]);
+    const squirrel = variantsOf('animal', 'autumn')[0]!;
+    expect(span(squirrel, 'x')).toBe(2);
+    expect(span(squirrel, 'z')).toBeLessThanOrEqual(7);
+  });
+
+  it('gives each land animal a head that moves on its own, at its front (+z)', () => {
+    for (const s of STRUCTURES.filter((s) => s.kind === 'animal')) {
+      expect(partsOf(s), s.name).toEqual(new Set(['base', 'head']));
+      const voxels = [...structureVoxels(s)];
+      const front = Math.max(...voxels.map((v) => v.z));
+      expect(voxels.filter((v) => v.z === front).every((v) => v.part === 'head'), s.name).toBe(true);
+    }
+  });
+
+  it('spreads each bird\'s and bat\'s wings either side of its body as parts that beat, a bird\'s 10 voxels across and a bat\'s 6, within `BIRD_REACH` of its middle', () => {
+    for (const s of STRUCTURES.filter((s) => s.kind === 'bird' || s.kind === 'bat')) {
+      expect(partsOf(s), s.name).toEqual(new Set(['base', 'wingLeft', 'wingRight']));
+      const voxels = [...structureVoxels(s)];
+      const xs = (part: string) => voxels.filter((v) => v.part === part).map((v) => v.x);
+      expect(Math.max(...xs('wingLeft')), s.name).toBeLessThan(Math.min(...xs('base')));
+      expect(Math.min(...xs('wingRight')), s.name).toBeGreaterThan(Math.max(...xs('base')));
+      expect(xs('wingLeft').length, s.name).toBe(xs('wingRight').length);
+      const across = Math.max(...voxels.map((v) => v.x)) - Math.min(...voxels.map((v) => v.x)) + 1;
+      expect(across, s.name).toBe(s.kind === 'bird' ? 10 : 6);
+      expect(reach(s), s.name).toBeLessThanOrEqual(BIRD_REACH);
+      expect(s.size.y, s.name).toBeLessThanOrEqual(3);
     }
   });
 });
