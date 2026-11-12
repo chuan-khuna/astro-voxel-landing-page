@@ -6,3 +6,4 @@ site/.tmp/
 site/test-results/
 site/playwright-report/
 site/blob-report/
+.scratch/*/screenshots/

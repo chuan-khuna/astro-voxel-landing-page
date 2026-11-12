@@ -48,7 +48,7 @@ Use Playwright for browser checks in `site/`, and keep its files where they belo
 
 - **Lasting browser tests:** `site/e2e/*.spec.ts`, configured in `site/playwright.config.ts` and run with `bun run e2e`. If a check would be worth running again, write it here rather than as a one-off script.
 - **Throwaway scripts** (a one-off probe or a screenshot run): `site/.tmp/`, which is gitignored. Never leave them in `site/` itself or commit them.
-- **Screenshots for review:** `.scratch/<feature-slug>/screenshots/`, committed.
+- **Screenshots for review:** `.scratch/<feature-slug>/screenshots/`, gitignored. Never commit screenshots or recordings.
 - **Playwright output** (`test-results/`, `playwright-report/`): left where Playwright writes it, gitignored.
 
 Astro allows only one dev server per project. The e2e config serves its own build with `astro preview`; don't start a second `astro dev`.
