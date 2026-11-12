@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BIOME_IDS, BOAT_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_VARIANTS, SHIP_KINDS } from '@/world';
+import { BIOME_IDS, BOAT_KINDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, PLACED_LANDMARK_IDS, SHIP_KINDS } from '@/world';
 import { GROUND_DETAIL, INTERIOR, STRUCTURE } from '@/render/voxelTiers';
 import { STRUCTURES, STRUCTURE_FILES, variantsOf } from './index';
 import { parseStructure, structureVoxels, voxelAt, type Structure } from './parse';
@@ -363,6 +363,59 @@ describe('the boats and ships', () => {
       const bow = Math.max(...zs);
       const middle = Math.round((Math.min(...zs) + bow) / 2);
       expect(across(bow), s.name).toBeLessThan(across(middle));
+    }
+  });
+});
+
+describe('the Decoration', () => {
+  const tallest = (s: Structure) => s.size.y - s.anchor.y;
+  /** The span of a structure's voxels along an axis, in voxels (max − min + 1). */
+  const width = (s: Structure, axis: 'x' | 'z') => {
+    const values = [...structureVoxels(s)].map((v) => v[axis]);
+    return Math.max(...values) - Math.min(...values) + 1;
+  };
+
+  it('gives every Biome one piece of each kind, numbered from 1', () => {
+    for (const biome of BIOME_IDS) for (const kind of DECORATION_KINDS) expect(variantsOf(kind, biome).map((s) => s.variant), `${kind} ${biome}`).toEqual([1]);
+  });
+
+  it('stands each piece on one cell, from the ground, never taller than the generator keeps clear for it (`DECORATION_HEIGHT`)', () => {
+    for (const kind of DECORATION_KINDS) {
+      for (const s of STRUCTURES.filter((s) => s.kind === kind)) {
+        expect(s.footprint, s.name).toEqual({ width: 1, depth: 1 });
+        expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
+        expect(tallest(s) / STRUCTURE, s.name).toBeLessThanOrEqual(DECORATION_HEIGHT[kind]);
+      }
+    }
+  });
+
+  it('keeps to the sizes in the README: grass, clumps and rocks 2–4 voxels tall, a bush 4–6, a small tree 12–16, a building 20 at most', () => {
+    const tall: Record<string, [number, number]> = { grass: [2, 4], clump: [2, 4], rocks: [2, 4], bush: [4, 6], sapling: [12, 16], fence: [4, 8], lamp: [10, 16], shed: [10, 16], windmill: [14, 20] };
+    for (const kind of DECORATION_KINDS) {
+      for (const s of STRUCTURES.filter((s) => s.kind === kind)) {
+        const [low, high] = tall[kind]!;
+        expect(tallest(s), s.name).toBeGreaterThanOrEqual(low);
+        expect(tallest(s), s.name).toBeLessThanOrEqual(high);
+      }
+    }
+  });
+
+  it('makes the small tree a smaller species than the Garden\'s tree: its crown 4–5 voxels across and lower', () => {
+    for (const biome of BIOME_IDS) {
+      const [sapling] = variantsOf('sapling', biome);
+      const [tree] = variantsOf('tree', biome);
+      for (const axis of ['x', 'z'] as const) expect(width(sapling!, axis), sapling!.name).toBeLessThanOrEqual(5);
+      expect(tallest(sapling!), sapling!.name).toBeLessThan(tallest(tree!));
+    }
+  });
+
+  it('fronts each minor building on +z, so turning it south or east shows its front', () => {
+    for (const kind of ['shed', 'windmill'] as const) for (const s of STRUCTURES.filter((s) => s.kind === kind)) expect(s.door, s.name).toBe('+z');
+  });
+
+  it('never stands a Landmark Variant lower than the generator assumes (`LANDMARK_MIN_HEIGHT`)', () => {
+    for (const kind of PLACED_LANDMARK_IDS) {
+      for (const s of STRUCTURES.filter((s) => s.kind === kind)) expect(tallest(s) / STRUCTURE, s.name).toBeGreaterThanOrEqual(LANDMARK_MIN_HEIGHT[kind]);
     }
   });
 });

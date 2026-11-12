@@ -43,6 +43,7 @@ describe('mesher', () => {
     expect(quads(slab)).toBeGreaterThan(6);
   });
 
+  // Forty Worlds take a few seconds: more than Vitest's default 5s when files run in parallel.
   it('keeps every sampled World, including 4-Isle ones, under the triangle budget', () => {
     let fourIsles = 0;
     for (let n = 0; n < 40; n++) {
@@ -52,5 +53,5 @@ describe('mesher', () => {
       expect(triangleCount(terrain) + triangleCount(detail)).toBeLessThanOrEqual(MAX_TRIANGLES);
     }
     expect(fourIsles).toBeGreaterThan(0);
-  });
+  }, 20_000);
 });

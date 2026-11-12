@@ -13,11 +13,15 @@
 import * as THREE from 'three/webgpu';
 import type { Structure } from '@/structures';
 import type { StructurePart } from '@/structures/roles';
+import type { Facing } from '@/world';
 import { meshVoxels, triangleCount, VoxelGrid, type ChunkMesh } from './mesher';
 import { LOOK } from './palette';
 import { drawStructure } from './structureModels';
 import { voxelMaterial } from './voxelMaterial';
 import type { WorldColours } from './worldVoxels';
+
+/** Quarter turns that take a front (a door, a bow) drawn towards +z (south) to each facing. */
+export const FACING_TURNS: Record<Facing, number> = { south: 0, east: 1, north: 2, west: 3 };
 
 /**
  * Where one copy goes, in world units, and how many quarter turns (about +y)

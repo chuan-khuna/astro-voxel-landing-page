@@ -241,9 +241,9 @@ chosen once in `mountWorld`): no MSAA, a 1024px shadow map instead of
 2048px, and frames that only ambient motion asks for (the sea bobbing, ships
 sailing, the Guide idling, the developer working) at most 30 a second. Camera moves
 (drags, pinches, flights) always render every frame. The tier changes how
-the World is drawn, never what is in it: every Landmark, plant, boat, ship
-and buoy is there in both, and Decoration and Ambient Life (polish) will
-read the tier for their density. The DPR cap stays 1.5 on touch devices and
+the World is drawn, and the reduced tier shows every other piece of
+Decoration (polish 08); every Landmark, plant, boat, ship and buoy is there
+in both. Ambient Life (polish) will read the tier for its density too. The DPR cap stays 1.5 on touch devices and
 2 elsewhere.
 
 - `?tier=full` or `?tier=reduced` forces a tier, to compare on one device;

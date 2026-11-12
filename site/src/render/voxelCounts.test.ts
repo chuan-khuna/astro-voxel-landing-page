@@ -4,6 +4,7 @@ import { structureVoxels } from '@/structures/parse';
 import { countVoxels, VOXEL_KINDS } from './voxelCounts';
 import { plantStructure } from './gardenPlants';
 import { vesselStructure } from './vesselModels';
+import { decorationStructure } from './decorationModels';
 import { worldToVoxels } from './worldVoxels';
 
 const counts = { projects: 6, pinned: 2, clients: 5, partners: 3 };
@@ -26,7 +27,7 @@ describe('countVoxels', () => {
   });
 
   it('counts every kind present in this World', () => {
-    for (const kind of ['terrain', 'landmarks', 'plants', 'houseRoom', 'boats', 'ships', 'buoys', 'bridges', 'stairs'] as const) {
+    for (const kind of ['terrain', 'landmarks', 'plants', 'decoration', 'houseRoom', 'boats', 'ships', 'buoys', 'bridges', 'stairs'] as const) {
       if (kind === 'bridges' && world.bridges.length === 0) continue;
       if (kind === 'stairs' && world.stairs.length === 0) continue;
       expect(tally[kind], kind).toBeGreaterThan(0);
@@ -38,6 +39,11 @@ describe('countVoxels', () => {
     expect(world.ships.length).toBe(counts.partners);
     expect(tally.boats).toBe(world.boats.reduce((sum, b) => sum + voxelsIn(vesselStructure('boat', biome, b.kind)), 0));
     expect(tally.ships).toBe(world.ships.reduce((sum, s) => sum + voxelsIn(vesselStructure('ship', biome, s.kind)), 0));
+  });
+
+  it('counts every piece of Decoration as the structure of its kind', () => {
+    expect(world.decoration.length).toBeGreaterThan(0);
+    expect(tally.decoration).toBe(world.decoration.reduce((sum, d) => sum + voxelsIn(decorationStructure(world.biome.id, d.kind)), 0));
   });
 
   it('counts nothing for kinds the content leaves out', () => {

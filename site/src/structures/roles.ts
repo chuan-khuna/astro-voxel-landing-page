@@ -66,6 +66,11 @@ export const STRUCTURE_ROLES = {
   hullRedDark: { fixed: 'hullRed', dl: -0.08 },
   hullNavy: { fixed: 'hullNavy' },
   hullNavyDark: { fixed: 'hullNavy', dl: -0.07 },
+  // Decoration (polish 08): rock piles in the Biome's stone, and tufts of its grass.
+  rock: { biome: 'rock' },
+  rockDark: { biome: 'rockDark' },
+  turf: { biome: 'grass', dl: -0.08 },
+  turfLight: { biome: 'grass', dl: 0.05 },
   // Plants.
   foliage: { biome: 'foliage' },
   foliageLight: { biome: 'foliage', dl: 0.05 },

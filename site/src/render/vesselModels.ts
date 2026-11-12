@@ -8,9 +8,9 @@
  *
  * Pure: no three.js.
  */
-import type { BiomeId, Boat, Facing, World } from '@/world';
+import type { BiomeId, Boat, World } from '@/world';
 import { variantsOf, type Structure } from '@/structures';
-import type { InstancePlacement } from './structureMeshes';
+import { FACING_TURNS, type InstancePlacement } from './structureMeshes';
 import type { ShipPose } from './shipMotion';
 
 export type VesselKind = 'boat' | 'ship';
@@ -21,9 +21,6 @@ export function vesselStructure(vessel: VesselKind, biome: BiomeId, kind: number
   if (!s) throw new Error(`No ${vessel} of kind ${kind} for the ${biome} Biome`);
   return s;
 }
-
-/** Quarter turns that take a bow drawn towards +z (south) to each facing. */
-const FACING_TURNS: Record<Facing, number> = { south: 0, east: 1, north: 2, west: 3 };
 
 /** A moored boat: its footprint's middle on its berth cell's middle, on the sea floor, its bow along its facing. */
 export function boatPlacement(boat: Pick<Boat, 'cell' | 'facing'>): InstancePlacement {

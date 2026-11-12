@@ -6,6 +6,7 @@ import { LANDMARK_VARIANTS, houseYard, placeLandmarks } from './landmarks';
 import { sailingRoutes } from './ships';
 import { BOAT_KINDS, SHIP_KINDS, vesselIds, vesselKind } from './vessels';
 import { placeBuoys } from './buoys';
+import { placeDecoration } from './decoration';
 import { buildStrata, buildTerrain } from './terrain';
 import { site } from '@/data/site';
 import {
@@ -17,6 +18,7 @@ import {
   type Cell,
   type ContentCounts,
   type Isle,
+  type Path,
   type PlacedLandmark,
   type PlacedLandmarkId,
   type Terrain,
@@ -63,6 +65,7 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
     if (!found) continue;
     const landmarks = pickVariants(seed, biome.id, found.landmarks);
     const { route } = found;
+    const paths: Path[] = [{ from: 'dock', to: 'house', cells: route }];
     const routes = sailingRoutes(terrain, isles, bridges, [...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)], counts.partners);
     const ships = withKinds(routes, counts.partnerIds, 'partner', SHIP_KINDS);
     return {
@@ -73,12 +76,13 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
       strata: buildStrata(rng, Math.max(...terrain.heights)),
       isles,
       bridges,
-      paths: [{ from: 'dock', to: 'house', cells: route }],
+      paths,
       stairs: stairsAlong(terrain, bridges, route),
       landmarks,
       boats,
       ships,
       buoys: placeBuoys(terrain, bridges, landmarks.find((l) => l.id === 'dock'), boats.map((b) => b.cell), ships),
+      decoration: placeDecoration(seed, biome.id, terrain, bridges, paths, landmarks),
       views: deriveViews(isles, landmarks, boats),
     };
   }

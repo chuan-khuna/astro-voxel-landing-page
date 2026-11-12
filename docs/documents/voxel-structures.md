@@ -8,7 +8,7 @@ Gallery.
 
 - Files: `site/src/structures/<kind>/<biome>-<variant>.structure` (`house`,
   `station`, `mailbox`, `dock`, `garden`; `tree` and `flower`; `boat` and
-  `ship`; `room` and `developer` for the House Interior)
+  `ship`; `room` and `developer` for the House Interior; the Decoration kinds `grass`, `clump`, `rocks`, `bush`, `sapling`, `fence`, `lamp`, `shed`, `windmill`)
 - Code: `site/src/structures/` (parser, roles, registry, Vite plugin),
   `site/src/render/structureModels.ts` (placing), `structureMeshes.ts`
   (instancing), `interiorModel.ts` (the House Interior's room), `site/src/dev/` and `site/src/integrations/modelGallery.ts`
@@ -17,7 +17,7 @@ Gallery.
   `docs/adr/0006-voxel-resolution-tiers.md`
 - Tests: `structures/parse.test.ts`, `structures/structures.test.ts`,
   `render/structureModels.test.ts`, `render/structureMeshes.test.ts`,
-  `render/interiorModel.test.ts`, `render/vesselModels.test.ts`
+  `render/interiorModel.test.ts`, `render/vesselModels.test.ts`, `render/decorationModels.test.ts`
 
 ## The format
 
@@ -46,7 +46,7 @@ layers 2-7
 
 | Field | Meaning |
 |---|---|
-| `kind` | What the structure is: a Landmark (`house`, `station`, `mailbox`, `dock`, `garden`: the Garden's fence), a Garden plant (`tree`, `flower`), a Client's `boat` or a Partner's `ship`, a House Interior `room` or the `developer`; later Decoration, creatures. |
+| `kind` | What the structure is: a Landmark (`house`, `station`, `mailbox`, `dock`, `garden`: the Garden's fence), a Garden plant (`tree`, `flower`), a Client's `boat` or a Partner's `ship`, a House Interior `room` or the `developer`, a piece of Decoration (`grass`, `clump`, `rocks`, `bush`, `sapling`, `fence`, `lamp`, `shed`, `windmill`); later creatures. |
 | `biome` | The Biome whose style it is (`tropical`, `northern`, `autumn`, `volcanic`), or `any` for one shared by every Biome. |
 | `variant` | Its Variant number within that kind and Biome, from 1 with no gaps. For a boat or ship it is the vessel's kind. |
 | `footprint` | Its footprint in cells, `<width>x<depth>`; each cell is `scale` voxels (8 by default), so every layer is `scale × width` characters wide and `scale × depth` rows deep. |
@@ -82,6 +82,7 @@ the terrain:
 | Openings and trim | `door`, `doorWood`, `window`, `frame`, `trim`, `accent` (the Biome's accent), `metal`, `metalDark`, `flag` (a mailbox's red flag), `canvas` (sail, awning, rope), `lamp` |
 | Hulls | `hullRed`, `hullRedDark`, `hullNavy`, `hullNavyDark` (painted hulls; wooden and iron hulls use `bamboo`, `timber`, `slate` and their dark shades) |
 | Plants | `foliage`, `foliageLight`, `foliageDark` (the Biome's foliage), `leafGold` (autumn leaves), `flower`, `flowerLight`, and for the Garden's flowers `stem`, `stemLight`, `stemDark` (one green in every Biome), `petalWhite`, `petalYellow`, `petalOrange`, `petalRed`, `petalBlue`, `petalBlueLight` and `pollen` |
+| Decoration | `rock`, `rockDark` (the Biome's stone, for rock piles), `turf`, `turfLight` (the Biome's grass, darker or lighter, for tufts) |
 | House Interior | `screen` (the computer's screen, which glows with code), `fire` (a hearth or brazier), `desk`, `chair`, and the developer's `skin`, `hair`, `shirt`, `trousers`, `shoe` |
 
 A new material is a new role in `roles.ts` (and, if needed, a fixed colour
@@ -155,7 +156,7 @@ greedy-meshed once with it, with the soft-voxel material at ⅛ unit.
 ## Repeated structures
 
 `render/structureMeshes.ts` draws structures that repeat (the Garden's
-flowers and trees, the boats and ships; later Decoration): `structureInstances(structure,
+flowers and trees, the boats and ships, the Decoration): `structureInstances(structure,
 colours, placements, { part?, pivot? })` meshes the structure once
 (`structureGeometry`) and draws every copy as one `InstancedMesh`, in the
 soft-voxel material in local space. A placement is a point in world units
@@ -166,7 +167,7 @@ quarter turns, so their seams stay on voxel edges; a sailing ship turns by
 any fraction (its heading), its seams turning with it. The Model Gallery
 uses it for every model, and the World for the Garden's plants
 (`render/garden.ts`, see "The Garden" below) and the boats and ships
-(`render/boats.ts`, `render/ships.ts`; see "Boats and ships").
+(`render/boats.ts`, `render/ships.ts`; see "Boats and ships") and the Decoration (`render/decoration.ts`; see "Decoration").
 
 ## The Landmark Variants
 
@@ -336,6 +337,37 @@ and one ship per ship kind, numbered from 1; each boat's and ship's size;
 that every ship is at least twice as long as any boat, 2.5 times as tall
 and five times the voxels; and that each hull narrows towards its bow (+z).
 
+## Decoration
+
+Polish ticket 08. Each Biome has one piece of each Decoration kind
+(`DECORATION_KINDS` in `world/types.ts`), `<kind>/<biome>-1`, 36 files, all
+1×1 (8×8), standing on the ground (anchor `0 0 0`). The generator places
+them (`world-generator.md`, "Decoration"); `render/decorationModels.ts`
+takes each piece's structure, its placement (its cell's middle, on its
+ground, turned to its facing) and the pieces a render tier shows, and
+`render/decoration.ts` draws one `InstancedMesh` per structure. They were
+drawn with a throwaway generator script and committed as plain ASCII; edit
+the files directly. Sizes follow `.scratch/voxel-world-polish/README.md`;
+no file may stand taller than `DECORATION_HEIGHT` for its kind.
+
+| Kind | Size (⅛ voxels) | tropical | northern | autumn | volcanic |
+|---|---|---|---|---|---|
+| `grass` | tufts 2–4 tall | lush green tufts | pale tufts, frost on the tips | dry gold grass | sparse dark tufts, black pebbles |
+| `clump` | two 3×3 clumps, 3–4 tall | red and pink blossoms | blue and white wildflowers | orange and yellow marigolds | fire-red blooms, ember hearts |
+| `rocks` | a pile up to 6 across, 4 tall | boulders with moss | boulders under snow | boulders, fallen gold leaves | black basalt, glowing cracks |
+| `bush` | 4×4, 5–6 tall | a shrub with pink blossoms | a juniper under snow | a shrub turning gold and red | a dark fern, ember berries |
+| `sapling` | 12–15 tall, crown 4–5 across | a young papaya | a young birch | a young maple | a charred snag |
+| `fence` | a run across the cell, 6–8 tall | bamboo poles and rails | a split-rail log fence under snow | a woven willow hurdle | iron railings, ember tips |
+| `lamp` | 13–16 tall | a tiki torch | an iron lamp post | a lantern on a crooked post | a stone lantern with fire |
+| `shed` | 6×6 walls, 11–12 tall, door +z | a bamboo hut under thatch | a log shed, snow on its shingles | a timber shed, tiled roof, green door | a stone store, slate roof |
+| `windmill` | a 4×5 tower, sails on +z, 15 tall | bamboo, thatch cap, canvas sails | timber, snowy shingle cap | whitewash, tiled cap | stone, slate cap, red sails |
+
+The small tree (`sapling`) is a different, smaller species than each
+Biome's Garden tree. The lamps' glass and flames are plain colours for now;
+they light up with the torches and Night light ticket (16). The shed and
+windmill front on +z (`door: +z`), so the generator turns them south or
+east to face the camera.
+
 ## The House Interior rooms
 
 One room per Biome (polish ticket 04), drawn at 1/16 unit (`scale: 16`,
@@ -398,6 +430,15 @@ height; and that each has a lamp or a fire. `interiorModel.test.ts` checks
 the furnished room, `coarsen`, the room's place in the World and in its
 structure grid, and `showsInterior`.
 
+For Decoration, `structures.test.ts` checks one piece of each kind per
+Biome, numbered 1; that each is 1×1, anchored on the ground and no taller
+than `DECORATION_HEIGHT`; the README's sizes per kind; that the small tree
+is lower than the Garden's tree with a crown at most 5 across; that the
+shed and windmill front on +z; and that every Landmark Variant stands at
+least `LANDMARK_MIN_HEIGHT` tall (Decoration by a Landmark stays below it).
+`decorationModels.test.ts` checks each piece's structure and placement, and
+which pieces each render tier shows.
+
 ## The Model Gallery
 
 `/dev/models` shows every structure of one kind (a picker) in a grid:
@@ -414,7 +455,8 @@ computer, at its own 1/16 unit; a Garden fence (kind `garden`) shows
 planted full, six flowers and three trees, as a World lays them out
 (`plantedGarden`); boats and ships float on a patch of their Biome's
 shallow sea (darker at Night), its top at sea level as in the World, the
-boats packed closer so each shows larger; **Night**
+boats packed closer so each shows larger; the Decoration kinds sit in a
+group of their own in the picker, packed closer still; **Night**
 switches the light, and the page's own colours follow (the site's theme
 tokens and fonts). On a phone the buttons show icons only (their names stay
 as tooltips and for screen readers). It renders on demand and on resize.

@@ -229,6 +229,26 @@ export interface ShipRoute {
   kind: number;
 }
 
+/**
+ * The kinds of Decoration, each a structure kind (`structures/<kind>/`)
+ * drawn in every Biome's style: tufts of grass, a flower clump, a rock
+ * pile, a bush and a small tree (a smaller species than the Garden's), then
+ * the minor buildings: a fence run, a lamp, a shed and a windmill.
+ */
+export const DECORATION_KINDS = ['grass', 'clump', 'rocks', 'bush', 'sapling', 'fence', 'lamp', 'shed', 'windmill'] as const;
+export type DecorationKind = (typeof DECORATION_KINDS)[number];
+
+/**
+ * One piece of Decoration: scenery that stands for nothing and cannot be
+ * clicked, on one land cell, turned to `facing` (its structure is drawn
+ * facing south, +z).
+ */
+export interface Decoration {
+  kind: DecorationKind;
+  cell: Cell;
+  facing: Facing;
+}
+
 /** A camera view: what to look at and how much of the World to fit. */
 export interface View {
   target: Vec3;
@@ -255,5 +275,7 @@ export interface World {
   ships: ShipRoute[];
   /** Buoys: sea cells, each with a buoy whose lamp glows at Night. Clear of the ships, boats, jetty and bridges. */
   buoys: Cell[];
+  /** Decoration, in the order it was placed (`decoration.ts`): never on a footprint, a path, a bridge end or in the Garden, never in front of a Landmark. */
+  decoration: Decoration[];
   views: Record<ViewLandmarkId, View>;
 }

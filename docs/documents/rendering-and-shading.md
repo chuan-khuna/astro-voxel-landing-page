@@ -26,7 +26,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid, the ¼-unit detail grid and the ⅛-unit structure grid with a shared colour list. `drawDetail(world, grid, colours, drawn?)`: the detail grid's parts in order (bridges, stairs, each Landmark, buoys), telling `drawn` after each. `meshWorld(world)`: the three grids meshed. | no |
 | `interiorModel.ts` | The House Interior's room, pure (see `voxel-structures.md`, "The House Interior rooms"): `furnishedRoom(biome)` (the room with the developer seated in it, 1/16 unit), `coarsen` (a structure at a coarser scale), `interiorPlacement` and `drawWorldRoom` (the room's place in the World, and the room at ⅛ unit in the structure grid), `developerBox`, `screenFace`, `roomLight`, `DEVELOPER_PARTS`, and `showsInterior` (when the Interior scene takes over). | no |
 | `structureModels.ts` | Structures placed in a World (see `voxel-structures.md`): `structureColour` (a colour role's id), `drawStructure` (a structure, or one part, at a placement, turned to its door), `landmarkStructure` and `landmarkPlacement` (a placed Landmark's Variant, and where and which way it stands), `houseStructure` and `housePlacement` (the same for the House), `drawStructures` (the structure grid's contents) and `houseWindowFaces` (the lit window faces). | no |
-| `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, plants, House room, boats, ships, buoys, bridges, stairs), the total and those in the three meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); plants are each Garden plant's structure voxels (`gardenPlantsOf`; instanced, outside the grids), the House room the House Interior's room at ⅛ unit in the structure grid (`drawWorldRoom`); the House Interior scene is not counted; the House's structure (base and lid, ⅛ unit) counts with the Landmarks; boats and ships are each one's structure voxels (instanced, outside the grids). About 2 ms. | no |
+| `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, plants, Decoration, House room, boats, ships, buoys, bridges, stairs), the total and those in the three meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); plants are each Garden plant's structure voxels (`gardenPlantsOf`; instanced, outside the grids), the House room the House Interior's room at ⅛ unit in the structure grid (`drawWorldRoom`); the House Interior scene is not counted; the House's structure (base and lid, ⅛ unit) counts with the Landmarks; boats, ships and pieces of Decoration are each one's structure voxels (instanced, outside the grids; every piece, as the full tier shows it). About 2 ms. | no |
 | `frameMeter.ts` | `createFrameMeter()`: FPS and frame time from frame timestamps, smoothed (exponential, 0.1); a gap over 250 ms ends a burst and the next starts afresh; `'idle'` with no frame for 500 ms or only a lone frame. | no |
 | `landmarkModels.ts` | The ¼-unit parts of the Landmarks (the Dock's deck and jetty), and `landmarkExtent(world, landmark)`: the box a Landmark covers, measured from its ¼-unit parts, its Variant's structure and, for the Garden, its plants, and never smaller than its footprint (for the House, the House's 3×3 up to its roof). | no |
 | `gardenPlants.ts` | The Garden's plants (polish ticket 05): `plantStructure` (the Biome's tree; its flowers in turn), `gardenPlantsOf(world)` (every flower and tree with its cell and structure), `plantExtent` (a plant's box, for its link) and `plantedGarden(biome)` (a fence planted full, for the Model Gallery). | no |
@@ -36,6 +36,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `houseMotion.ts` | `ROOF_LIFT`, `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame) and `developerPose(seconds)` (typing and reading). | no |
 | `vesselModels.ts` | The boats and ships (polish ticket 06): `vesselStructure` (a kind's structure in a Biome), `boatsOf(world)`, `boatPlacement` and `shipPlacement` (see "Boats and ships"). | no |
 | `boats.ts` | `buildBoats(world)`: one `InstancedMesh` per boat structure, one instance per moored boat. | yes |
+| `decorationModels.ts` | Decoration as structures: `decorationStructure(biome, kind)`, `decorationPlacement(world, piece)` (its cell's middle, on its ground, turned to its facing) and `decorationOf(world, tier)` (every piece on the full tier, every other one on the reduced tier). | no |
+| `decoration.ts` | `buildDecoration(world, tier)`: one `InstancedMesh` per Decoration structure, one instance per piece the tier shows. | yes |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
 | `guideModel.ts` | The Guide's model: `guideVoxels(colours)` (a 6×6×6 ¼-unit cube centred on its origin, side fins, an antenna, the bezel on +x), `GUIDE_SCREEN` (the screen's rectangle) and `GUIDE_FACES` (a 12 × 10 pixel-eye face per mood, and a blink). | no |
 | `guideMotion.ts` | `guideSpot(world, id)` (where the Guide floats beside a placed Landmark), `voxelFlights` and `flightPoint` (the assembly), `travelPoint` (flying between spots on the Tour), `hoverPose(seconds)` (the bob) and `blinking(seconds)`. | no |
@@ -62,7 +64,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
 meshing run in the Web Worker. Only geometry upload, materials, the sea,
-the instanced boats, ships and plants, the House's lid, the House Interior scene and the Guide
+the instanced boats, ships, plants and Decoration, the House's lid, the House Interior scene and the Guide
 (small grids) are built on the main thread.
 
 ## Voxel grids
@@ -524,7 +526,8 @@ camera to a Landmark (see "Landmark focus and flights").
   `ui.tierOverride` from `?tier=`). `full`: MSAA, a 2048² shadow map,
   every frame. `reduced` (a touch device whose screen's shorter side is
   under 600px): no MSAA, a 1024² shadow map, and ambient frames at most 30 a
-  second (below). It never adds or removes anything in the World.
+  second (below), and every other piece of Decoration (`decorationOf`). It
+  never adds or removes a Landmark, plant, boat, ship or buoy.
   `canvas.dataset.tier` and `view.tier` report it.
 - **Camera:** orthographic, on the true isometric axis (1, 1, 1). Zoom 1
   frames the Overview view so every Isle fits at any aspect ratio; the
@@ -827,10 +830,15 @@ cabins. Polish ticket 07 replaced the two flat sea planes with the voxel sea,
 now counted in `data-triangles`: 38,664 (`42`), 51,948 (`lighthouse`),
 62,152 (`seed-2`) and 68,532 (`seed-1`), the sea about two thirds of it.
 Headless Chrome (software GL) drew `lighthouse` at about 18 fps on
-desktop (20.5 before) and held 30 fps on the phone tier. Decoration (a later ticket) will add most of the remaining
-triangles.
+desktop (20.5 before) and held 30 fps on the phone tier. Polish ticket 08 added
+the Decoration (instanced): with the site's content `data-triangles` reads 50,526
+(`42`, volcanic, sparse), 95,524 (`lighthouse`), 98,748 (`lanternfish`), 104,704
+(`seed-2`) and 133,734 (`seed-1`) on the full tier, and 44,934, 73,716, 75,076,
+83,478 and 100,446 on the reduced tier (half the Decoration): the Decoration costs
+about 11,000–65,000, roughly 240 a piece. In headless Chrome (software GL, a
+slower run than the one above) `lighthouse` drew about 5.7 fps with it and 6.0–6.7
+without; the phone tier held 29 fps.
 
 ## Not yet built
 
-Animation of plants, boats and ships rocking on the swell, and the
-reduced-decoration tier.
+Animation of plants and Decoration (wind sway), and boats and ships rocking on the swell.

@@ -1,4 +1,5 @@
 import type { Rng } from './prng';
+import { forEachRayColumn, SAMPLES_PER_CELL } from './sightline';
 import { surfaceOf } from './terrain';
 import type { BiomeId, Boat, Bridge, Cell, Facing, Footprint, Isle, PlacedLandmark, PlacedLandmarkId, Terrain } from './types';
 
@@ -57,6 +58,19 @@ export const LANDMARK_HEIGHT: Record<PlacedLandmarkId, number> = {
   mailbox: 2,
 };
 /**
+ * How tall each Landmark stands at least, in units above its ground: its
+ * lowest Variant's top (the Garden's: its fence, as an empty Garden has no
+ * plants). Decoration never stands taller than the Landmark nearest it
+ * (`decoration.ts`); the structure files' tests hold every Variant to it.
+ */
+export const LANDMARK_MIN_HEIGHT: Record<PlacedLandmarkId, number> = {
+  station: 5.5,
+  house: 4,
+  garden: 1,
+  dock: 0.875,
+  mailbox: 1.25,
+};
+/**
  * How tall, in units above the Garden's ground, each part of the Garden may
  * stand: its fence (round the edge), a flower (the bed's front two rows) and
  * a tree (its back row, `LANDMARK_HEIGHT.garden`). Placement keeps the other
@@ -76,8 +90,6 @@ export const LANDMARK_VARIANTS: Record<BiomeId, Record<PlacedLandmarkId, number>
   autumn: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
   volcanic: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
 };
-/** Ground points checked for occlusion per cell edge: a ¼-cell grid. */
-const SAMPLES_PER_CELL = 4;
 
 const SIDES = [
   [1, 0],
@@ -182,19 +194,7 @@ export function placeLandmarks(
         for (let k = 0; k <= SAMPLES_PER_CELL; k++) {
           const px = c.x + i / SAMPLES_PER_CELL;
           const pz = c.z + k / SAMPLES_PER_CELL;
-          for (let s = 0; s <= reach; s++) {
-            for (let a = -1; a <= 1; a++) {
-              for (let b = -1; b <= 1; b++) {
-                const cx = Math.floor(px) + s + a;
-                const cz = Math.floor(pz) + s + b;
-                // When the ray is inside this column: t in [enter, leave).
-                const enter = Math.max(cx - px, cz - pz, 0);
-                const leave = Math.min(cx + 1 - px, cz + 1 - pz);
-                if (enter >= leave) continue;
-                if (y + enter < levelled(cx, cz)) return false;
-              }
-            }
-          }
+          if (forEachRayColumn(px, pz, reach, (cx, cz, enter) => y + enter < levelled(cx, cz))) return false;
         }
       }
     }

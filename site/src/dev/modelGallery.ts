@@ -8,12 +8,13 @@
  * A House Interior room shows furnished, the developer at their computer
  * (`furnishedRoom`), at its own 1/16 unit; a Garden fence shows planted
  * full, six flowers and three trees (`plantedGarden`); boats and ships float on
- * a patch of their Biome's sea, as in the World. Renders on demand. Dev only
+ * a patch of their Biome's sea, as in the World; each kind of Decoration shows
+ * its piece in every Biome, closer together. Renders on demand. Dev only
  * (`/dev/models`).
  */
 import * as THREE from 'three/webgpu';
 import { BIOMES } from '@/world/biomes';
-import { BIOME_IDS } from '@/world';
+import { BIOME_IDS, DECORATION_KINDS } from '@/world';
 import { STRUCTURES, type Structure } from '@/structures';
 import { furnishedRoom } from '@/render/interiorModel';
 import { plantedGarden } from '@/render/gardenPlants';
@@ -33,6 +34,8 @@ const SPACING = 6;
 const ROOM_SPACING = 4;
 /** Cells between the boats (1×1, and low): closer, so each shows larger. */
 const BOAT_SPACING = 3.5;
+/** Cells between pieces of Decoration (1×1, and small): closer, so each shows larger. */
+const DECORATION_SPACING = 3;
 /** Cells between the Gardens (5×5 with their ground): wider, so their ground patches never touch. */
 const GARDEN_SPACING = 8;
 /** Rows (in SPACING) between one row and the next: a row step is shallower on screen than a column step, so it needs more room. */
@@ -217,8 +220,9 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
       const columns = BIOME_IDS.map((biome) => list.filter((s) => s.biome === biome));
       columns.push(list.filter((s) => s.biome === null));
       const used = columns.filter((column) => column.length > 0);
-      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'boat' ? BOAT_SPACING : kind === 'garden' ? GARDEN_SPACING : SPACING;
-      const margin = kind === 'room' || kind === 'boat' ? 2 : 4;
+      const decoration = (DECORATION_KINDS as readonly string[]).includes(kind);
+      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'boat' ? BOAT_SPACING : kind === 'garden' ? GARDEN_SPACING : decoration ? DECORATION_SPACING : SPACING;
+      const margin = kind === 'room' || kind === 'boat' || decoration ? 2 : 4;
       const rows = Math.max(1, ...used.map((column) => column.length));
       used.forEach((column, c) => {
         column.forEach((s, r) => {

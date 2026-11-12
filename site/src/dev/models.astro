@@ -10,12 +10,13 @@
  */
 import '@fontsource/jersey-20';
 import '@fontsource/jersey-15';
-import { BIOME_IDS } from '@/world';
+import { BIOME_IDS, DECORATION_KINDS } from '@/world';
 import { STRUCTURES } from '@/structures';
 import { site } from '@/data/site';
 import { themeCss } from '@/data/theme';
 
-const kinds = [...new Set(STRUCTURES.map((s) => s.kind))];
+const decoration: readonly string[] = DECORATION_KINDS;
+const kinds = [...new Set(STRUCTURES.map((s) => s.kind))].filter((kind) => !decoration.includes(kind));
 const { colour, fonts } = site.brand;
 ---
 
@@ -37,6 +38,9 @@ const { colour, fonts } = site.brand;
           <span>Kind</span>
           <select data-kind>
             {kinds.map((kind) => <option value={kind}>{kind}</option>)}
+            <optgroup label="Decoration">
+              {DECORATION_KINDS.map((kind) => <option value={kind}>{kind}</option>)}
+            </optgroup>
           </select>
         </label>
         <button type="button" data-turn title="Turn a quarter" aria-label="Turn a quarter">

@@ -27,6 +27,7 @@ const KIND_LABELS: Record<VoxelKind, string> = {
   terrain: 'terrain',
   landmarks: 'Landmarks',
   plants: 'plants',
+  decoration: 'Decoration',
   houseRoom: 'House room',
   boats: 'boats',
   ships: 'ships',

@@ -45,8 +45,9 @@
  *   map is kept; one frame is rendered.
  * - DPR is capped at 1.5 on touch devices and 2 elsewhere.
  * - The render tier (`lib/renderTier.ts`): phones get the reduced tier (no
- *   MSAA, a 1024 px shadow map, ambient motion at 30 fps); camera moves
- *   always render every frame. A tier never removes anything from the World.
+ *   MSAA, a 1024 px shadow map, ambient motion at 30 fps, half the
+ *   Decoration); camera moves always render every frame. A tier never
+ *   removes a Landmark, plant, boat, ship or buoy.
  *   `ui.tierOverride` (`?tier=full|reduced`) picks one for measuring;
  *   `canvas.dataset.tier` and `WorldView.tier` say which is on.
  * - `ui.onExplore` hears the visitor pan, zoom or tab to a Landmark off
@@ -392,7 +393,7 @@ export async function mountWorld(
       scene.remove(objects.group);
       objects.dispose();
     }
-    objects = buildWorldObjects(next, nextMeshed);
+    objects = buildWorldObjects(next, nextMeshed, tier.name);
     objects.setTheme(theme);
     objects.swell(swelled);
     objects.house.setOpening(opening);

@@ -45,9 +45,11 @@ imports, so the generator stays pure.
 | File | What it does |
 |---|---|
 | `generateWorld.ts` | The public function: Seed fallback, Biome choice, the retry loop, the Dock-to-House route, derived views. |
-| `landmarks.ts` | Landmark footprints: placement, levelling, the occlusion check, the Garden's bed (its flowers and trees) and gate, and the Dock's berths (the moored boats). |
+| `landmarks.ts` | Landmark footprints: placement, levelling, the occlusion check (`sightline.ts`), `LANDMARK_HEIGHT` and `LANDMARK_MIN_HEIGHT`, the Garden's bed (its flowers and trees) and gate, and the Dock's berths (the moored boats). |
 | `ships.ts` | The Partners' sailing routes: loops through open sea. |
 | `buoys.ts` | The buoys: sea marks just off the Isles, nearest the Dock first. |
+| `decoration.ts` | Decoration: `placeDecoration`, `DECORATION_HEIGHT` and `MINOR_BUILDINGS`: pieces of scenery on free land, each below the nearest Landmark and out of every Landmark's sight line. |
+| `sightline.ts` | `forEachRayColumn`: the columns the camera's ray from a ground point passes through, the occlusion check shared by Landmark placement and Decoration. |
 | `vessels.ts` | Boat and ship kinds: `BOAT_KINDS`, `SHIP_KINDS`, `vesselKind(id, kinds)` (a stable hash of the id) and the stand-in ids. |
 | `terrain.ts` | Isle layout, noise heights, surface kinds, cliff strata. |
 | `noise.ts` | Seeded 2D simplex noise and FBM. |
@@ -84,6 +86,7 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `boats` | One per Client, up to 12 (`MAX_BOATS`), in Client order: the berth `cell` (a sea cell beside the jetty or off its tip; it may lie past the grid's edge, in the open sea), the `facing` its bow points, out to sea along the jetty, and its `kind` (1 to `BOAT_KINDS`, from its Client's id; see "Boat and ship kinds"). |
 | `ships` | One per Partner, in Partner order: `cells`, a closed loop of sea cells (each an 8-neighbour of the one before, the last of the first) sailed in order, `phase` (0–1), how far round it the ship starts, and its `kind` (1 to `SHIP_KINDS`, from its Partner's id). Cells may lie past the grid's edge. |
 | `buoys` | Up to 4 (`MAX_BUOYS`) sea cells, each with a buoy (its lamp glows at Night; see `rendering-and-shading.md`). Inside the grid, clear of the ships, boats, jetty and bridges. |
+| `decoration` | Decoration, in placement order (row by row): each piece's `kind` (`DECORATION_KINDS`), land `cell` and `facing` (its structure is drawn facing south; see "Decoration"). |
 | `views` | The two derived Landmarks, as camera views (`target`, `radius`): `overview` and `house-interior`. |
 
 ### Placed vs derived Landmarks
@@ -137,6 +140,8 @@ Dock and Mailbox. The other two are views derived from the layout:
 9. **Ships.** One sailing route per Partner (see "Ships" below). No
    randomness: the loops follow from the layout, so they draw nothing from
    the PRNG.
+10. **Decoration.** After everything else, each Biome places its own
+    Decoration over the Isles (see "Decoration" below).
 
 ### Landmark footprints
 
@@ -285,6 +290,45 @@ style (the structure `boat/<biome>-<kind>` or `ship/<biome>-<kind>`; see
 it. The salt was picked so the three mock Partners get three different
 ships; any hash may make two Clients share a kind.
 
+### Decoration
+
+Polish ticket 08 (`decoration.ts`). Scenery that stands for nothing and
+cannot be clicked: `World.decoration` lists pieces, each a kind
+(`DECORATION_KINDS`: `grass`, `clump` (a flower clump), `rocks`, `bush`,
+`sapling` (a small tree, a smaller species than the Garden's), and the
+minor buildings `fence`, `lamp`, `shed`, `windmill`), a land cell and a
+facing. The renderer draws each kind in the World's Biome's style
+(`voxel-structures.md`, "Decoration").
+
+`placeDecoration` runs on the finished layout and draws from a sequence
+of the Seed's own (`<seed>/decoration`), so it never moves the layout and
+the same layout always gets the same Decoration. It visits every cell row
+by row; a land cell may take a piece with the Biome's density (tropical and
+autumn 22%, northern 17%, volcanic 14%), then picks a kind by the Biome's
+weights among the kinds that fit there. A piece:
+
+- never stands on or beside (8-neighbour) a footprint or the Dock's jetty,
+  so the Garden and the House's yard stay clear and nothing crowds a
+  Landmark; never on a path or on the land at a bridge's end;
+- is never taller than the nearest Landmark: `DECORATION_HEIGHT[kind]`
+  (grass, clump and rocks 0.5 units, bush 0.75, fence 1, sapling, lamp and
+  shed 2, windmill 2.5) is at most `LANDMARK_MIN_HEIGHT` of the Landmark
+  nearest the cell (Station 5.5, House 4, Garden 1 (its fence), Dock 0.875,
+  Mailbox 1.25: each Landmark's lowest Variant; the lowest of several as
+  near). So only grass, clumps, rocks and bushes stand by the Dock or the
+  Garden;
+- never stands between the camera and a Landmark: every Landmark's ground
+  points (the ¼-cell grid of its footprint and jetty) cast the same sight
+  line as Landmark placement (`sightline.ts`, `forEachRayColumn`), and a
+  cell's piece must stay below the lowest sight line through it;
+- if a minor building, faces the camera (south or east), keeps 3 cells
+  from other minor buildings, and the World holds at most 5 fences, 4
+  lamps, 2 sheds and 1 windmill. Plants and rocks face any way.
+
+Over `seed-0`–`seed-399` (8 Projects) a World gets 46–369 pieces, 181 on
+average; placing it takes under 1 ms (at most about 3). The reduced render
+tier draws every other piece (`rendering-and-shading.md`).
+
 ### Buoys
 
 `buoys.ts` sets out up to 4 buoys after the ships, from the layout alone
@@ -371,7 +415,7 @@ the same 200 Seeds keep their Variants with the largest content counts.
 
 ## Not yet built
 
-Later tickets: decoration and Data Card anchors. The site passes the sizes
+Later tickets: Data Card anchors. The site passes the sizes
 of the `projects`, `clients` and `partners` collections, how many Projects
 are pinned, and the Clients' and Partners' ids (for the boat and ship
 kinds); it pairs flower `k` with the `k`-th Pinned Project by id and tree
@@ -433,6 +477,13 @@ Seeds, never snapshots:
 - buoys: at most 4, at sea inside the grid, 1–4 cells off the land, at
   least 2 cells from ship cells, the jetty, boats and bridges, 4 apart, the
   lamp in plain view (the ray march); over 90% of Worlds get two or more.
+- Decoration: more than 5 pieces in every sampled World and every kind in
+  every Biome; one piece a cell, on land, at least 2 cells (Chebyshev) from
+  every footprint and jetty cell (so never in the Garden), never on a path
+  or a bridge end; never taller than the nearest Landmark's
+  `LANDMARK_MIN_HEIGHT`; no Landmark ground point hidden by a piece's
+  column (an independent ray march); minor buildings face south or east,
+  3 cells apart;
 
 ```sh
 cd site && bun run test

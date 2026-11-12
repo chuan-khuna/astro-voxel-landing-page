@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, GARDEN_HEIGHT, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -910,5 +910,96 @@ describe('generateWorld', { timeout: 20_000 }, () => {
     }
     // Nearly every World has buoys to light at Night.
     expect(withBuoys, 'Worlds with two or more buoys').toBeGreaterThan(sampledSeeds.length * 0.9);
+  });
+
+  describe('Decoration', () => {
+    const chebyshev = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+
+    it('places Decoration on every sampled World, and every kind occurs in every Biome', () => {
+      const seen = new Map<string, Set<string>>();
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        expect(world.decoration.length, seed).toBeGreaterThan(5);
+        const kinds = seen.get(world.biome.id) ?? new Set<string>();
+        for (const d of world.decoration) kinds.add(d.kind);
+        seen.set(world.biome.id, kinds);
+      }
+      for (const biome of BIOME_IDS) expect([...(seen.get(biome) ?? [])].toSorted(), biome).toEqual([...DECORATION_KINDS].toSorted());
+    });
+
+    it('stands one piece a cell on land, never on or beside a footprint or jetty, on a path, a bridge end or in the Garden', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const { width, isle } = world.terrain;
+        const cells = world.decoration.map((d) => key(d.cell));
+        expect(new Set(cells).size, seed).toBe(cells.length);
+        const path = new Set(world.paths.flatMap((p) => p.cells.map(key)));
+        const bridgeEnds = new Set(
+          world.bridges.flatMap((b) => b.cells.flatMap((c) => SIDES.map(([dx, dz]) => key({ x: c.x + dx, z: c.z + dz })))),
+        );
+        const covered = world.landmarks.flatMap(coveredCells);
+        for (const d of world.decoration) {
+          const at = `${seed} ${d.kind} ${key(d.cell)}`;
+          expect(isle[d.cell.z * width + d.cell.x], at).not.toBe(-1);
+          expect(path.has(key(d.cell)), at).toBe(false);
+          expect(bridgeEnds.has(key(d.cell)), at).toBe(false);
+          // The Garden is a footprint too, so this keeps Decoration out of it and off its fence.
+          for (const c of covered) expect(chebyshev(c, d.cell), at).toBeGreaterThanOrEqual(2);
+        }
+      }
+    });
+
+    it('never stands taller than the nearest Landmark', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        for (const d of world.decoration) {
+          const centre = { x: d.cell.x + 0.5, z: d.cell.z + 0.5 };
+          const distance = (l: World['landmarks'][number]) =>
+            Math.min(...coveredCells(l).map((c) => Math.hypot(c.x + 0.5 - centre.x, c.z + 0.5 - centre.z)));
+          const nearest = Math.min(...world.landmarks.map(distance));
+          // Ties take the lowest of the nearest Landmarks.
+          const cap = Math.min(...world.landmarks.filter((l) => distance(l) === nearest).map((l) => LANDMARK_MIN_HEIGHT[l.id]));
+          expect(DECORATION_HEIGHT[d.kind], `${seed} ${d.kind} ${key(d.cell)}`).toBeLessThanOrEqual(cap);
+        }
+      }
+    });
+
+    it('never hides a Landmark from the isometric camera', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const { width, heights } = world.terrain;
+        const tops = new Map(world.decoration.map((d) => [key(d.cell), heights[d.cell.z * width + d.cell.x]! + DECORATION_HEIGHT[d.kind]] as const));
+        const reach = Math.max(0, ...tops.values());
+        const hidden: string[] = [];
+        for (const l of world.landmarks) {
+          for (const c of coveredCells(l)) {
+            for (let i = 0; i <= 4; i++) {
+              for (let k = 0; k <= 4; k++) {
+                const px = c.x + i / 4;
+                const pz = c.z + k / 4;
+                for (let t = 0.001; l.y + t <= reach; t += 0.02) {
+                  const top = tops.get(key({ x: Math.floor(px + t), z: Math.floor(pz + t) }));
+                  if (top !== undefined && l.y + t < top) {
+                    hidden.push(`${l.id} at ${px},${pz}`);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+        expect(hidden, seed).toEqual([]);
+      }
+    });
+
+    it('turns a minor building to face the camera (south or east), and keeps minor buildings two cells apart', () => {
+      for (const seed of sampledSeeds) {
+        const buildings = worldFor(seed).decoration.filter((d) => MINOR_BUILDINGS.includes(d.kind));
+        buildings.forEach((b, n) => {
+          expect(['south', 'east'], seed).toContain(b.facing);
+          for (const other of buildings.slice(n + 1)) expect(chebyshev(b.cell, other.cell), seed).toBeGreaterThanOrEqual(3);
+        });
+      }
+    });
   });
 });

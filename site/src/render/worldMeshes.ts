@@ -4,7 +4,8 @@
  * voxel layer that bobs, `seaModel.ts` and `seaMaterial.ts`), the
  * Partners' sailing ships (`ships.ts`) and the Clients' moored boats
  * (`boats.ts`), both instanced, the House's moving parts (`house.ts`:
- * its lid and its lights), the Garden's plants (`garden.ts`, instanced) and
+ * its lid and its lights), the Garden's plants (`garden.ts`, instanced), the
+ * Decoration (`decoration.ts`, instanced, thinned on the reduced tier) and
  * the buoys' lamps. The House Interior is a
  * scene of its own (`interior.ts`).
  * `setTheme` recolours the sea and lights the lamps and the House's windows
@@ -23,12 +24,14 @@ import { buildFleet, type Fleet } from './ships';
 import { buildHouse, type HouseParts } from './house';
 import { buildGardenPlants } from './garden';
 import { buildBoats } from './boats';
+import { buildDecoration } from './decoration';
+import type { RenderTierName } from '@/lib/renderTier';
 import { seaModel, type SeaMesh } from './seaModel';
 import { seaMaterial } from './seaMaterial';
 
 export interface WorldObjects {
   group: THREE.Group;
-  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure and room, boats, ships, the House's lid, the Garden's plants) and the sea's water and seabed. */
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure and room, boats, ships, the House's lid, the Garden's plants, the Decoration the tier shows) and the sea's water and seabed. */
   triangles: number;
   /** The Partners' ships, which sail: `ships.sail(seconds)` moves them. */
   ships: Fleet;
@@ -41,8 +44,12 @@ export interface WorldObjects {
   dispose: () => void;
 }
 
-/** Build the World's three.js objects. Pass `meshed` when it was meshed elsewhere (the Web Worker). */
-export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(world)): WorldObjects {
+/**
+ * Build the World's three.js objects. Pass `meshed` when it was meshed
+ * elsewhere (the Web Worker). The render tier only thins the Decoration
+ * (`decorationModels.ts`); every Landmark is the same on every tier.
+ */
+export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(world), tier: RenderTierName = 'full'): WorldObjects {
   const { terrain, detail, structure, voxelSizes } = meshed;
   const group = new THREE.Group();
   const materials = voxelSizes.map((size) => voxelMaterial(size));
@@ -76,10 +83,12 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
   group.add(plants.group);
   const boats = buildBoats(world);
   group.add(boats.group);
+  const decoration = buildDecoration(world, tier);
+  group.add(decoration.group);
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + sea.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + sea.triangles,
     ships,
     house,
     swell: sea.swell,
@@ -98,6 +107,7 @@ export function buildWorldObjects(world: World, meshed: MeshedWorld = meshWorld(
       lamps.dispose();
       plants.dispose();
       boats.dispose();
+      decoration.dispose();
     },
   };
 }

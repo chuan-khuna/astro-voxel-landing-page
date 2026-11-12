@@ -162,6 +162,7 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 - It is never taller than the nearest Landmark.
 - It never stands between the camera and any Landmark. This uses the same occlusion check as terrain placement.
 - A reduced tier applies on small devices.
+- Built in ticket 08: nine kinds, one piece each per Biome (`grass`, `clump`, `rocks`, `bush`, `sapling`, `fence`, `lamp`, `shed`, `windmill`; all 1×1), placed from a sequence of the Seed's own (`<seed>/decoration`) after the layout, so no layout moves. A piece keeps off and one cell clear of every footprint and jetty (so out of the Garden and the House's yard), off paths and bridge ends; "taller than the nearest Landmark" compares its kind's height cap (`DECORATION_HEIGHT`) with the nearest Landmark's lowest Variant (`LANDMARK_MIN_HEIGHT`: the Garden counts as its 1-unit fence, the Dock as 0.875); the occlusion check is the Landmarks' own sight line (`world/sightline.ts`). Minor buildings face south or east, keep 3 cells apart and are capped per World. The reduced tier draws every other piece. Lamps are plain colour until the Night light ticket (16).
 
 **Water**
 - The sea is a 1-unit voxel layer with the soft-voxel seam and bevel look.
