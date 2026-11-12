@@ -27,15 +27,20 @@ describe('roofLift', () => {
 
 describe('openingStep', () => {
   it('moves the opening towards open or shut over `ms`, and stops there', () => {
-    expect(openingStep(0, true, 100, 400)).toBeCloseTo(0.25);
-    expect(openingStep(0.9, true, 200, 400)).toBe(1);
-    expect(openingStep(1, false, 100, 400)).toBeCloseTo(0.75);
-    expect(openingStep(0.1, false, 200, 400)).toBe(0);
+    expect(openingStep(0, 1, 100, 400)).toBeCloseTo(0.25);
+    expect(openingStep(0.9, 1, 200, 400)).toBe(1);
+    expect(openingStep(1, 0, 100, 400)).toBeCloseTo(0.75);
+    expect(openingStep(0.1, 0, 200, 400)).toBe(0);
+  });
+
+  it('stops part-way when the target is part-way (the lid led by the scroll)', () => {
+    expect(openingStep(0, 0.4, 100, 100)).toBeCloseTo(0.4);
+    expect(openingStep(1, 0.4, 100, 400)).toBeCloseTo(0.75);
   });
 
   it('cuts when there is no time to move in (reduced motion)', () => {
-    expect(openingStep(0, true, 16, 0)).toBe(1);
-    expect(openingStep(1, false, 16, 0)).toBe(0);
+    expect(openingStep(0, 1, 16, 0)).toBe(1);
+    expect(openingStep(1, 0, 16, 0)).toBe(0);
   });
 });
 

@@ -3,23 +3,19 @@
  * One static page per Landmark section (every Landmark but the Overview),
  * from the Landmark list in the site data module: `/services`, `/about`,
  * `/about/team`, `/garden`, `/dock`, `/contact`. Each shows its intro copy
- * from the `pages` collection in a panel over the World; the Station's also
- * lists every Service, the Garden's every Project (each Project's page is
- * `garden/[slug].astro`), the Dock's every Client and Partner, and Team's
- * every Team Member, and Contact's the company's contact details (no form).
- * About links on to Team (as does the developer in the
- * World's open House).
+ * from the `pages` collection in a panel over the World, with what the
+ * section lists (`SectionContent.astro`): the Station's every Service, the
+ * Garden's every Project (each Project's page is `garden/[slug].astro`), the
+ * Dock's every Client and Partner, Team's every Team Member, and Contact's
+ * contact details (no form). About links on to Team (as does the developer
+ * in the World's open House).
  */
 import type { GetStaticPaths } from 'astro';
-import { getCollection, render } from 'astro:content';
-import WorldPage from '../layouts/WorldPage.astro';
-import SectionPanel from '../components/SectionPanel.astro';
-import ProjectList from '../components/ProjectList.astro';
-import ServiceList from '../components/ServiceList.astro';
-import DockList from '../components/DockList.astro';
-import TeamList from '../components/TeamList.astro';
-import ContactList from '../components/ContactList.astro';
-import { site } from '../data/site';
+import { getCollection } from 'astro:content';
+import WorldPage from '@/layouts/WorldPage.astro';
+import SectionPanel from '@/components/SectionPanel.astro';
+import SectionContent from '@/components/SectionContent.astro';
+import { site } from '@/data/site';
 
 export const getStaticPaths = (async () => {
   const pages = await getCollection('pages');
@@ -33,33 +29,10 @@ export const getStaticPaths = (async () => {
 }) satisfies GetStaticPaths;
 
 const { landmark, page } = Astro.props;
-const { Content } = await render(page);
-const { company } = site;
-const team = site.landmarks.find((l) => l.id === 'house-interior')!;
 ---
 
-<WorldPage title={`${page.data.title} · ${company.name}`} description={page.data.description}>
-  <SectionPanel slot="panel" title={page.data.title}>
-    <Content />
-    {landmark.id === 'station' && <ServiceList />}
-    {landmark.id === 'garden' && <ProjectList route={landmark.route} />}
-    {landmark.id === 'dock' && <DockList />}
-    {
-      landmark.id === 'house' && (
-        <p class="next">
-          <a href={team.route} data-seed-link>
-            Meet the {team.label} →
-          </a>
-        </p>
-      )
-    }
-    {landmark.id === 'house-interior' && <TeamList />}
-    {landmark.id === 'mailbox' && <ContactList />}
+<WorldPage title={`${page.data.title} · ${site.company.name}`} description={page.data.description}>
+  <SectionPanel slot="panel" title={page.data.title} id={landmark.id}>
+    <SectionContent landmark={landmark} />
   </SectionPanel>
 </WorldPage>
-
-<style>
-  .next a {
-    color: var(--brand-ink);
-  }
-</style>

@@ -211,6 +211,17 @@ describe('placeDataCard', () => {
     expect(cssPoint(m, card.width, 0).y).toBeGreaterThanOrEqual(0);
   });
 
+  it('hangs the card when a bar across the top of the frame would cover it', () => {
+    // The Station in the lower half: room to stand in the frame.
+    const vp = camera(stateShowing(focus.point, focus.zoom, { x: 0, y: -0.5 * halfHeight }, open));
+    const standing = dataCardTransform(vp, frame, anchors.above, card, 'bottom');
+    const highest = cssPoint(standing, card.width, 0).y;
+    expect(highest).toBeGreaterThan(0);
+    // A bar ending just above the standing card leaves it standing; one just below it hangs it.
+    expect(placeDataCard(vp, frame, anchors, card, highest - 1)).toEqual(standing);
+    expect(placeDataCard(vp, frame, anchors, card, highest + 1)).toEqual(dataCardTransform(vp, frame, anchors.below, card, 'top'));
+  });
+
   it('hangs a card from the middle of its top edge', () => {
     const vp = camera(stateShowing(focus.point, focus.zoom, { x: 0, y: 0 }, open));
     const fromBelow = dataCardTransform(vp, frame, anchors.below, card, 'top');

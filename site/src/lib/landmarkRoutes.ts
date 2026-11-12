@@ -2,13 +2,18 @@
  * Which Landmark a route belongs to, from the Landmark list in the site data
  * module. Plain functions over paths; no DOM.
  */
-import { site, type Landmark } from '../data/site';
-import type { LandmarkId } from '../world';
+import { site, type Landmark } from '@/data/site';
+import type { LandmarkId } from '@/world';
 
 /** `/about/`, `/about/index.html` and `/about` are the same route. */
 function normalise(pathname: string): string {
   const path = pathname.replace(/\/index\.html$/, '/').replace(/\/+$/, '');
   return path === '' ? '/' : path;
+}
+
+/** Whether two paths are the same route (`/about/`, `/about/index.html` and `/about` are). */
+export function sameRoute(a: string, b: string): boolean {
+  return normalise(a) === normalise(b);
 }
 
 /**

@@ -5,8 +5,8 @@
  * (`aria-current`). On narrow screens it collapses into a menu button that
  * opens the list as a popover, which needs no JS (the Popover API).
  */
-import { landmarksInStoryOrder } from '../data/site';
-import { landmarkForPath } from '../lib/landmarkRoutes';
+import { landmarksInStoryOrder } from '@/data/site';
+import { landmarkForPath } from '@/lib/landmarkRoutes';
 
 // The section this page belongs to is marked as the current page.
 const current = landmarkForPath(Astro.url.pathname);
@@ -65,7 +65,8 @@ const current = landmarkForPath(Astro.url.pathname);
   }
   .menu-button {
     display: none;
-    padding: 0.55rem;
+    /* 44px square with its 22px icon: a comfortable tap. */
+    padding: 0.6875rem;
     border: 0;
     border-radius: var(--card-radius);
     background: var(--card);
@@ -93,6 +94,13 @@ const current = landmarkForPath(Astro.url.pathname);
     }
   }
 
+  /* A touch screen wide enough for the bar: each link at least 44px tall to tap. */
+  @media (min-width: 64rem) and (pointer: coarse) {
+    a {
+      padding-block: 0.55rem 0.65rem;
+    }
+  }
+
   /* Narrow screens: a menu button; the list opens below it as a popover. */
   @media (max-width: 63.99rem) {
     .menu-button {
@@ -101,13 +109,13 @@ const current = landmarkForPath(Astro.url.pathname);
     ol[popover] {
       position: fixed;
       inset: auto var(--gutter) auto auto;
-      top: calc(var(--gutter) + 3.25rem);
+      top: calc(var(--gutter) + 3.5rem);
       min-width: 12rem;
       margin: 0;
       border: 0;
     }
     ol[popover] a {
-      padding: 0.45rem 0.75rem;
+      padding: 0.6rem 0.75rem;
     }
   }
 </style>

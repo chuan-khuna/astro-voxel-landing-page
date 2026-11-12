@@ -2,7 +2,8 @@
  * Data Cards: the page's metric cards (real HTML text inside the World's
  * frame), each laid on the isometric plane over its Landmark with a CSS
  * `matrix3d` from the camera (`placeDataCard`). One shows at a time: the
- * card of the Landmark the camera is near (`nearestDataCard`).
+ * card of the Landmark the camera is near (`nearestDataCard`), or on the
+ * Story Scroll only the card of the section's own Landmark.
  *
  * `place(camera, state, centre)` re-positions them; call it whenever the camera changes.
  */
@@ -19,8 +20,16 @@ export interface DataCards {
    * Show the card of the Landmark the camera is near, laid over it as
    * `camera` sees it. `centre` is where the visitor looks, in CSS px from the
    * frame's centre (y down): the middle of the part a panel leaves free.
+   * `only` narrows the choice to one Landmark's card (null: none at all);
+   * `top` (CSS px) keeps a standing card below a bar across the frame's top.
    */
-  place(camera: THREE.OrthographicCamera, state: CameraState, centre: { x: number; y: number }): void;
+  place(
+    camera: THREE.OrthographicCamera,
+    state: CameraState,
+    centre: { x: number; y: number },
+    only?: PlacedLandmarkId | null,
+    top?: number,
+  ): void;
 }
 
 interface Placed {
@@ -46,17 +55,18 @@ export function createDataCards(frame: HTMLElement, cards: HTMLElement[]): DataC
         placed.push({ id: landmark.id, card, anchors: dataCardAnchors(world, landmark), focus: landmarkFocus(world, landmark.id) });
       }
     },
-    place(camera, state, centre) {
+    place(camera, state, centre, only, top = 0) {
       const size = { width: frame.clientWidth, height: frame.clientHeight };
       // CSS px to frame units (world units at zoom 1), y up.
       const k = (camera.top - camera.bottom) / Math.max(1, size.height);
-      const shown = nearestDataCard(state, placed, { x: camera.right, y: camera.top }, { x: centre.x * k, y: -centre.y * k });
+      const candidates = only === undefined ? placed : placed.filter((p) => p.id === only);
+      const shown = nearestDataCard(state, candidates, { x: camera.right, y: camera.top }, { x: centre.x * k, y: -centre.y * k });
       viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       for (const { id, card, anchors } of placed) {
         card.toggleAttribute('data-near', id === shown);
         // A card going away keeps its last place, so it fades out where it was.
         if (id !== shown) continue;
-        const m = placeDataCard(viewProjection.elements, size, anchors, { width: card.offsetWidth, height: card.offsetHeight });
+        const m = placeDataCard(viewProjection.elements, size, anchors, { width: card.offsetWidth, height: card.offsetHeight }, top);
         card.style.transform = `matrix3d(${m.map((v) => +v.toFixed(6)).join(',')})`;
       }
     },

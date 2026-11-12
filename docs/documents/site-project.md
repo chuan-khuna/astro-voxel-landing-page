@@ -31,6 +31,7 @@ bun run check    # astro check
 bun run test     # vitest run
 bun run build    # static build into site/dist, then the World still and OG image (needs Playwright's Chromium, below)
 bun run preview  # serve the build (Astro 7 runs it in the background; stop with `bunx astro preview stop`)
+bun run e2e      # browser tests: builds, serves the build on :4329 and runs e2e/*.spec.ts (see "Browser tests")
 ```
 
 The build captures the World still with a headless Chromium from
@@ -46,6 +47,35 @@ bunx playwright install chromium
 Without it the build still passes: it warns, says this command, and leaves
 the still out of every page (see "World still"). `WORLD_STILLS=off bun run
 build` skips the capture the same way.
+
+### Browser tests
+
+`bun run e2e` runs Playwright (`@playwright/test`, pinned to the same
+1.64.1 as `playwright`) on the built site: `playwright.config.ts` builds it
+and serves it with `astro preview` on its own port (4329), never a second
+`astro dev` (Astro allows one dev server per project). Chromium draws the
+World with SwiftShader (software WebGL), so it mounts headless; one worker,
+since a software World is slow. Two projects: `desktop` (1440×900) and
+`phone` (390×844, touch). The specs are `site/e2e/*.spec.ts` (Vitest only
+picks up `src/**/*.test.ts`); `e2e/world.ts` has the shared steps (wait for
+the World, read the camera from `canvas.dataset.camera`, collect console
+errors).
+
+- `smoke.spec.ts`: every route loads on both projects, the World mounts,
+  there is no horizontal scroll and no console error; without JS the page
+  is the scrolling fallback with only its own panel.
+- `phone-scroll.spec.ts`: the Story Scroll (polish 18). Scrolling top to
+  bottom visits every section in order, the URL follows, the camera is
+  never out at the Overview (zoom over 1.5, even half-way between
+  sections), and the House is open at About and Team only; a deep link
+  opens at its section with the camera there; the menu scrolls, and Back
+  and Forward scroll back; a sideways swipe on the World never pans it and
+  an upward one scrolls the page; under reduced motion the camera cuts. On
+  desktop only the page's own panel shows and the page does not scroll.
+
+Throwaway scripts go in `site/.tmp/` (gitignored), as do Playwright's
+`test-results/`, `playwright-report/` and `blob-report/`. Screenshots for
+review go in `.scratch/<feature>/screenshots/`.
 
 ## Layout
 
@@ -80,7 +110,9 @@ build` skips the capture the same way.
 | `src/components/LandmarkMenu.astro` | The HTML Landmark menu, built from the Landmark list in Story Order: a floating rounded bar, collapsing below 64rem into a menu button that opens the list as a popover (the Popover API, so it needs no JS). Its links carry `data-seed-link`, so they keep a rolled Seed; the current section's link has `aria-current="page"`. |
 | `src/components/ThemeToggle.astro` | The theme toggle: one icon button (a monitor, a sun or a moon, for the choice in force) that cycles Auto, Day and Night, and the script that keeps the choice (see "Day and Night"). |
 | `src/components/Logo.astro` | The logo mark beside the company name: one isometric voxel in three shades of the brand colour. |
-| `src/components/SectionPanel.astro` | A section's panel over the World, as a floating card: heading, close link and the intro copy. |
+| `src/components/SectionPanel.astro` | A section's panel over the World, as a floating card: heading (`h1` for the page's own panel, `h2` for another section on the Story Scroll; ids `panel-<id>`), close link (hidden on the Story Scroll) and its content. |
+| `src/components/SectionContent.astro` | What a section says inside its panel: its `pages` intro, then its list (Services, Projects, Clients and Partners, About's link to Team, Team Members, Contact's details). Used by the section's page and by the Story Scroll. |
+| `src/client/storyScroll.ts` | The Story Scroll on phones (polish 18): reads the page's sections, moves the camera (damped) and the House's lid with the scroll, keeps the URL, title and menu on the section in view, scrolls to a section for an in-page link, Back or Forward, and turns on and off at 48rem. See "Phones: the Story Scroll". |
 | `src/components/ServiceList.astro` | The Station's list of every Service in `order`: icon, title, summary and body. |
 | `src/components/ProjectList.astro` | The Garden's list of every Project in Garden order (Pinned Projects first): title (a link to its page), Client, year and summary. |
 | `src/components/DockList.astro` | The Dock's two lists: Clients (by id) and Partners (closest tier first), each with its logo or initials. |
@@ -88,12 +120,13 @@ build` skips the capture the same way.
 | `src/components/ContactList.astro` | Contact's details (`contactDetails`) as a definition list in an `<address>`. |
 | `src/lib/seo.ts` | What a page says about itself: `canonicalUrl(siteUrl, path)`, `pageMeta` (the canonical URL and the Open Graph and Twitter tags), `sitemapXml(siteUrl, paths)` and `robotsTxt(siteUrl)`. Tested in `seo.test.ts`. See "SEO and link previews". |
 | `src/layouts/Base.astro` | The HTML shell: title and description (site data by default), the canonical link and the Open Graph and Twitter tags (`pageMeta`; the page's `image`, or the OG image), Astro's `<ClientRouter />`, the self-hosted Jersey fonts, the theme's boot script and colour tokens (`themeBootScript`, `themeCss()`, both inline in `<head>`), the card and font tokens, and the inline script that turns on the full-screen layout (`data-world="live"`). |
-| `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's plant links, the Data Cards and the Guide's button and speech bubble, and the HUD floating over it (company name, theme toggle, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice and Tour buttons, the Tour's card), and the client script that runs the World and the Tour across routes. |
+| `src/layouts/WorldPage.astro` | Every page: the full-screen World frame with Landmark hotspots, the developer's link inside the House, the Garden's plant links, the Data Cards and the Guide's button and speech bubble, and the HUD floating over it (company name, theme toggle, Landmark menu, the section's panel in the `panel` slot or the Overview's intro, dice and Tour buttons, the Tour's card), the Story Scroll's sections (`.story`: the intro and every section on every page, the page's own panel in its section's place), and the client script that runs the World, the Tour and the Story Scroll across routes. |
 | `src/pages/index.astro` | The home page: the World and the home hook. |
 | `src/pages/[...section].astro` | One static page per section, from the Landmark list (every Landmark but the Overview): `/services`, `/about`, `/about/team`, `/garden`, `/dock`, `/contact`. The build fails if a section has no `pages` entry. The Station's page also lists every Service, the Garden's every Project, the Dock's every Client and Partner, Team's every Team Member, and Contact the company's contact details; About links on to Team. |
 | `src/pages/garden/[slug].astro` | One static page per Project, `/garden/<id>`: its case study in the panel. Its cover, if any, is its link preview's image. |
 | `src/pages/sitemap.xml.ts` | `/sitemap.xml`: every route (`sitemapXml`). |
 | `src/pages/robots.txt.ts` | `/robots.txt` (`robotsTxt`), naming the sitemap. |
+| `playwright.config.ts`, `e2e/` | The browser tests (`bun run e2e`); see "Browser tests". |
 
 Company identity, the fonts, the default Seed, the Landmark list and the
 Data Card metrics live only in `src/data/site.ts`. Landmark ids are typed against the generator's id lists.
@@ -156,10 +189,10 @@ radius, the `--card` paper at 95%, a soft shadow), haru-ni style:
 |---|---|
 | Top left | The logo mark and company name (the `h1` on the Overview, a link home on a section page). |
 | Top right | The theme toggle (one icon button), then the Landmark menu: a rounded bar; below 64rem a menu button that opens it as a popover (the bar, the toggle and the name need about 1,018px). The current section is marked (`aria-current`). |
-| Bottom left | The dice button, the Tour button and the current Seed (narrower than 48rem the two buttons are icons only, so the row stays on one line). |
+| Bottom left | The dice button, the Tour button and the current Seed (narrower than 48rem the dice is an icon only and there is no Tour button). |
 | Right, below the menu (48rem and wider) | A section's panel: `min(27rem, 42vw)` wide, as tall as its content and no taller than the screen; long content scrolls inside it. |
 | Left, below the name (48rem and wider) | The Overview's intro card: the tagline and the home hook. |
-| Bottom (narrower than 48rem) | The panel or the intro as a bottom sheet (up to 55dvh; the intro 40dvh), with the dice row just above it. |
+| Narrower than 48rem | The Story Scroll: the page scrolls over the fixed World, the intro and every section each a window of World and then a card (see "Phones: the Story Scroll"). |
 
 - **HUD.** `.hud` is a fixed, full-screen column with
   `pointer-events: none`: `.hud-bar` (name, and `.hud-tools`: the theme toggle and the menu), then `.hud-main`, a
@@ -187,10 +220,17 @@ radius, the `--card` paper at 95%, a soft shadow), haru-ni style:
   seen there, so a Landmark at the edge of the World still lands beside the
   panel or above the sheet. It is measured again on each route and on
   resize.
-- **Icon-only controls on phones.** Below 48rem the dice and the Tour button
-  show only their icons; their labels (`.control-label`) stay for screen
-  readers and both carry a `title`. With the stats toggle beside them the
-  row stays on one line on a 360px screen.
+- **Icon-only controls on phones.** Below 48rem the dice shows only its
+  icon (the Tour button is hidden there); its label (`.control-label`)
+  stays for screen readers and it carries a `title`.
+- **Tap targets (polish 18).** Below 48rem the company name, the theme
+  toggle, the menu button, its popover's links and the dice are at least
+  44×44px. On a touch screen (`pointer: coarse`) wider than that, the menu
+  bar's links, the panel's close link, the dice and the Tour button are
+  too; with a mouse they keep their desktop size. The theme toggle and the
+  menu button are 44px everywhere. Checked at 320, 375, 390, 768, 1024 and
+  1440px wide, portrait and landscape, Day and Night: no horizontal scroll
+  and no text under 16px (the stats toggle, dev only, stays 35px).
 - **Fonts.** Jersey 20 for body text (20px, line height 1.3, never below
   16px) and Jersey 15 for headings (`h1`–`h3`, `dt`, card titles and the
   company name, at multiples of 15px), from `@fontsource/jersey-20` and
@@ -234,6 +274,66 @@ Day and by Night, captured at build time.
   and `stripStills` takes the figure out of every built page: no broken
   image, only the Landmark menu and the cards. `stripOgStill` takes the OG
   image's tags out too.
+
+### Phones: the Story Scroll
+
+Below 48rem, with the World live, a phone reads the site top to bottom
+(polish 18, the user's decision of 2026-11-12; record
+`docs/records/2026-11-12-phone-scroll-camera.md`). Every page renders the
+intro and every section in Story Order (`.story`, one `[data-story-item]`
+each, with its `data-route`, `data-landmark` and `data-title`); the page's
+own panel stands in its section's place, and a Project's page comes right
+after the Garden's. The others carry `data-extra` and show only on the
+Story Scroll: on desktop, in the fallback without JS or a GPU, and from
+48rem up the page is as before.
+
+- **Layout.** The World stays fixed full screen behind the page; the top
+  bar stays at the top and the dice row at the bottom left. Each section is
+  a window of World (`--story-window`, 58svh) and then its card at full
+  width, with no close link. The last section is at least a screen tall,
+  so Contact's window can still fill the screen.
+- **Camera.** It follows the scroll (`client/storyScroll.ts`; the pure
+  parts in `render/storyMath.ts`): it holds at a section's framing from
+  where its window of World fills the top of the screen until the end of
+  its card reaches the bottom, then glides to the next section's framing
+  as the next window scrolls in, eased in and out and part-way with the
+  finger. It chases that framing with a 320 ms damping (`dampState`), so a
+  fast flick still moves it calmly; each move renders at full rate, like
+  any camera move. Each Landmark is framed in the middle of its window,
+  below the top bar. The intro frames the Station at 0.8 of its close-up's
+  zoom; the Garden comes as close as the camera may (2.5 times its
+  close-up, capped at the World's closest zoom), so its plant links are
+  about 32×37px (trees 32×92px). The camera never pulls out to the
+  Overview.
+- **The House** follows the same scroll: its lid lifts as About scrolls in
+  and comes down as Projects does (`view.setOpening`, at most a full lift
+  per 800 ms, so it too lags a little).
+- **The URL** follows the section in view (`history.replaceState`, keeping
+  the router's state and every query parameter), and so do the page title
+  and the menu's current link. Opening a section's URL scrolls straight to
+  it, with the camera already there. A link to a section on the page (the
+  menu, a Landmark's link in the World, About's "Meet the Team") scrolls to
+  it smoothly and adds a history entry (`pushState` with no state, so the
+  router leaves Back and Forward between those entries to the Story Scroll,
+  which scrolls back). A link to a Project or another Seed goes through the
+  router; after the swap the scroll is put back where it was and glides on
+  to the new route's section.
+- **Touch.** The World takes no pan or zoom on the Story Scroll
+  (`camera.setInput(false)`, `touch-action: auto`): a swipe on it, or the
+  wheel, scrolls the page. Tapping a Landmark scrolls to its section.
+- **Data Cards** show only for the section's own Landmark, once the camera
+  holds there (`view.setDataCardFocus`), and wait while a card or the top
+  bar covers them (`data-covered`). The Guide's bubble waits the same way.
+- **No Tour** on the Story Scroll: the page itself goes from Landmark to
+  Landmark. The Tour button and card are hidden, and clicking the Guide
+  says an `idle` line instead. A Tour running when the window narrows ends.
+- **Reduced motion:** no glide: the camera and the lid cut as each section
+  takes over (the section past half-way).
+- **Crossing 48rem** turns it on or off. Narrowing scrolls to the route's
+  section; widening loads the route the URL now names if the scroll moved
+  it on (`navigate`, replacing the entry), or else frames the route as usual.
+- **SEO.** Every page carries every section's text (hidden off the Story
+  Scroll); each page keeps its own title, description and canonical URL.
 
 ### Phones and the render tier
 
@@ -357,9 +457,11 @@ route on every `astro:after-swap`:
   World view to return to is still the one from before the first section.
 - **Opening a route directly** mounts the World and cuts the camera to the
   route's Landmark, with the page's panel already open. On the Overview it
-  frames the whole World in the free part (above the intro sheet on phones).
+  frames the whole World in the free part.
 - **Back and Forward** are ordinary router navigations, so they move between
   sections and the World in the same way.
+- **On phones** (below 48rem) the routes are sections of one scrolling page
+  instead, and the camera follows the scroll; see "Phones: the Story Scroll".
 
 ### Exploring the World
 
@@ -368,7 +470,9 @@ route on every `astro:after-swap`:
   one finger pans and two fingers pinch-zoom. Pan stops at the World's
   bounds and zoom runs from the Overview in to a close-up. The frame has
   `touch-action: none`, so gestures on the World never scroll or zoom the
-  page, and the wheel over the World zooms instead of scrolling. Pan or
+  page, and the wheel over the World zooms instead of scrolling. On the
+  Story Scroll (phones) it is the other way round: the World takes no
+  input and every gesture scrolls the page. Pan or
   zoom input stops a flight, and ends the Tour (see "The Tour").
 - Each page renders one hotspot link per placed Landmark inside the frame
   (`a.hotspot[data-hotspot]`, with `data-seed-link`), hidden until the World
@@ -515,7 +619,9 @@ tree whether or not a card is on screen; visually only one card shows at a
 time, the one of the Landmark the camera is near (see
 `rendering-and-shading.md`, "Data Cards"). Cards never take the pointer, so
 panning and hotspots work through them. They fade in and out (200 ms; no
-fade under reduced motion), and are smaller on screens under 48rem.
+fade under reduced motion), and are smaller on screens under 48rem. On the
+Story Scroll only the section's own Landmark's card shows, once the camera
+holds there, and never under a card.
 
 ## The Guide
 
@@ -615,8 +721,8 @@ Forward stay as they were.
 **On the page.** `section#tour` (persisted, `data-covers-world`) is the
 card; it is `hidden` when the Tour is not running. While it runs,
 `<html data-touring>` hides the intro or the section's panel, and the card
-takes its place: at the bottom right on desktop, a bottom sheet on
-phones. The camera frames each Landmark in the part the cards leave free,
+takes its place at the bottom right. Below 48rem there is no Tour (see
+"Phones: the Story Scroll"). The camera frames each Landmark in the part the cards leave free,
 and the Guide's bubble keeps clear of the card. `script#tour-steps` holds
 the steps as JSON. Without JS or a GPU there is no Tour (its button lies in
 the World's controls, which are hidden).

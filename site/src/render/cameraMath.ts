@@ -125,6 +125,27 @@ export function flightState(from: CameraState, to: CameraState, t: number): Came
   };
 }
 
+/** Closer than this (world units, and the zoom's log) a damped camera lands on its target. */
+const LANDED = 1e-3;
+
+/**
+ * The camera `dt` ms on from `current` as it chases `target`, closing the gap
+ * exponentially with time constant `tau` ms (about 63% of it each `tau`):
+ * calm whatever the target does, and never overshooting. The zoom closes on
+ * a log scale, like a flight. Once close enough it lands exactly; `tau` 0 cuts.
+ */
+export function dampState(current: CameraState, target: CameraState, dt: number, tau: number): CameraState {
+  if (tau <= 0) return target;
+  const k = 1 - Math.exp(-dt / tau);
+  const x = current.target.x + (target.target.x - current.target.x) * k;
+  const z = current.target.z + (target.target.z - current.target.z) * k;
+  const logZoom = Math.log(current.zoom) + (Math.log(target.zoom) - Math.log(current.zoom)) * k;
+  const near =
+    Math.abs(target.target.x - x) < LANDED && Math.abs(target.target.z - z) < LANDED && Math.abs(Math.log(target.zoom) - logZoom) < LANDED;
+  if (near) return target;
+  return k === 0 ? current : { target: { x, z }, zoom: Math.exp(logZoom) };
+}
+
 /**
  * Where a World point is seen: frame units from the screen centre, y up
  * (the inverse of `stateShowing`). A raised point is seen where the view ray

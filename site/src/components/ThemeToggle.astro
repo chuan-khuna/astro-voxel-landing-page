@@ -30,7 +30,7 @@
 </button>
 
 <script>
-  import { THEME_STORAGE_KEY, nextThemeChoice, parseThemeChoice, resolveTheme, type ThemeChoice } from '../lib/theme';
+  import { THEME_STORAGE_KEY, nextThemeChoice, parseThemeChoice, resolveTheme, type ThemeChoice } from '@/lib/theme';
 
   const LABELS: Record<ThemeChoice, string> = { auto: 'Auto', day: 'Day', night: 'Night' };
   const root = document.documentElement;
@@ -76,7 +76,8 @@
 <style>
   .theme-toggle {
     display: inline-flex;
-    padding: 0.55rem;
+    /* 44px square with its 22px icon: a comfortable tap. */
+    padding: 0.6875rem;
     border: 0;
     border-radius: var(--card-radius);
     background: var(--card);

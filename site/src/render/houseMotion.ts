@@ -18,14 +18,14 @@ export function roofLift(opening: number): number {
 }
 
 /**
- * The next opening after `dt` ms, moving towards open (1) or shut (0) at a
- * rate that takes `ms` end to end. With `ms` 0 it cuts.
+ * The next opening after `dt` ms, moving towards `target` (1 open, 0 shut, or
+ * part-way while the Story Scroll leads the lid) at a rate that takes `ms`
+ * from shut to open. With `ms` 0 it cuts.
  */
-export function openingStep(opening: number, open: boolean, dt: number, ms: number): number {
-  const target = open ? 1 : 0;
+export function openingStep(opening: number, target: number, dt: number, ms: number): number {
   if (ms <= 0) return target;
   const step = dt / ms;
-  return open ? Math.min(target, opening + step) : Math.max(target, opening - step);
+  return opening < target ? Math.min(target, opening + step) : Math.max(target, opening - step);
 }
 
 /** Offsets of the developer's moving parts from their rest pose, in world units. */

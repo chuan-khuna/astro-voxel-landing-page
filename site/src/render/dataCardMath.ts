@@ -155,16 +155,19 @@ export function dataCardAnchors(world: Pick<World, 'biome' | 'landmarks'>, landm
 
 /**
  * The `matrix3d` for a Data Card: standing over its Landmark, or hanging
- * under it when the top of the frame would cut off a standing card.
+ * under it when the top of the frame would cut off a standing card. `top`
+ * (CSS px from the frame's top) moves that edge down, below a bar across
+ * the top of the frame (the Story Scroll's top bar).
  */
 export function placeDataCard(
   viewProjection: Mat4,
   frame: { width: number; height: number },
   anchors: DataCardAnchors,
   card: { width: number; height: number },
+  top = 0,
 ): number[] {
   const standing = dataCardTransform(viewProjection, frame, anchors.above, card, 'bottom');
   // The card's highest corner is its top right: its text rises to the right.
-  const top = (standing[1]! * card.width + standing[13]!) / (standing[3]! * card.width + standing[15]!);
-  return top >= 0 ? standing : dataCardTransform(viewProjection, frame, anchors.below, card, 'top');
+  const highest = (standing[1]! * card.width + standing[13]!) / (standing[3]! * card.width + standing[15]!);
+  return highest >= top ? standing : dataCardTransform(viewProjection, frame, anchors.below, card, 'top');
 }

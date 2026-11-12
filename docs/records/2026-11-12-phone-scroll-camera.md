@@ -17,4 +17,4 @@ Built in polish ticket 18 (`.scratch/voxel-world-polish/issues/18-phone-scroll-c
 
 ## Open questions
 
-- How touch on the World behaves while the page scrolls, and whether the Tour follows the scroll or is hidden on phones: left to the ticket, to be reviewed.
+- How touch on the World behaves while the page scrolls, and whether the Tour follows the scroll or is hidden on phones: left to the ticket, to be reviewed. _Chosen in ticket 18 (logged in `docs/todo.md` for review):_ on a phone the World takes no pan or zoom, so every swipe on it scrolls the page, and a tap on a Landmark scrolls to its section; the Tour is hidden on phones (the scroll already goes from Landmark to Landmark), and clicking the Guide there says an idle line.

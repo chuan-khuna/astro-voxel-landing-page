@@ -12,6 +12,9 @@
  *   animation frame); any pan or zoom input stops a flight where it is. A
  *   cut is one `jumpTo`.
  * - `onInput` hears the visitor pan or zoom (the Tour stops for it).
+ * - `setInput(false)` stops taking pointer and wheel input (the Story Scroll
+ *   on phones: a swipe or the wheel scrolls the page instead); the camera
+ *   still moves by `jumpTo` and `flyTo`.
  */
 import * as THREE from 'three/webgpu';
 import { clampState, flightState, panBy, zoomAt, type CameraLimits, type CameraState } from './cameraMath';
@@ -40,6 +43,8 @@ export interface CameraRig {
   jumpTo(state: CameraState): void;
   /** Fly to a state over `ms` milliseconds (a cut when `ms` is 0). Resolves when it lands or is stopped. */
   flyTo(state: CameraState, ms: number): Promise<void>;
+  /** Take pan and zoom input (the default), or leave every pointer and wheel event to the page. */
+  setInput(enabled: boolean): void;
   dispose(): void;
 }
 
@@ -57,6 +62,8 @@ export function createCameraRig({ element, camera, onChange, onInput }: Options)
   let limits: CameraLimits = { minX: 0, maxX: 0, minZ: 0, maxZ: 0, minZoom: 1, maxZoom: 1 };
   let state: CameraState = { target: { x: 0, z: 0 }, zoom: 1 };
   let distance = 100;
+  /** Whether pointer and wheel input pan and zoom. */
+  let input = true;
 
   /** The flight in progress: its animation frame and how to end it. */
   let flight: { frame: number; done: () => void } | null = null;
@@ -130,6 +137,7 @@ export function createCameraRig({ element, camera, onChange, onInput }: Options)
   };
 
   const onPointerDown = (event: PointerEvent) => {
+    if (!input) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     stopFlight();
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -198,6 +206,7 @@ export function createCameraRig({ element, camera, onChange, onInput }: Options)
   };
 
   const onWheel = (event: WheelEvent) => {
+    if (!input) return;
     event.preventDefault();
     stopFlight();
     const lines = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element.clientHeight : 1;
@@ -243,6 +252,17 @@ export function createCameraRig({ element, camera, onChange, onInput }: Options)
       apply(next);
     },
     flyTo,
+    setInput(enabled) {
+      input = enabled;
+      if (enabled) return;
+      // A drag under way ends here: the page takes the gesture.
+      pointers.clear();
+      pressStart = null;
+      if (dragging) {
+        dragging = false;
+        delete element.dataset.dragging;
+      }
+    },
     dispose() {
       stopFlight();
       element.removeEventListener('pointerdown', onPointerDown);

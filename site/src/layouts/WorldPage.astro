@@ -35,9 +35,11 @@
  */
 import Base from './Base.astro';
 import LandmarkMenu from '@/components/LandmarkMenu.astro';
+import SectionPanel from '@/components/SectionPanel.astro';
+import SectionContent from '@/components/SectionContent.astro';
 import Logo from '@/components/Logo.astro';
 import ThemeToggle from '@/components/ThemeToggle.astro';
-import { getCollection, getEntry } from 'astro:content';
+import { getCollection, getEntry, render } from 'astro:content';
 import { site, landmarksInStoryOrder, type DataCardMetric } from '@/data/site';
 import { PLACED_LANDMARK_IDS } from '@/world';
 import type { ContentCounts, LandmarkId } from '@/world';
@@ -46,6 +48,7 @@ import type { GuideLines } from '@/lib/contentSchemas';
 import { tourSteps } from '@/lib/tour';
 import { STILL_SIZE, stillPath, stillSrcset } from '@/lib/worldStill';
 import type { PageImage } from '@/lib/seo';
+import { landmarkForPath, sameRoute } from '@/lib/landmarkRoutes';
 
 interface Props {
   title?: string;
@@ -55,6 +58,25 @@ interface Props {
 }
 const { title, description, image } = Astro.props;
 const hasPanel = Astro.slots.has('panel');
+
+/*
+ * The Story Scroll (phones): every section stands on every page, in Story
+ * Order after the intro, so a phone reads the site top to bottom over the
+ * World. The page's own panel takes its section's place (a Project's page
+ * comes right after the Garden's); the others are marked `data-extra` and
+ * show only on the Story Scroll. Each item says its route, its Landmark and
+ * the page title the browser shows while it is in view.
+ */
+const path = Astro.url.pathname;
+const sections = landmarksInStoryOrder.filter((l) => l.route !== '/');
+const pages = await getCollection('pages');
+const pageTitle = (id: LandmarkId) => {
+  const page = pages.find((p) => p.data.landmark === id);
+  return page ? `${page.data.title} · ${site.company.name}` : site.seo.title;
+};
+/** The section whose place the page's own panel takes, or after which it comes (a Project's page, after the Garden). */
+const ownSection = hasPanel ? sections.find((l) => sameRoute(l.route, path)) : undefined;
+const parentSection = hasPanel && !ownSection ? landmarkForPath(path) : null;
 
 const projects = projectOrder(await getCollection('projects'));
 // The generator gets counts and ids only: Projects and Pinned Projects for the Garden's plants, a boat per Client and a
@@ -84,6 +106,8 @@ const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
 });
 // The Guide's lines (filled in with the Seed and its name on the client).
 const home = await getEntry('pages', 'home');
+// The home page's intro copy, for the Story Scroll's intro on every other page (the home page passes its own).
+const HomeIntro = hasPanel && home ? (await render(home)).Content : null;
 const guideLines: GuideLines = home?.data.guide ?? { greeting: [], welcomeBack: [], reform: [], idle: [] };
 const guideName = site.guide.name;
 // The Tour: a step per Landmark in Story Order, with the Guide's lines from each Landmark's `pages` entry (`tour`).
@@ -125,16 +149,40 @@ const stillAlt = site.seo.imageAlt;
     </header>
 
     <main class="hud-main">
-      {
-        hasPanel ? (
-          <slot name="panel" />
-        ) : (
-          <section class="intro" data-covers-world aria-label="Introduction">
+      <div class="story" data-story data-page-route={path}>
+        <div class="story-item" data-story-item data-route="/" data-landmark="overview" data-title={site.seo.title} data-extra={hasPanel ? '' : undefined}>
+          <section class="intro" data-covers-world data-story-card tabindex="-1" aria-label="Introduction">
             <p class="tagline">{site.company.tagline}</p>
-            <slot />
+            {hasPanel ? HomeIntro && <HomeIntro /> : <slot />}
           </section>
-        )
-      }
+        </div>
+        {
+          sections.map((landmark) => (
+            <>
+              <div
+                class="story-item"
+                data-story-item
+                data-route={landmark.route}
+                data-landmark={landmark.id}
+                data-title={landmark === ownSection ? (title ?? pageTitle(landmark.id)) : pageTitle(landmark.id)}
+                data-extra={landmark === ownSection ? undefined : ''}>
+                {landmark === ownSection ? (
+                  <slot name="panel" />
+                ) : (
+                  <SectionPanel title={pages.find((p) => p.data.landmark === landmark.id)?.data.title ?? landmark.label} id={landmark.id} level={2}>
+                    <SectionContent landmark={landmark} />
+                  </SectionPanel>
+                )}
+              </div>
+              {landmark.id === parentSection && (
+                <div class="story-item" data-story-item data-route={path} data-landmark={landmark.id} data-title={title ?? site.seo.title}>
+                  <slot name="panel" />
+                </div>
+              )}
+            </>
+          ))
+        }
+      </div>
       <!--
         The World still: what the default Seed's World looks like, by Day and
         by Night, shown in the World's place when the browser cannot draw it
@@ -285,7 +333,7 @@ const stillAlt = site.seo.imageAlt;
   import { createWorldSource } from '@/render/worldSource';
   import type { CameraState } from '@/render/cameraMath';
   import { rollSeed, seedFromUrl, withSeed, SEED_PARAM } from '@/lib/seedUrl';
-  import { landmarkForPath, routeView } from '@/lib/landmarkRoutes';
+  import { landmarkForPath, routeView, sameRoute } from '@/lib/landmarkRoutes';
   import { STATS_PARAM, statsAvailable, withStats } from '@/lib/renderStats';
   import type { StatsOverlay } from '@/render/statsOverlay';
   import type { ContentCounts, LandmarkId } from '@/world';
@@ -293,6 +341,7 @@ const stillAlt = site.seo.imageAlt;
   import { fillLine, pickLine, type GuideLine } from '@/lib/guideLines';
   import type { GuideLines } from '@/lib/contentSchemas';
   import { tourAfter, tourStage, type TourAction, type TourState, type TourStep } from '@/lib/tour';
+  import { createStoryScroll } from '@/client/storyScroll';
 
   /** How long a camera flight to a Landmark takes; a cut under reduced motion. */
   const FLIGHT_MS = 900;
@@ -341,6 +390,8 @@ const stillAlt = site.seo.imageAlt;
     let mounting: Promise<WorldView> | null = null;
     /** Whether the World has mounted (so the full-screen layout is earned). */
     let mounted = false;
+    /** The World view once mounted, for what must reach it at once (the Story Scroll). */
+    let liveView: WorldView | null = null;
     /** Only the latest request may show its World; older ones are dropped. */
     let latest = 0;
     /** The Seed of the World on show (or loading), as asked for in the URL. */
@@ -360,6 +411,8 @@ const stillAlt = site.seo.imageAlt;
     const currentTheme = (): Theme => (document.documentElement.dataset.theme === 'night' ? 'night' : 'day');
     const currentSeed = () => seedFromUrl(new URL(location.href)) ?? defaultSeed;
     const routeLandmark = () => landmarkForPath(location.pathname) ?? 'overview';
+    /** The page's own panel (not another section standing in the Story Scroll). */
+    const ownPanel = () => document.querySelector<HTMLElement>('[data-story-item]:not([data-extra]) [data-panel]');
     const flightMs = () => (reducedMotion.matches ? 0 : FLIGHT_MS);
     /** The lid's lift and the Guide's flight alongside a camera move of `ms`: cuts when the move is one. */
     const roofMs = (ms: number) => (ms > 0 ? ROOF_MS : 0);
@@ -410,13 +463,33 @@ const stillAlt = site.seo.imageAlt;
      * the developer on Team (the links are persisted, so the page cannot).
      */
     const markCurrentLink = () => {
-      const here = location.pathname.replace(/\/(index\.html)?$/, '');
       for (const link of frame.querySelectorAll<HTMLAnchorElement>('a[data-project], a[data-developer]')) {
-        const current = new URL(link.href).pathname.replace(/\/$/, '') === here;
+        const current = sameRoute(new URL(link.href).pathname, location.pathname);
         if (current) link.setAttribute('aria-current', 'page');
         else link.removeAttribute('aria-current');
       }
     };
+
+    /**
+     * Phones: the Story Scroll (`client/storyScroll.ts`) moves the camera
+     * with the page; the routes, the Tour and free exploration stand aside.
+     */
+    const story = createStoryScroll({
+      view: () => liveView,
+      frame,
+      reducedMotion,
+      onSection: markCurrentLink,
+      onToggle: (on) => {
+        if (on) return endTour('explore');
+        // Wide again: the page must be the route's own (the scroll may have moved the URL on), and the camera its route's.
+        const route = document.querySelector<HTMLElement>('[data-story]')?.dataset.pageRoute ?? '/';
+        if (!sameRoute(route, location.pathname)) return void navigate(location.href, { history: 'replace' });
+        if (!liveView) return;
+        worldState = null;
+        shownLandmark = 'overview';
+        followRoute(liveView, 0, true);
+      },
+    });
 
     /**
      * Where a Landmark should sit on the full-screen World so the floating
@@ -491,7 +564,8 @@ const stillAlt = site.seo.imageAlt;
 
     /** Start the Tour at its first step: the intro or panel makes way for the Tour's card. */
     const startTour = async () => {
-      if (!mounting || !tourCard || steps.length === 0) return;
+      // No Tour on the Story Scroll: the page itself goes from Landmark to Landmark.
+      if (!mounting || !tourCard || steps.length === 0 || story.on) return;
       const view = await mounting;
       if (!tour) beforeTour = view.camera.state;
       tour = tourAfter(tour, 'start', steps.length);
@@ -576,6 +650,7 @@ const stillAlt = site.seo.imageAlt;
           });
           view = await mounting;
           mounted = true;
+          liveView = view;
           void greet(view);
           // The theme may have changed while the World mounted.
           view.setTheme(currentTheme());
@@ -592,7 +667,8 @@ const stillAlt = site.seo.imageAlt;
         // A new World starts at its Overview: cut to the open section's Landmark, if any.
         worldState = null;
         shownLandmark = 'overview';
-        followRoute(view, 0, true);
+        if (story.on) story.worldShown();
+        else followRoute(view, 0, true);
         canvas.dataset.generateMs = ms.toFixed(1);
         linkSeed = world.seed;
         keepSeedOnLinks();
@@ -612,11 +688,13 @@ const stillAlt = site.seo.imageAlt;
     const onRoute = async () => {
       keepSeedOnLinks();
       markCurrentLink();
+      // The Story Scroll keeps the page where it was and glides on to the route's section.
+      story.afterSwap();
       if (currentSeed() !== shownSeed) return showSeed(currentSeed());
-      if (!mounting) return;
+      if (!mounting || story.on) return;
       followRoute(await mounting, flightMs());
       // The panel is new content: move focus to it, as a page load would.
-      document.querySelector<HTMLElement>('[data-panel]')?.focus({ preventScroll: true });
+      ownPanel()?.focus({ preventScroll: true });
     };
 
     dice?.addEventListener('click', () => {
@@ -629,6 +707,13 @@ const stillAlt = site.seo.imageAlt;
     // The Tour button, and clicking the idle Guide, start the Tour; on the Tour, clicking the Guide says the step again.
     tourButton?.addEventListener('click', () => void startTour());
     guideButton?.addEventListener('click', () => {
+      // On the Story Scroll there is no Tour: the Guide just says something.
+      if (story.on) {
+        lastIdle = pickLine(guide.lines.idle, lastIdle, Math.random());
+        const line = lastIdle;
+        if (line) void mounting?.then((view) => view.guide.say([fill(line)]));
+        return;
+      }
       if (!tour) return void startTour();
       const lines = steps[tour.step]!.lines.map(fill);
       void mounting?.then((view) => view.guide.say(lines, { hold: true }));
@@ -657,9 +742,9 @@ const stillAlt = site.seo.imageAlt;
         return;
       }
       // Escape closes an open section, like its close button; an open menu popover takes it first.
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || story.on) return;
       if (document.querySelector(':popover-open')) return;
-      document.querySelector<HTMLAnchorElement>('[data-panel-close]')?.click();
+      ownPanel()?.querySelector<HTMLAnchorElement>('[data-panel-close]')?.click();
     });
 
     // The router swaps the <html> attributes: keep the full-screen layout on.
@@ -670,7 +755,7 @@ const stillAlt = site.seo.imageAlt;
     document.addEventListener('astro:after-swap', () => void onRoute());
     // A resize can move the cards (a side panel becomes a bottom sheet): re-aim the Data Card.
     window.addEventListener('resize', () => {
-      if (mounted) void mounting?.then((view) => view.setViewCentre(freeCentre()));
+      if (mounted && !story.on) void mounting?.then((view) => view.setViewCentre(freeCentre()));
     });
     // Day and Night: the World follows <html data-theme> (set by the theme toggle and the system preference).
     new MutationObserver(() => {
@@ -714,6 +799,18 @@ const stillAlt = site.seo.imageAlt;
     display: grid;
     gap: var(--gutter);
     margin-top: var(--gutter);
+  }
+  /*
+   * The Story Scroll's sections: off the phone Story Scroll, only the page's
+   * own (its panel, or the intro on the home page) shows, laid out as if the
+   * wrappers were not there.
+   */
+  .story,
+  .story-item {
+    display: contents;
+  }
+  .story-item[data-extra] {
+    display: none;
   }
   .world,
   .world-controls {
@@ -799,6 +896,9 @@ const stillAlt = site.seo.imageAlt;
   .intro :global(p:last-child) {
     margin-bottom: 0;
   }
+  .intro:focus {
+    outline: none;
+  }
   .world-controls {
     align-items: center;
     gap: 0.75rem;
@@ -821,6 +921,13 @@ const stillAlt = site.seo.imageAlt;
   .dice:focus-visible {
     outline: 2px solid var(--ink);
     outline-offset: 2px;
+  }
+  /* On a touch screen the dice and the Tour button are at least 44px tall to tap. */
+  @media (pointer: coarse) {
+    .dice,
+    .tour-start {
+      min-height: 2.75rem;
+    }
   }
   .world-status {
     margin: 0;
@@ -954,7 +1061,7 @@ const stillAlt = site.seo.imageAlt;
     justify-self: start;
     max-height: 100%;
   }
-  :global(:root[data-world]) .hud-main > :global([data-panel]) {
+  :global(:root[data-world]) .hud-main :global([data-panel]) {
     grid-area: 1 / 2 / -1 / 3;
     align-self: start;
     justify-self: end;
@@ -973,8 +1080,12 @@ const stillAlt = site.seo.imageAlt;
     justify-self: end;
   }
   :global(:root[data-world][data-touring]) .intro,
-  :global(:root[data-world][data-touring]) .hud-main > :global([data-panel]) {
+  :global(:root[data-world][data-touring]) .hud-main :global([data-panel]) {
     display: none;
+  }
+  :global(:root) {
+    /* The Story Scroll's window of World above each card (phones). */
+    --story-window: 58svh;
   }
   :global(:root[data-world]) .world {
     position: fixed;
@@ -991,33 +1102,95 @@ const stillAlt = site.seo.imageAlt;
     cursor: grab;
     background: var(--surface);
   }
-  /* Phones: the panel (or intro) is a bottom sheet, the controls just above it. */
+  /*
+   * Phones: the Story Scroll (`client/storyScroll.ts`). The World stays fixed
+   * full screen behind the page, and the page scrolls: the intro and every
+   * section in Story Order, each a window of World (where its Landmark is
+   * framed) and then its card. The top bar stays at the top, the controls
+   * at the bottom left; the World takes no pan or zoom, so a swipe on it
+   * scrolls the page.
+   */
   @media (max-width: 47.99rem) {
     .brand,
     .tagline {
       font-size: 1.40625rem;
     }
-    :global(:root[data-world]) .hud-main {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr) auto auto;
+    /* At least 44px tall to tap (the company name links home on a section page). */
+    .brand {
+      box-sizing: border-box;
+      min-height: 2.75rem;
     }
-    :global(:root[data-world]) .world-controls {
-      grid-area: 2 / 1;
+    :global(:root[data-world]),
+    :global(:root[data-world] body) {
+      height: auto;
+      overflow: visible;
+      overscroll-behavior: auto;
+    }
+    :global(:root[data-world] body) {
+      overflow-x: clip;
+    }
+    /* Still a stacking context over the body, so the World (z-index -1 within it) takes the pointer between the cards. */
+    :global(:root[data-world]) .hud {
+      position: relative;
+      display: block;
+      height: auto;
+      padding: 0 var(--gutter);
+    }
+    :global(:root[data-world]) .hud-bar {
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 2;
+      padding: var(--gutter);
+      pointer-events: none;
+    }
+    :global(:root[data-world]) .hud-main {
+      display: block;
+    }
+    :global(:root[data-world]) .story {
+      display: block;
+      /* Room after the last card, so Contact's window of World can still fill the screen. */
+      padding-bottom: var(--gutter);
+      pointer-events: none;
+    }
+    :global(:root[data-world]) .story-item,
+    :global(:root[data-world]) .story-item[data-extra] {
+      display: block;
+      /* The window of World: the section's Landmark is framed in it, below the top bar. */
+      padding-top: var(--story-window);
+    }
+    :global(:root[data-world]) .story-item:last-child {
+      box-sizing: border-box;
+      min-height: 100svh;
+    }
+    :global(:root[data-world]) .story-item > :global([data-story-card]) {
+      pointer-events: auto;
     }
     :global(:root[data-world]) .intro,
-    :global(:root[data-world]) .hud-main > :global([data-panel]) {
-      grid-area: 3 / 1;
-      justify-self: stretch;
-      max-width: none;
-      max-height: 55dvh;
-    }
-    :global(:root[data-world]) .intro {
-      max-height: 40dvh;
-    }
-    :global(:root[data-world]) .tour {
-      grid-area: 3 / 1;
-      justify-self: stretch;
+    :global(:root[data-world]) .story :global([data-panel]) {
       width: auto;
+      max-width: none;
+      max-height: none;
+      overflow: visible;
+      animation: none;
+    }
+    /* The Story Scroll has no close: the page scrolls on to the next section. */
+    :global(:root[data-world]) .story :global([data-panel-close]) {
+      display: none;
+    }
+    :global(:root[data-world]) .world-controls {
+      position: fixed;
+      bottom: var(--gutter);
+      left: var(--gutter);
+      z-index: 2;
+    }
+    /* No Tour on the Story Scroll: scrolling the page goes from Landmark to Landmark. */
+    :global(:root[data-world]) .tour-start,
+    :global(:root[data-world]) .tour {
+      display: none;
+    }
+    :global(:root[data-world]) .world {
+      touch-action: auto;
+      cursor: default;
     }
     /* Phones have no arrow keys to speak of. */
     .tour-keys {
@@ -1036,11 +1209,17 @@ const stillAlt = site.seo.imageAlt;
       clip-path: inset(50%);
       white-space: nowrap;
     }
-    /* The same size as the stats toggle: the dice has no border, so 2px more padding. */
+    /* At least 44px square to tap: the dice has no border, so 2px more padding than the Tour button. */
     .dice {
+      justify-content: center;
+      min-width: 2.75rem;
+      min-height: 2.75rem;
       padding: calc(0.35rem + 2px);
     }
     .tour-start {
+      justify-content: center;
+      min-width: 2.75rem;
+      min-height: 2.75rem;
       padding: 0.35rem;
     }
     .world-controls {
@@ -1085,6 +1264,10 @@ const stillAlt = site.seo.imageAlt;
   }
   .data-card[data-near] {
     opacity: 1;
+  }
+  /* On the Story Scroll, a card that would show under a section's card waits until it is clear. */
+  .data-card[data-near][data-covered] {
+    opacity: 0;
   }
   .data-card-value {
     color: var(--brand-ink);
@@ -1200,7 +1383,7 @@ const stillAlt = site.seo.imageAlt;
     pointer-events: none;
     transition: opacity 160ms;
   }
-  .guide-bubble[data-shown]:not([data-offscreen]) {
+  .guide-bubble[data-shown]:not([data-offscreen], [data-covered]) {
     opacity: 1;
   }
   .guide-name {

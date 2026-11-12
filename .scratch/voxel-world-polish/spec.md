@@ -54,6 +54,8 @@ Rolling a new Seed changes the terrain and the colours, but not the character of
 - clouds drift over the sea and their shadows cross the Isles
 - fish swim in the shallows and waves break on the shore
 
+**Phones: the Story Scroll (ticket 18, the user's decision of 2026-11-12).** On a phone the site reads top to bottom: the intro and every section stack as one scrolling page over the fixed World, and the camera glides from one Landmark's close-up to the next with the scroll. It never moves by itself and never pulls out to the whole Isle. Desktop and tablet (48rem and up) keep one panel over the World. Every route also gets a responsive pass at every width.
+
 **Night light.** Torches and lanterns in each Biome's style stand round the Landmarks and along the paths. At Night they flicker and throw warm block light on the voxels round them, and every light source glows softly.
 
 None of it can be clicked, none of it hides a Landmark for long, and all of it stands still under reduced motion (ADR 0005).
@@ -216,6 +218,12 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 - *Sea.* Shore foam (⅛-unit) runs in towards the coast, breaks along the edge and draws back. It is computed in the shader from the same distance-from-coast data as the water colour. Schools of 3–5 fish swim in the shallows, seen through the translucent water. Now and then one leaps and splashes. At Night the foam dims, and a faint bioluminescent glow shows where waves break.
 - *Land animals.* `generateWorld` gives each land animal a rest point and a short route from the Seed. Routes never cross a footprint, a bridge or the Garden, and never stand between the camera and a Landmark, using the Decoration occlusion check. At runtime an animal walks its route, then rests, grazes or turns its head. Each Isle has at most 2–3 animals.
 - *Birds* circle above the Isles, higher than every Landmark, and never fly through the camera's view of a Landmark.
+
+**Story Scroll (ticket 18)**
+- Built in ticket 18. Below 48rem (with the World live) every page renders the intro and every section in Story Order (`WorldPage.astro`, `SectionContent.astro`); the page's own panel takes its section's place, and a Project's page follows the Garden's. Each section is a window of World (58svh) and then its card.
+- The camera holds at a section while its card is read and glides to the next section's framing as the next window scrolls in, eased and part-way with the finger, chased with a 320 ms damping (`render/storyMath.ts`, `dampState`; controller `client/storyScroll.ts`). The intro frames the Station at 0.8 of its close-up's zoom; the Garden as close as the camera may come. The House's lid follows the same scroll. Reduced motion cuts.
+- The URL follows the section in view (`replaceState`); in-page links scroll and push an entry; Back and Forward scroll back; a deep link opens scrolled to its section with the camera there. The World takes no pan or zoom on a phone, so swipes scroll the page. No Tour on phones. Data Cards show only for the section's Landmark, once the camera holds, never under a card.
+- Responsive pass: no horizontal scroll and no text under 16px at 320–1440px, portrait and landscape; controls at least 44px to tap on phones and touch screens.
 
 **Night light (ticket 16)**
 - A Light Source is a ⅛-unit structure with a `flame` or `glow` role and a declared light: colour (a theme token per Biome), reach of about 3–5 cells and strength.

@@ -106,8 +106,11 @@ export interface WorldView {
   show(world: World, meshed?: MeshedWorld): void;
   /** The camera rig: its state, cuts and flights to other states. */
   readonly camera: CameraRig;
-  /** The camera state that shows a Landmark of the World on show; see `focus`. */
-  focusState(id: LandmarkId, at?: ScreenOffset): CameraState;
+  /**
+   * The camera state that shows a Landmark of the World on show; see `focus`.
+   * `zoomScale` scales its close-up's zoom (below 1 stands further back), within the zoom limits.
+   */
+  focusState(id: LandmarkId, at?: ScreenOffset, zoomScale?: number): CameraState;
   /**
    * Fly the camera to a Landmark over `ms` (0 cuts). `at` is where on the
    * frame the Landmark should end up, in CSS px from the frame's centre
@@ -125,6 +128,20 @@ export interface WorldView {
    * shows) or shut it (the lid comes down). 0 cuts. Kept across `show`.
    */
   setInterior(open: boolean, ms: number): void;
+  /**
+   * Open the House part-way (0 shut, 1 open): the Story Scroll leads the lid
+   * with the page. The lid moves there at the rate of a full lift over `ms`
+   * (0 cuts). `setInterior(open, ms)` is `setOpening(open ? 1 : 0, ms)`.
+   */
+  setOpening(amount: number, ms: number): void;
+  /**
+   * Which Data Card may show: the one of the Landmark seen nearest where the
+   * visitor looks (undefined, the default), only this Landmark's (if it is
+   * near), or none (null). The Story Scroll shows only its section's.
+   * `top` (CSS px from the frame's top, default 0) is where the free part
+   * begins: a card that would stand above it hangs below its Landmark instead.
+   */
+  setDataCardFocus(id: PlacedLandmarkId | null | undefined, top?: number): void;
   /** Show the World by Day or by Night. Kept across `show`. */
   setTheme(theme: Theme): void;
   /**
@@ -242,11 +259,11 @@ export async function mountWorld(
   // Seen again (the tab shown, the canvas back on screen, motion allowed): start the loop. Unseen: it stops by itself.
   const life = createAmbientLife({ canvas, render: tier, override: ui.lifeOverride, onChange: () => life.seen() && requestRender() });
   const { clock } = life;
-  /** The House: open or shut, how far its lid is lifted (0–1) and how long a lift takes. */
-  let interior = false;
+  /** The House: how far its lid is heading (1 open, 0 shut, part-way on the Story Scroll), how far it is lifted (0–1) and how long a lift takes. */
+  let openTarget = 0;
   let opening = 0;
   let openingMs = 0;
-  const lifting = () => opening !== (interior ? 1 : 0);
+  const lifting = () => opening !== openTarget;
   // The Guide assembles and dissolves whenever it does; it bobs and blinks only while Ambient Life is alive.
   const moving = () => life.alive() || lifting() || guide.moving(life.alive());
   /** The time of the last frame while something moved (0 when nothing did). */
@@ -277,7 +294,7 @@ export async function mountWorld(
         objects?.step(clock.seconds);
       }
       if (lifting()) {
-        opening = openingStep(opening, interior, dt, openingMs);
+        opening = openingStep(opening, openTarget, dt, openingMs);
         objects?.house.setOpening(opening);
         // The lid casts a shadow (and the room shows or hides): redraw the static shadow map while it moves.
         sun.shadow.needsUpdate = true;
@@ -288,7 +305,7 @@ export async function mountWorld(
       guide.step(dt, life.alive());
       lastTick = moving() ? now : 0;
       hotspots.place(camera);
-      cards.place(camera, rig.state, viewCentre);
+      cards.place(camera, rig.state, viewCentre, cardFocus, cardTop);
       guide.place(camera);
       renderer.render(scene, camera);
       idleRenderer();
@@ -314,6 +331,10 @@ export async function mountWorld(
   const guide = createGuide({ frame: ui.frame, ...ui.guide, onChange: requestRender });
   scene.add(guide.object);
   let viewCentre: ScreenOffset = { x: 0, y: 0 };
+  /** Which Data Card may show: the nearest (undefined), only this Landmark's, or none (null). */
+  let cardFocus: PlacedLandmarkId | null | undefined;
+  /** CSS px from the frame's top that a standing Data Card keeps below (a bar across the top), else it hangs. */
+  let cardTop = 0;
 
   const frameCamera = () => {
     const w = canvas.clientWidth;
@@ -376,7 +397,7 @@ export async function mountWorld(
     frameCamera();
     lookAtViewCentre();
     hotspots.setWorld(next, objects.house.developer);
-    hotspots.setInterior(interior);
+    hotspots.setInterior(openTarget > 0.5);
     cards.setWorld(next);
     // The Guide (dis)assembles in flight only where it can be seen; otherwise it is simply there.
     guide.formAt(guideSpot(next, 'station'), life.seen());
@@ -400,6 +421,7 @@ export async function mountWorld(
   };
 
   show(world, meshed);
+  canvas.dataset.interior = 'shut';
   const observer = new ResizeObserver(resize);
   observer.observe(canvas);
   resize();
@@ -407,9 +429,20 @@ export async function mountWorld(
   canvas.dataset.backend = backend;
 
 
-  const focusState = (id: LandmarkId, at: ScreenOffset = { x: 0, y: 0 }) => {
+  /** Open the House `amount` of the way (1 open, 0 shut) over `ms` per full lift; 0 cuts. */
+  const setOpening = (amount: number, ms: number) => {
+    if (amount === openTarget && ms === openingMs) return;
+    openTarget = amount;
+    openingMs = ms;
+    // The developer's link shows once the House is more open than shut.
+    hotspots.setInterior(amount > 0.5);
+    if (!lifting()) canvas.dataset.interior = amount === 1 ? 'open' : amount === 0 ? 'shut' : 'moving';
+    requestRender();
+  };
+
+  const focusState = (id: LandmarkId, at: ScreenOffset = { x: 0, y: 0 }, zoomScale = 1) => {
     const { point, zoom } = landmarkFocus(current, id);
-    return stateShowing(point, zoom, toFrameUnits(at), rig.limits);
+    return stateShowing(point, zoom * zoomScale, toFrameUnits(at), rig.limits);
   };
 
   return {
@@ -417,11 +450,12 @@ export async function mountWorld(
     camera: rig,
     focusState,
     focus: (id, { at, ms }) => rig.flyTo(focusState(id, at), ms),
-    setInterior: (open, ms) => {
-      interior = open;
-      openingMs = ms;
-      hotspots.setInterior(open);
-      if (!lifting()) canvas.dataset.interior = open ? 'open' : 'shut';
+    setInterior: (open, ms) => setOpening(open ? 1 : 0, ms),
+    setOpening,
+    setDataCardFocus: (id, top = 0) => {
+      if (id === cardFocus && top === cardTop) return;
+      cardFocus = id;
+      cardTop = top;
       requestRender();
     },
     guide,

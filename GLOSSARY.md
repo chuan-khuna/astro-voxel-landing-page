@@ -78,3 +78,7 @@ _Avoid_: mascot, bot, assistant
 **Tour**:
 An optional guided walk that moves the view through every Landmark in Story Order. Without it, the visitor explores freely.
 _Avoid_: walkthrough, autoplay
+
+**Story Scroll**:
+How a phone reads the site: every section stands on one page in Story Order over the fixed World, and as the page scrolls the camera glides from one Landmark to the next. It never moves by itself and never shows the whole World. Desktop and tablet keep one panel over the World instead.
+_Avoid_: scrollytelling, parallax, mobile tour

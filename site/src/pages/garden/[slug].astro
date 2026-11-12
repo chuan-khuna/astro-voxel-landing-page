@@ -23,7 +23,7 @@ const { title, summary, client, year, tags, cover } = project.data;
 ---
 
 <WorldPage title={`${title} · ${site.company.name}`} description={summary} image={cover}>
-  <SectionPanel slot="panel" title={title}>
+  <SectionPanel slot="panel" title={title} id={`project-${project.id}`}>
     <p class="back">
       <a href={garden.route} data-seed-link>← All {garden.label}</a>
     </p>

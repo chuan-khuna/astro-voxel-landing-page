@@ -1,0 +1,48 @@
+---
+/**
+ * What a Landmark section says, inside its panel: its intro copy from the
+ * `pages` collection, then the Station's Services, the Garden's Projects,
+ * the Dock's Clients and Partners, About's link on to Team, Team's Team
+ * Members, or Contact's details. Used by the section's own page
+ * (`[...section].astro`) and by the Story Scroll on phones, where every
+ * section stands on every page (`WorldPage.astro`).
+ */
+import { getCollection, render } from 'astro:content';
+import ProjectList from '@/components/ProjectList.astro';
+import ServiceList from '@/components/ServiceList.astro';
+import DockList from '@/components/DockList.astro';
+import TeamList from '@/components/TeamList.astro';
+import ContactList from '@/components/ContactList.astro';
+import { site, type Landmark } from '@/data/site';
+
+interface Props {
+  landmark: Landmark;
+}
+const { landmark } = Astro.props;
+const page = (await getCollection('pages')).find((p) => p.data.landmark === landmark.id);
+if (!page) throw new Error(`No pages entry with landmark: ${landmark.id} (for ${landmark.route})`);
+const { Content } = await render(page);
+const team = site.landmarks.find((l) => l.id === 'house-interior')!;
+---
+
+<Content />
+{landmark.id === 'station' && <ServiceList />}
+{landmark.id === 'garden' && <ProjectList route={landmark.route} />}
+{landmark.id === 'dock' && <DockList />}
+{
+  landmark.id === 'house' && (
+    <p class="next">
+      <a href={team.route} data-seed-link>
+        Meet the {team.label} →
+      </a>
+    </p>
+  )
+}
+{landmark.id === 'house-interior' && <TeamList />}
+{landmark.id === 'mailbox' && <ContactList />}
+
+<style>
+  .next a {
+    color: var(--brand-ink);
+  }
+</style>

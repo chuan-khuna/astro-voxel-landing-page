@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { clampState, flightState, panBy, screenOffsetOf, stateShowing, zoomAt, type CameraLimits, type CameraState } from './cameraMath';
+import { clampState, dampState, flightState, panBy, screenOffsetOf, stateShowing, zoomAt, type CameraLimits, type CameraState } from './cameraMath';
 
 const limits: CameraLimits = { minX: 0, maxX: 40, minZ: 0, maxZ: 30, minZoom: 1, maxZoom: 6 };
 const start: CameraState = { target: { x: 20, z: 15 }, zoom: 2 };
@@ -152,5 +152,26 @@ describe('screenOffsetOf', () => {
       expect(offset.x).toBeCloseTo(seen.x, 6);
       expect(offset.y).toBeCloseTo(seen.y, 6);
     }
+  });
+});
+
+describe('dampState', () => {
+  const from: CameraState = { target: { x: 0, z: 0 }, zoom: 2 };
+  const to: CameraState = { target: { x: 10, z: -20 }, zoom: 8 };
+
+  it('closes about 63% of the gap in one time constant, zoom on a log scale', () => {
+    const next = dampState(from, to, 300, 300);
+    expect(next.target.x).toBeCloseTo(10 * (1 - Math.exp(-1)));
+    expect(next.target.z).toBeCloseTo(-20 * (1 - Math.exp(-1)));
+    expect(next.zoom).toBeCloseTo(2 * 4 ** (1 - Math.exp(-1)));
+  });
+
+  it('stays put for no time, and lands exactly once close enough', () => {
+    expect(dampState(from, to, 0, 300)).toEqual(from);
+    expect(dampState(from, to, 10_000, 300)).toEqual(to);
+  });
+
+  it('cuts with no time constant', () => {
+    expect(dampState(from, to, 16, 0)).toEqual(to);
   });
 });

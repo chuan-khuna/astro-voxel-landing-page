@@ -33,7 +33,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `garden.ts` | `buildGardenPlants(world)`: one `InstancedMesh` per plant structure, one instance per plant, on the Garden's ground. | yes |
 | `plantLinks.ts` | `plantLinkSize(kind, pxPerUnit)`: a plant link's size on screen, so no link covers another plant (see "Plant links"). | no |
 | `buoyModel.ts` | `drawBuoy(cell, grid, colours)`: a buoy in the detail grid; `buoyLamp(cell)`: its lamp's box, which glows at Night. | no |
-| `houseMotion.ts` | `ROOF_LIFT`, `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame) and `developerPose(seconds)` (typing and reading). | no |
+| `houseMotion.ts` | `ROOF_LIFT`, `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame, toward a target from 0 to 1) and `developerPose(seconds)` (typing and reading). | no |
 | `vesselModels.ts` | The boats and ships (polish ticket 06): `vesselStructure` (a kind's structure in a Biome), `boatsOf(world)`, `boatPlacement` and `shipPlacement` (see "Boats and ships"). | no |
 | `boats.ts` | `buildBoats(world)`: one `InstancedMesh` per boat structure, one instance per moored boat. | yes |
 | `decorationModels.ts` | Decoration as structures: `decorationStructure(biome, kind)`, `decorationPlacement(world, piece)` (its cell's middle, on its ground, turned to its facing) and `decorationOf(world, tier)` (every piece on the full tier, every other one on the reduced tier). | no |
@@ -42,7 +42,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `guideModel.ts` | The Guide's model: `guideVoxels(colours)` (a 6×6×6 ¼-unit cube centred on its origin, side fins, an antenna, the bezel on +x), `GUIDE_SCREEN` (the screen's rectangle) and `GUIDE_FACES` (a 12 × 10 pixel-eye face per mood, and a blink). | no |
 | `guideMotion.ts` | `guideSpot(world, id)` (where the Guide floats beside a placed Landmark), `voxelFlights` and `flightPoint` (the assembly), `travelPoint` (flying between spots on the Tour), `hoverPose(seconds)` (the bob) and `blinking(seconds)`. | no |
 | `speechBubble.ts` | `placeBubble(guide, bubble, frame, covers, landmarks?)`: where the speech bubble goes on screen, or nowhere. | no |
-| `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`, `stateShowing` (the state that shows a point at a screen offset), `screenOffsetOf` (where a point is seen; its inverse) and `flightState` (one moment of an eased flight). | no |
+| `cameraMath.ts` | Pure camera math: `screenToGround`, `panBy`, `zoomAt` (zoom toward a point), `clampState`, `stateShowing` (the state that shows a point at a screen offset), `screenOffsetOf` (where a point is seen; its inverse), `dampState` (a camera chasing a target, closing about 63% of the gap per time constant; the Story Scroll's damping) and `flightState` (one moment of an eased flight). | no |
+| `storyMath.ts` | The Story Scroll on phones (polish 18): `storyPosition(scrollY, stops)` (which two sections the page is between and how far), `sectionInView`, `storyFraming` (the camera there, eased; a cut under reduced motion) and `storyOpening` (how far the House is open). Tested in `storyMath.test.ts`. See `site-project.md`, "Phones: the Story Scroll". | no |
 | `dataCardMath.ts` | Data Card maths: `nearestDataCard` (which card shows), `dataCardAnchors` (where a card stands or hangs), `dataCardTransform` and `placeDataCard` (the CSS `matrix3d`). | no |
 | `landmarkFocus.ts` | `landmarkFocus(world, id)`: the point to look at and the zoom for each of the seven Landmarks. | no |
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
@@ -296,8 +297,9 @@ and the door on the face the House's `door` names
   lifts with it, and one for the base's. From outside the shut House shows
   lit windows, and inside the open House the back windows glow.
 - **Lifting** (`houseMotion.ts`). The House's opening runs from 0 (shut)
-  to 1 (open); `openingStep` moves it toward open or shut at a rate that
-  takes the given time end to end (a cut at 0). `roofLift(opening)` lifts
+  to 1 (open); `openingStep` moves it toward its target (open, shut, or
+  part-way while the Story Scroll leads it) at a rate that takes the given
+  time from shut to open (a cut at 0). `roofLift(opening)` lifts
   the lid by up to `ROOF_LIFT` = 6 units, eased in and out: high enough
   that, in the House Interior close-up, the lid is clear of the room on
   screen (it rises out of the top of the frame). The sun's shadow map is
@@ -504,7 +506,7 @@ the water; they do not bob. The Model Gallery floats them on an opaque
 ## Scene runtime
 
 `mountWorld(canvas, world, meshed?, ui?)` returns a `WorldView`
-`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?), setViewCentre(at), setInterior(open, ms), setTheme(theme), guide, onFrame(listener), backend, tier, lifeTier, dispose() }`. `ui` is
+`{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?, zoomScale?), setViewCentre(at), setInterior(open, ms), setOpening(amount, ms), setDataCardFocus(id), setTheme(theme), guide, onFrame(listener), backend, tier, lifeTier, dispose() }`. `ui` is
 `{ frame, hotspots, cards?, theme?, guide?, onExplore?, tierOverride?, lifeOverride? }`: the element round the canvas that takes pan and zoom
 input, the Landmark hotspot links inside it, the Data Cards, the theme of the first frame and the Guide's
 button, speech bubble and the boxes its bubble avoids (default: the canvas's
@@ -514,7 +516,14 @@ looks (CSS px from the frame's centre: the middle of the part the floating
 cards leave free, from `freeCentre`), which picks the Data Card shown and
 is where the pan bounds apply (`CameraLimits.at`, below). `setInterior(open, ms)`
 opens the House (its lid lifts over `ms`, the developer's link shows) or
-shuts it (the lid comes down); 0 cuts. The House stays open or shut across
+shuts it (the lid comes down); 0 cuts. `setOpening(amount, ms)` opens it
+part-way (0–1; the Story Scroll leads the lid with the page), moving at
+the rate of a full lift over `ms`; `setInterior(open, ms)` is
+`setOpening(open ? 1 : 0, ms)`, and the developer's link shows once the
+House is more open than shut. `canvas.dataset.interior` is `shut`, `open`
+or `moving`. `setDataCardFocus(id)` narrows which Data Card may show (see
+"Data Cards"). `focusState(id, at, zoomScale)` scales the close-up's zoom
+(the Story Scroll's intro and Garden framings). The House stays open or shut across
 `show`: a new World's lid starts where the old one was. `camera` is the camera rig (below); `focus` flies the
 camera to a Landmark (see "Landmark focus and flights").
 
@@ -709,6 +718,9 @@ on the isometric axis above the target.
   - The frame has `touch-action: none`, so the browser never scrolls or
     zooms the page for a gesture that starts on the World, and
     `data-dragging` while dragging (grab and grabbing cursors).
+  - `setInput(false)` stops all of it (the Story Scroll on phones): no
+    pointer or wheel event is taken, so a swipe or the wheel scrolls the
+    page; flights and cuts still move the camera.
   - `reset(limits, state, distance)` sets new bounds and cuts; `jumpTo(state)`
     cuts to a clamped state; `flyTo(state, ms)` flies there (below);
     `limits` are the current bounds and zoom range; `lookAt(at)` sets
@@ -716,8 +728,8 @@ on the isometric axis above the target.
 - **Limits:** pan bounds are the union of the Isles' footprints (the same
   box the Overview is fitted to), so where the visitor looks is always over
   the World's land box. That is the free part's middle, not the screen's
-  centre: with a bottom sheet open on a phone, a Landmark at the World's
-  edge can still be brought into the free part above it. `mountWorld`
+  centre: with a panel open beside it, a Landmark at the World's edge can
+  still be brought into the free part. `mountWorld`
   keeps `limits.at` in step with `setViewCentre`, resizes and new Worlds. Zoom runs from 1 (the Overview, the farthest out) to
   `max(2, radius / 3)`, about 3 world units from the centre to the frame
   edge.
@@ -759,9 +771,9 @@ on the isometric axis above the target.
   and stops taking the pointer (clicks fall through to the Garden's
   hotspot); it still takes keyboard focus. With the camera at the Garden
   (`/garden`), flowers are 47 × 53 px and trees 47 × 133 px at 1440 × 900,
-  and 13 × 15 px and 13 × 37 px on a 390 × 844 phone, where the Garden fits
-  the strip above the bottom sheet; there they take the pointer but are
-  below a comfortable tap size (zooming in grows them). The page marks the
+  and about 32 × 37 px and 32 × 92 px on a 390 × 844 phone, where the Story
+  Scroll frames the Garden as close as the camera may come (flowers stay
+  under 44 px: that would need a closer zoom than the World allows). The page marks the
   open Project's plant link with `aria-current="page"` (an outline).
 
 ### Data Cards
@@ -780,7 +792,10 @@ camera):
   the view centre the page sets: the Landmark sits in the middle of the
   part the floating cards leave free, and that is what counts, not the
   frame's centre. The shown card gets `data-near` (opacity 1); the others fade out
-  where they were. Cards are hidden until a World is shown and reset on a
+  where they were. `view.setDataCardFocus(id)` narrows the choice to one
+  Landmark's card (`null`: none; `undefined`, the default: any); the Story
+  Scroll shows only its section's, once the camera holds there, and marks
+  a card under a section's card `data-covered` (hidden). Cards are hidden until a World is shown and reset on a
   new World.
 - **The tilt: `dataCardTransform(viewProjection, frame, anchor, card, pin)`.**
   A CSS `matrix3d` (column-major, like three's `Matrix4.elements`) built
@@ -826,7 +841,7 @@ camera):
   frame (CSS px from its centre) the Landmark should land. The page passes
   `freeCentre(frame, covers)` (`freeArea.ts`, tested in
   `freeArea.test.ts`): the middle of the part the floating cards (top bar,
-  panel or bottom sheet, intro, dice row) leave free, so the Landmark is
+  panel, intro, dice row) leave free, so the Landmark is
   never under a card. See "Full-screen layout" in `site-project.md`.
 - **Flights:** `rig.flyTo(state, ms)` tweens with `flightState(from, to, t)`:
   cubic ease in and out, the target in a straight line and the zoom on a

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { landmarkForPath, routeView } from './landmarkRoutes';
-import { site } from '../data/site';
+import { landmarkForPath, routeView, sameRoute } from './landmarkRoutes';
+import { site } from '@/data/site';
 
 describe('landmarkForPath', () => {
   it('maps each Landmark route to its Landmark', () => {
@@ -44,5 +44,13 @@ describe('routeView', () => {
     for (const id of ['overview', 'station', 'garden', 'dock', 'mailbox'] as const) {
       expect(routeView(id)).toEqual({ focus: id, interior: false });
     }
+  });
+});
+
+describe('sameRoute', () => {
+  it('treats a trailing slash and index.html as the same route, and nothing else', () => {
+    expect(sameRoute('/about/', '/about')).toBe(true);
+    expect(sameRoute('/index.html', '/')).toBe(true);
+    expect(sameRoute('/about/team', '/about')).toBe(false);
   });
 });

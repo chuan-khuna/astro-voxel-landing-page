@@ -1,19 +1,29 @@
 ---
 /**
  * A section page's panel over the World: a floating card at the right on
- * desktop, a bottom sheet on narrow screens. It is plain static HTML, so the section reads in
- * full without JS. The close link goes back to the World (`/`, keeping the
- * Seed); Escape does the same when JS runs.
+ * desktop, one card of the Story Scroll on phones. It is plain static HTML,
+ * so the section reads in full without JS. The close link goes back to the
+ * World (`/`, keeping the Seed); Escape does the same when JS runs. The
+ * Story Scroll has no close link: the page scrolls on to the next section.
+ *
+ * The page's own panel has its title as the page's `h1`; the other sections
+ * standing in the Story Scroll on the same page take an `h2`.
  */
 interface Props {
   title: string;
+  /** Unique on the page: the title's id is `panel-<id>`. */
+  id: string;
+  /** The title's heading level: 1 for the page's own panel (the default), 2 for another section on the page. */
+  level?: 1 | 2;
 }
-const { title } = Astro.props;
+const { title, id, level = 1 } = Astro.props;
+const Heading = level === 1 ? 'h1' : 'h2';
+const titleId = `panel-${id}`;
 ---
 
-<aside class="panel" data-panel data-covers-world tabindex="-1" aria-labelledby="panel-title">
+<aside class="panel" data-panel data-covers-world data-story-card tabindex="-1" aria-labelledby={titleId}>
   <div class="panel-head">
-    <h1 id="panel-title">{title}</h1>
+    <Heading class="panel-title" id={titleId}>{title}</Heading>
     <a class="panel-close" href="/" data-seed-link data-panel-close aria-label={`Close ${title} and return to the World`} title="Close">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
         <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
@@ -64,7 +74,7 @@ const { title } = Astro.props;
     justify-content: space-between;
     gap: 1rem;
   }
-  .panel-head h1 {
+  .panel-title {
     margin: 0.1rem 0 0.5rem;
     font-size: 2.8125rem;
   }
@@ -74,6 +84,13 @@ const { title } = Astro.props;
     padding: 0.35rem;
     border-radius: 4px;
     color: var(--ink);
+  }
+  /* On a touch screen the close link is at least 44px square to tap. */
+  @media (pointer: coarse) {
+    .panel-close {
+      padding: 0.75rem;
+      margin: -0.4rem -0.6rem 0 0;
+    }
   }
   .panel-close:hover,
   .panel-close:focus-visible {
@@ -91,7 +108,7 @@ const { title } = Astro.props;
       padding: 0.75rem 1rem 1rem;
       --panel-from: translateY(1.5rem);
     }
-    .panel-head h1 {
+    .panel-title {
       font-size: 1.875rem;
     }
   }
