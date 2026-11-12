@@ -51,6 +51,8 @@ imports, so the generator stays pure.
 | `decoration.ts` | Decoration: `placeDecoration`, `DECORATION_HEIGHT` and `MINOR_BUILDINGS`: pieces of scenery on free land, each below the nearest Landmark and out of every Landmark's sight line. |
 | `particles.ts` | Particles' spawn areas: `placeParticles`, `PARTICLE_SETS` (which particles each Biome has by Day and at Night) and `PARTICLE_AREA` (each kind's box and cap). |
 | `clouds.ts` | The clouds: `placeClouds` and `MAX_CLOUDS`: masses of 1-unit voxels shaped from the Seed, drifting down the wind high over the sea, never over an Isle nor between the camera and one. |
+| `fish.ts` | The fish schools: `placeFish`, `MAX_SCHOOLS` and `FISH_AREA`: 2×2-cell squares of open shallow water, clear of the jetty, the boats, bridges, buoys and the ships. |
+| `coast.ts` | `coastDistance(terrain, ring)`: each cell's distance to the nearest land cell (a chamfer), shared by the fish's shallows and the sea's shade and surf (`render/seaModel.ts`). |
 | `sightline.ts` | `forEachRayColumn`: the columns the camera's ray from a ground point passes through, the occlusion check shared by Landmark placement, Decoration and particles; `sightClearance`: how high anything may stand over each cell and leave every Landmark in view. |
 | `vessels.ts` | Boat and ship kinds: `BOAT_KINDS`, `SHIP_KINDS`, `vesselKind(id, kinds)` (a stable hash of the id) and the stand-in ids. |
 | `terrain.ts` | Isle layout, noise heights, surface kinds, cliff strata. |
@@ -91,6 +93,7 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `decoration` | Decoration, in placement order (row by row): each piece's `kind` (`DECORATION_KINDS`), land `cell` and `facing` (its structure is drawn facing south; see "Decoration"). |
 | `particles` | Spawn areas of the Biome's particles, by Day and at Night: each a `kind` (`PARTICLE_KINDS`), a box of air (`centre`, `radius` across the ground, `floor` and `top` heights) over land no higher than its `ground` (see "Particles"). |
 | `clouds` | Up to 8 (`MAX_CLOUDS`) clouds: each one's `voxels` (1-unit cells of its box, `size` across, up and across, from its corner) and `base` (its underside's height), and its drift down the wind: `from` and `to` (its box's corner at the start and end), `period` (seconds a drift takes) and `phase` (0–1, how far through at time 0). See "Clouds". |
+| `fish` | Up to 6 (`MAX_SCHOOLS`) fish schools: each one's `centre` (a grid corner), `radius` (1: the square of water it keeps to, 2×2 cells) and `size` (3–5 fish). See "Fish". |
 | `wind` | The wind's `direction` across the ground, a unit vector, from the Seed alone. |
 | `views` | The two derived Landmarks, as camera views (`target`, `radius`): `overview` and `house-interior`. |
 
@@ -411,6 +414,31 @@ least 4. Since the view ray runs from a cloud towards the north-west, an
 Isle keeps clouds off a long band of sea to its south-east (a cloud there
 would be seen over the Isle).
 
+### Fish
+
+Polish ticket 13 (`fish.ts`). Schools of the Biome's fish swim in the
+shallows (the renderer swims them, leaps them and draws the shore's surf;
+see `rendering-and-shading.md`, "Ambient Life: shore waves, fish and
+glowing surf"). `World.fish` holds where each school swims and how many
+fish it has.
+
+`placeFish` runs last, once the vessels and buoys are placed, and draws
+from a sequence of the Seed's own (`<seed>/fish`), so it never moves the
+layout. A school keeps to the square of water 1 unit either side of a grid
+corner (`FISH_AREA`): the 2×2 cells round it. A corner can take a school
+when every one of those cells is:
+
+- **in the shallows**: sea inside the grid, at most 2 cells from the land,
+  centre to centre (`coastDistance`), where the water is translucent and
+  the seabed shows, so the fish are seen through it;
+- **open**: not the jetty, a moored boat or a cell beside either (the
+  jetty's posts and the boats' hulls stand in the water), nor a bridge, a
+  buoy or a cell of a ship's loop.
+
+The fitting corners are shuffled and taken in turn, each school at least
+3 units from the others, up to 6 (`MAX_SCHOOLS`), each with 3–5 fish.
+Over the 200 test Seeds every World gets all 6.
+
 ### Buoys
 
 `buoys.ts` sets out up to 4 buoys after the ships, from the layout alone
@@ -584,6 +612,11 @@ Seeds, never snapshots:
   straight down or down the view ray from its top (an independent march
   over 60 Seeds); and it is seen within 1.6 Overview radii of the
   Overview's centre;
+- fish: the same Seed gives the same schools; at least 2 on 90% of Worlds,
+  never over 6, each of 3–5 fish; every cell under a school is sea inside
+  the grid with land within 2 cells (an independent measure); none on or
+  beside the jetty or a boat, on a bridge, a buoy or a ship's loop, and
+  schools 3 units apart;
 
 ```sh
 cd site && bun run test

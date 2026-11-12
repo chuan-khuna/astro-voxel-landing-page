@@ -90,6 +90,15 @@ export const STRUCTURE_ROLES = {
   petalBlue: { fixed: 'petalBlue' },
   petalBlueLight: { fixed: 'petalBlue', dl: 0.07 },
   pollen: { fixed: 'pollen' },
+  // The fish (polish 13), one species a Biome.
+  fishOrange: { fixed: 'fishOrange' },
+  fishWhite: { fixed: 'fishWhite' },
+  fishSilver: { fixed: 'fishSilver' },
+  fishSilverDark: { fixed: 'fishSilver', dl: -0.3 },
+  fishGold: { fixed: 'fishGold' },
+  fishRed: { fixed: 'petalRed', dl: 0.04 },
+  fishDark: { fixed: 'fishDark' },
+  fishEmber: { fixed: 'fishEmber' },
   // The House Interior's rooms (1/16 unit) and the developer at work.
   /** The computer's screen: the glowing code is drawn over its +x face (`interiorModel.ts`). */
   screen: { fixed: 'screenDark' },

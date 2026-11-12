@@ -22,6 +22,7 @@
  * under every translucent voxel a seabed tile shows through the water.
  */
 import type { World } from '@/world';
+import { coastDistance as coastDistanceOf } from '@/world/coast';
 
 /** The top of the water at rest, in world units above the sea floor (y = 0). */
 export const SEA_LEVEL = 0.15;
@@ -39,6 +40,8 @@ export const DEEP_REACH = 6;
 export const CLEAR_REACH = 3;
 /** The opacity of the water beside the coast. */
 export const SHALLOW_OPACITY = 0.7;
+/** The coast's distance stops counting this far out (units): no surf reaches it. */
+export const COAST_FAR = 8;
 /** Cells over which the swell fades out towards the ring's outer edge. */
 const SWELL_FADE = 4;
 
@@ -50,6 +53,14 @@ export interface SeaMesh {
   cells: Float32Array;
   /** Per vertex: the voxel's deep (0–1), opacity (0–1) and swell (0–1). */
   shades: Float32Array;
+  /**
+   * Per vertex, the same for all four of a voxel's: the distance from the
+   * coastline (units) at its corners (x, z), (x + 1, z), (x, z + 1),
+   * (x + 1, z + 1), which the surf runs in along (`surf.ts`).
+   */
+  coast: Float32Array;
+  /** Per vertex, likewise: 1 where surf may break at each corner, 0 by the jetty or a moored boat. */
+  calm: Float32Array;
   indices: Uint32Array;
   triangles: number;
 }
@@ -78,46 +89,19 @@ export function seaShade(coast: number, edge: number): SeaShade {
 
 /**
  * Distance from each cell of the grid plus its ring to the nearest land
- * cell, centre to centre (a two-pass chamfer: steps of 1 and √2). Indexed
+ * cell, centre to centre (`world/coast.ts`). Indexed
  * `(z + SEA_RING) * w + (x + SEA_RING)`; Infinity with no land at all.
  */
 export function coastDistance(world: World): { w: number; d: number; distance: Float32Array } {
-  const { width, depth, isle } = world.terrain;
-  const w = width + 2 * SEA_RING;
-  const d = depth + 2 * SEA_RING;
-  const distance = new Float32Array(w * d).fill(Infinity);
-  for (let z = 0; z < depth; z++) {
-    for (let x = 0; x < width; x++) {
-      if (isle[z * width + x] !== -1) distance[(z + SEA_RING) * w + x + SEA_RING] = 0;
-    }
-  }
-  const relax = (i: number, x: number, z: number, dx: number, dz: number, step: number) => {
-    const nx = x + dx;
-    const nz = z + dz;
-    if (nx < 0 || nz < 0 || nx >= w || nz >= d) return;
-    const via = distance[nz * w + nx]! + step;
-    if (via < distance[i]!) distance[i] = via;
-  };
-  for (let z = 0; z < d; z++) {
-    for (let x = 0; x < w; x++) {
-      const i = z * w + x;
-      relax(i, x, z, -1, 0, 1);
-      relax(i, x, z, 0, -1, 1);
-      relax(i, x, z, -1, -1, Math.SQRT2);
-      relax(i, x, z, 1, -1, Math.SQRT2);
-    }
-  }
-  for (let z = d - 1; z >= 0; z--) {
-    for (let x = w - 1; x >= 0; x--) {
-      const i = z * w + x;
-      relax(i, x, z, 1, 0, 1);
-      relax(i, x, z, 0, 1, 1);
-      relax(i, x, z, 1, 1, Math.SQRT2);
-      relax(i, x, z, -1, 1, Math.SQRT2);
-    }
-  }
-  return { w, d, distance };
+  return coastDistanceOf(world.terrain, SEA_RING);
 }
+
+/** A voxel's surf data: the coast's distance and the calm at its four corners. */
+interface Surf {
+  coast: readonly number[];
+  calm: readonly number[];
+}
+const OPEN_SEA: Surf = { coast: [COAST_FAR, COAST_FAR, COAST_FAR, COAST_FAR], calm: [1, 1, 1, 1] };
 
 /** Collects quads into a `SeaMesh`. */
 class QuadBuilder {
@@ -125,6 +109,8 @@ class QuadBuilder {
   private readonly normals: number[] = [];
   private readonly cells: number[] = [];
   private readonly shades: number[] = [];
+  private readonly coast: number[] = [];
+  private readonly calm: number[] = [];
   private quads = 0;
 
   /** Four corners counter-clockwise seen from the side `normal` points to; `lifts` says which corners bob. */
@@ -134,12 +120,15 @@ class QuadBuilder {
     cell: readonly [number, number],
     lifts: readonly number[],
     shade: SeaShade,
+    surf: Surf = OPEN_SEA,
   ): void {
     corners.forEach((c, k) => {
       this.positions.push(c[0], c[1], c[2]);
       this.normals.push(normal[0], normal[1], normal[2]);
       this.cells.push(cell[0], cell[1], lifts[k]!);
       this.shades.push(shade.deep, shade.opacity, shade.swell);
+      this.coast.push(...surf.coast);
+      this.calm.push(...surf.calm);
     });
     this.quads++;
   }
@@ -155,6 +144,8 @@ class QuadBuilder {
       normals: new Float32Array(this.normals),
       cells: new Float32Array(this.cells),
       shades: new Float32Array(this.shades),
+      coast: new Float32Array(this.coast),
+      calm: new Float32Array(this.calm),
       indices,
       triangles: this.quads * 2,
     };
@@ -170,6 +161,14 @@ export function seaModel(world: World): SeaModel {
   const y = SEA_LEVEL;
   const flat: SeaShade = { deep: 1, opacity: 1, swell: 0 };
 
+  // The surf's data. A cell's distance (centre to the nearest land cell's centre, out to COAST_FAR); beyond the ring, far.
+  const far = (gx: number, gz: number) => (gx >= 0 && gz >= 0 && gx < w && gz < d ? Math.min(COAST_FAR, distance[gz * w + gx]!) : COAST_FAR);
+  // A corner's distance from the coastline: the mean of the four cells round it, less half a cell (so a land cell's edge is 0).
+  const coastAt = (gx: number, gz: number) => Math.max(0, (far(gx - 1, gz - 1) + far(gx, gz - 1) + far(gx - 1, gz) + far(gx, gz)) / 4 - 0.5);
+  // The jetty's posts and the boats' hulls stand in the water: no corner of a cell round them breaks.
+  const still = new Set([...world.landmarks.flatMap((l) => l.jetty), ...world.boats.map((b) => b.cell)].map((c) => `${c.x},${c.z}`));
+  const calmAt = (x: number, z: number) => (still.has(`${x - 1},${z - 1}`) || still.has(`${x},${z - 1}`) || still.has(`${x - 1},${z}`) || still.has(`${x},${z}`) ? 0 : 1);
+
   const isWater = (gx: number, gz: number) => gx >= 0 && gz >= 0 && gx < w && gz < d && distance[gz * w + gx]! > 0;
   for (let gz = 0; gz < d; gz++) {
     for (let gx = 0; gx < w; gx++) {
@@ -179,8 +178,12 @@ export function seaModel(world: World): SeaModel {
       const edge = Math.min(gx, gz, w - 1 - gx, d - 1 - gz);
       const shade = seaShade(distance[gz * w + gx]!, edge);
       const cell = [x, z] as const;
+      const surf: Surf = {
+        coast: [coastAt(gx, gz), coastAt(gx + 1, gz), coastAt(gx, gz + 1), coastAt(gx + 1, gz + 1)],
+        calm: [calmAt(x, z), calmAt(x + 1, z), calmAt(x, z + 1), calmAt(x + 1, z + 1)],
+      };
       // Top, counter-clockwise from above.
-      water.quad([[x, y, z], [x, y, z + 1], [x + 1, y, z + 1], [x + 1, y, z]], [0, 1, 0], cell, [1, 1, 1, 1], shade);
+      water.quad([[x, y, z], [x, y, z + 1], [x + 1, y, z + 1], [x + 1, y, z]], [0, 1, 0], cell, [1, 1, 1, 1], shade, surf);
       // Skirts on the sides the camera sees, where the neighbour is water too.
       if (isWater(gx + 1, gz)) {
         water.quad(

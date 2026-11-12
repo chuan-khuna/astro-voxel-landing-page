@@ -46,6 +46,9 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `particles.ts` | `buildParticles(world, clock)`: one `InstancedMesh` of ⅛-unit cubes per particle kind, moved in the vertex shader on the shared clock and wind; `setTheme(theme)` shows the kinds out, `setLife(tier)` the tier's share. | yes |
 | `cloudMath.ts` | The clouds, pure: `cloudFade(world, zoom)` (how much of the clouds shows at a zoom: whole at the Overview, gone well before any close-up), `cloudsShown(total, lifeTier)`, `cloudShadowDrift(wind, seconds)` and `cloudShadowStrength(theme)` (see "Ambient Life: clouds and their shadows"). | no |
 | `clouds.ts` | `buildClouds(world, clock)`: every cloud meshed from its 1-unit voxels and merged into one translucent mesh, drifted in the vertex shader on the shared clock; `setTheme`, `setZoom` (the fade) and `setLife` (the tier's share). | yes |
+| `schools.ts` | The fish, pure: `schoolFish(world)` (each fish's loop, lane, speed, wiggle and leap timing in its school), `fishAt(fish, seconds)` (where it is, its heading and pitch, whether it is leaping), `sprayDrops` and `sprayAt` (the spray its leaps throw up), `fishShown` and `sprayShown` (the life tier's share), `FISH_REACH`. | no |
+| `fish.ts` | `buildFish(world, clock)`: one `InstancedMesh` of the Biome's fish structure and one of ⅛-unit spray cubes, both moved in the vertex shader on the shared clock by `schools.ts`' sums; `setLife(tier)` (returns the fish shown), `setTheme(theme)` (the spray takes the foam's colour). | yes |
+| `surf.ts` | The shore's surf, pure: `surfFoam(d, u)` and `surfGlow(d, u)` (foam and glow at a distance from the coastline, part-way through a wave), `surfFront`, `SURF_PERIOD`, `SURF_RUN`, `SURF_BREAK`; `seaMaterial` does the same sums per ⅛-unit square. | no |
 | `cloudShadow.ts` | `CLOUD_SHADOW` (the shared `drift` and `strength` uniforms) and `cloudShade(position)`: the clouds' soft shadows, a drifting noise mask every voxel material and the sea take into their colour. | yes |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
 | `guideModel.ts` | The Guide's model: `guideVoxels(colours)` (a 6×6×6 ¼-unit cube centred on its origin, side fins, an antenna, the bezel on +x), `GUIDE_SCREEN` (the screen's rectangle) and `GUIDE_FACES` (a 12 × 10 pixel-eye face per mood, and a blink). | no |
@@ -57,15 +60,15 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `landmarkFocus.ts` | `landmarkFocus(world, id)`: the point to look at and the zoom for each of the seven Landmarks. | no |
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
-| `seaModel.ts` | The sea, pure (see "Sea"): `seaModel(world)` (the water voxels' tops and skirts, the flat water beyond them and the seabed, as typed arrays), `coastDistance` and `seaShade`, and `SEA_LEVEL`. | no |
+| `seaModel.ts` | The sea, pure (see "Sea"): `seaModel(world)` (the water voxels' tops and skirts, the flat water beyond them and the seabed, as typed arrays, with each voxel's surf data: the coast's distance and the calm at its corners), `coastDistance` (from `world/coast.ts`) and `seaShade`, and `SEA_LEVEL`. | no |
 | `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?, { displace? })`: the TSL node material, in world space or (for instanced and moving meshes) the mesh's own space, optionally moving each vertex (a swaying plant), shaded by the clouds' shadows (`cloudShadow.ts`); `softVoxelLook` is the look on its own (seams, bevel, jitter) for other materials. | yes |
 | `ambientClock.ts` | `createAmbientClock()`: the shared Ambient Life clock (`time`, seconds, advanced only while Ambient Life is alive) and wind (`wind`, the World's direction) uniforms; `windAt(clock, position)`: the wind at a world position in the shader, gusts rolling down the wind (see "Ambient Life: loop, clock and tiers"). | yes |
 | `ambientLife.ts` | `createAmbientLife`: whether the World is seen (tab shown, canvas on screen, motion allowed) and alive (seen, at a tier that moves), the life tier watch and the clock, for `mountWorld`'s loop. | DOM only |
-| `seaMaterial.ts` | `seaMaterial(clock)`: the sea's TSL material (the soft-voxel look at 1 unit, shallow to deep colour, opacity, the bob in the vertex shader on the shared clock) and its colour uniforms. | yes |
+| `seaMaterial.ts` | `seaMaterial(clock)`: the sea's TSL material (the soft-voxel look at 1 unit, shallow to deep colour, opacity, the bob in the vertex shader on the shared clock, the shore's surf per ⅛-unit square and its glow at Night) and its colour uniforms (water, foam, glow). | yes |
 | `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy, optionally with a material of its own), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, plus an optional heave, roll and pitch for a vessel on the swell, pure maths) and `mergeChunks`. | yes |
 | `house.ts` | `buildHouse(world, clock?)`: the House Variant's lid (⅛ unit) as a mesh, the windows' lights, and the House Interior's room at 1/16 unit (furniture, the developer's head and hands, the code screen, the Night lamp worked out in the room's material); `setOpening` lifts the lid and shows the room while it is above 0, `setLights` lights the windows and the lamp, `work(seconds)` poses the developer; `roomTriangles` and `developer` (the developer's box, for their link). | yes |
 | `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops, rocking on the swell. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves, the Biome's particles, the clouds and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer, the clouds' shadows' drift) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves, particles and clouds; `setZoom(zoom)` fades the clouds; `setTheme` recolours the sea and the clouds, lights the lamps and windows, shows the particles out and sets the clouds' shadows (none at Night). | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves, the Biome's particles, the clouds, the fish and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer, the clouds' shadows' drift) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves, particles, clouds and fish (and returns how many fish show); `setZoom(zoom)` fades the clouds; `setTheme` recolours the sea and the clouds, lights the lamps and windows, shows the particles out and sets the clouds' shadows (none at Night). | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
 | `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, the render loop (continuous while Ambient Life is alive, else on demand) and the render tier, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
@@ -493,6 +496,13 @@ built by `seaModel.ts` (pure) and drawn with `seaMaterial.ts`:
   motion, at the still tier, on a hidden page or with the canvas off
   screen the water holds still where it is (a fresh page and the build's
   World still show the bob at time 0, the voxels' steps frozen).
+- **Surf** (polish ticket 13; see "Ambient Life: shore waves, fish and
+  glowing surf"). Each voxel also carries, at its four corners, the
+  distance from the coastline (`coast`: the mean of the four cells' coast
+  distances round the corner, less half a cell, so a land cell's edge is
+  0; 8 units at most) and whether surf may break there (`calm`: 0 at any
+  corner of the jetty's cells or a moored boat's). The shader runs the
+  foam in along them.
 - **Night** darkens both water colours and the seabed (`seaColour`: the
   `waterShift` token, −0.12 OKLCH lightness).
 - **Triangles.** Two for each top, two for each skirt, eight for the flat
@@ -851,6 +861,76 @@ Isles, and their soft shadows cross the whole World.
   (`e2e/ambient-life.spec.ts` checks `data-clouds` at the Overview and in
   the Garden's close-up).
 
+### Ambient Life: shore waves, fish and glowing surf
+
+Polish ticket 13 (ADR 0005). Foam runs in and breaks along every coast,
+schools of fish swim in the shallows and now and then one leaps, and at
+Night the breaking surf glows faintly.
+
+- **Surf** (`surf.ts`, pure; `seaMaterial.ts`). Computed in the sea's
+  fragment shader from the water's distance-from-coast data (`seaModel`'s
+  `coast` corners, see "Sea"), with no work on the CPU. Each ⅛-unit square
+  of a water voxel's top takes the distance at its middle (bilinear
+  between the voxel's corners) and how far through its wave it is: a wave
+  every 7 s (`SURF_PERIOD`), arriving a little out of step along the coast
+  (a slow wobble of a quarter of a wave across the sea). For the first 55%
+  of a wave (`SURF_BREAK`) a crest of foam runs in from 2 units out
+  (`SURF_RUN`), speeding up and thickening; then it lies thick along the
+  edge and washes out to 0.85 units as it draws back, thinning to nothing;
+  a thin rim always laps the edge. `surfFoam` gives the amount; a square is
+  foam when a hash of it (new each wave) falls under it, so the foam is
+  scattered ⅛-unit squares with the soft-voxel look at ⅛ unit (seams
+  and jitter), nearly opaque (0.95), in `WorldTokens.foam`. Surf never
+  breaks on the jetty's cells or a moored boat's (`calm` is 0 at their
+  corners, fading over the next cell), so no foam runs under the deck or
+  through a hull. Only voxel tops foam; the flat water beyond the ring is
+  far from any coast. A frozen clock holds the surf where it is.
+- **Glow at Night.** `surfGlow`: where a wave breaks (within about half a
+  unit of the edge), brightest as it breaks and fading as it draws back.
+  It is emissive, `WorldTokens.surfGlow` (a cyan) times
+  `surfGlowStrength` (0 by Day, 0.8 at Night): 0.6 of it as a soft wash,
+  the whole of it on the foam's squares where waves break, and a quarter
+  of it on every square of foam. The foam itself dims at Night
+  (`foam`: L 0.97 by Day, 0.72 at Night), so at Night the surf reads as
+  faint cyan lines. It throws no light and does not
+  bloom (that is ticket 16's).
+- **Fish** (`schools.ts`, pure; `fish.ts`). `generateWorld` places up to 6
+  schools in the shallows (`World.fish`, see `world-generator.md`, "Fish"),
+  each a 2×2-cell square round a grid corner. A school's 3–5 fish swim
+  round a loop of radius 0.35–0.42 units about its centre at 0.18–0.28 units a
+  second, one behind the other 0.28 units apart in three lanes 0.1 apart,
+  wiggling ±0.15 rad; they swim with their back 0.105 units up, under the
+  lowest the water sinks to (0.11), so the translucent shallows tint them.
+  The Biome's species (`fish/<biome>-1`, see `voxel-structures.md`) is one
+  `InstancedMesh`, one instance a fish, in the soft-voxel look at ⅛ unit;
+  it gives off 45% of its colour by Day, so it still reads through the
+  water's tint, and 10% at Night, so it never glows.
+- **Leaps.** Each school leaps once every 7–14 s, its fish taking turns
+  (never two at once): out of the water nose up, 0.45 units high over
+  0.9 s, landing nose down 0.3 units ahead, then drifting back to its
+  place under the water over 2 s. As it leaves the water and as it falls
+  back, 3 drops of spray (⅛-unit cubes in the foam's colour, glowing a
+  little at Night) fly up 0.8–1.3 units a second and out 0.2–0.4 and fall
+  back to the sea; between leaps a drop has no size. All of it in the
+  vertex shader by the same sums as `fishAt` and `sprayAt` (tested: every
+  fish and drop stays in its school's square, a swimming fish stays under
+  the water, a leap clears it), so a frozen clock holds every fish.
+- **Tiers and clicks.** `setLife` shows the life tier's share of the
+  schools, whole schools (all at full, half rounded up at reduced and
+  still), and their spray; `canvas.dataset.fish` says how many fish show.
+  Fish and spray cast no shadow (the shadow map is static), are never
+  frustum-culled (the shader moves them) and never raycast; the foam is
+  the sea's own colour. Neither is a hotspot.
+- **Triangles.** A fish is 40–60 triangles and a drop of spray 12 (6 a
+  fish): about 2,900 a World on `harbour` (6 schools, 22 fish: 1,320 for
+  the fish, 1,584 for the spray), in `data-triangles`. The surf adds none.
+- **Checked** in headless Chromium (SwiftShader), desktop and phone, with
+  no console errors: all four Biomes by Day and at Night at the Overview,
+  and close-ups near a school (`harbour`'s Contact, `seed-1`'s Dock,
+  `seed-2`'s Garden), with recordings of the waves and the leaps
+  (`screenshots/13-*`); `e2e/ambient-life.spec.ts` checks `data-fish`
+  follows the life tier.
+
 ## Day and Night
 
 The theme (`site-project.md`, "Day and Night") reaches the World through
@@ -867,6 +947,7 @@ page's CSS:
 | `waterShift` | 0 | −0.12 lightness on both water colours and the seabed |
 | `lightsOn` | off | the House's windows (`windowLight`, a warm white) and the buoys' lamps (`buoyLight`, a warm amber) glow |
 | `cloud`, `cloudShadow` | white clouds, shadows 0.2 | dark grey-blue clouds, no shadows |
+| `foam`, `surfGlow`, `surfGlowStrength` | white foam, no glow | dimmer grey-blue foam, glowing a faint cyan, brightest where waves break (0.8) |
 
 `setTheme` recolours the sky, the lights, the water's two colours, the seabed and the clouds, sets the clouds' shadows, shows
 or hides the window panes and lamp boxes, sets `canvas.dataset.theme` and

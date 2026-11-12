@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { BIOME_IDS, BOAT_KINDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, PLACED_LANDMARK_IDS, SHIP_KINDS } from '@/world';
 import { GROUND_DETAIL, INTERIOR, STRUCTURE } from '@/render/voxelTiers';
 import { STRUCTURES, STRUCTURE_FILES, variantsOf } from './index';
+import { FISH_REACH } from '@/render/schools';
 import { parseStructure, structureVoxels, voxelAt, type Structure } from './parse';
 import { STRUCTURE_ROLES } from './roles';
 
@@ -416,6 +417,51 @@ describe('the Decoration', () => {
   it('never stands a Landmark Variant lower than the generator assumes (`LANDMARK_MIN_HEIGHT`)', () => {
     for (const kind of PLACED_LANDMARK_IDS) {
       for (const s of STRUCTURES.filter((s) => s.kind === kind)) expect(tallest(s) / STRUCTURE, s.name).toBeGreaterThanOrEqual(LANDMARK_MIN_HEIGHT[kind]);
+    }
+  });
+});
+
+describe('the fish', () => {
+  const fish = STRUCTURES.filter((s) => s.kind === 'fish');
+
+  it('gives every Biome one species of its own', () => {
+    for (const biome of BIOME_IDS) expect(variantsOf('fish', biome).map((s) => s.variant), biome).toEqual([1]);
+    const looks = new Set(fish.map((s) => `${[...s.voxels].join('')}|${s.palette.map((p) => p.role).join()}`));
+    expect(looks.size).toBe(BIOME_IDS.length);
+  });
+
+  it('keeps each fish one ⅛-unit voxel tall, so it swims under the water, on a 1×1 footprint', () => {
+    for (const s of fish) {
+      expect(s.footprint, s.name).toEqual({ width: 1, depth: 1 });
+      expect(s.size.y, s.name).toBe(1);
+      expect(s.scale, s.name).toBe(STRUCTURE);
+      expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
+    }
+  });
+
+  it('draws each fish 4–5 voxels long nose to tail along z and 2–3 wide, every corner within FISH_REACH of its cell\'s middle, so it turns in place', () => {
+    for (const s of fish) {
+      const voxels = [...structureVoxels(s)];
+      const span = (axis: 'x' | 'z') => Math.max(...voxels.map((v) => v[axis])) - Math.min(...voxels.map((v) => v[axis])) + 1;
+      expect(span('z'), s.name).toBeGreaterThanOrEqual(4);
+      expect(span('z'), s.name).toBeLessThanOrEqual(5);
+      expect(span('x'), s.name).toBeGreaterThanOrEqual(2);
+      expect(span('x'), s.name).toBeLessThanOrEqual(3);
+      const middle = STRUCTURE / 2;
+      for (const v of voxels) {
+        const far = Math.hypot(Math.max(Math.abs(v.x - middle), Math.abs(v.x + 1 - middle)), Math.max(Math.abs(v.z - middle), Math.abs(v.z + 1 - middle))) / STRUCTURE;
+        expect(far, s.name).toBeLessThanOrEqual(FISH_REACH);
+      }
+    }
+  });
+
+  it('points each fish\'s head to +z: its single-voxel nose is the southmost row, its forked tail the northmost', () => {
+    for (const s of fish) {
+      const voxels = [...structureVoxels(s)];
+      const zs = voxels.map((v) => v.z);
+      const row = (z: number) => voxels.filter((v) => v.z === z).length;
+      expect(row(Math.max(...zs)), s.name).toBe(1);
+      expect(row(Math.min(...zs)), s.name).toBe(2);
     }
   });
 });

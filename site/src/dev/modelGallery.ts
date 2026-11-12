@@ -8,7 +8,8 @@
  * A House Interior room shows furnished, the developer at their computer
  * (`furnishedRoom`), at its own 1/16 unit; a Garden fence shows planted
  * full, six flowers and three trees (`plantedGarden`); boats and ships float on
- * a patch of their Biome's sea, as in the World; each kind of Decoration shows
+ * a patch of their Biome's sea, as in the World, and the fish lie on one;
+ * each kind of Decoration shows
  * its piece in every Biome, closer together. Renders on demand. Dev only
  * (`/dev/models`).
  */
@@ -36,6 +37,8 @@ const ROOM_SPACING = 4;
 const BOAT_SPACING = 3.5;
 /** Cells between pieces of Decoration (1×1, and small): closer, so each shows larger. */
 const DECORATION_SPACING = 3;
+/** Cells between the fish: their water patches just apart, framed close (the fish are small and flat). */
+const FISH_SPACING = 3.2;
 /** Cells between the Gardens (5×5 with their ground): wider, so their ground patches never touch. */
 const GARDEN_SPACING = 8;
 /** Rows (in SPACING) between one row and the next: a row step is shallower on screen than a column step, so it needs more room. */
@@ -163,16 +166,19 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
   const coloursOf = (s: Structure) => worldColours({ biome: BIOMES[s.biome ?? 'tropical'] });
   /** Boats and ships stand on the sea floor, their first layer under the water. */
   const afloat = (s: Structure) => s.kind === 'boat' || s.kind === 'ship';
+  /** A fish shows on a patch of its Biome's shallow water, on top of it (in the World it swims under the water). */
+  const swims = (s: Structure) => s.kind === 'fish';
   /**
    * A patch of a Biome's grass under a model, one cell wider each side than
    * its footprint; for a boat or ship, a patch of its Biome's shallow sea
-   * (in the theme's shade) whose top is the sea level, as in the World.
+   * (in the theme's shade) whose top is the sea level, as in the World; for
+   * a fish, the same water with its top at the fish's underside.
    */
   const groundPatch = (s: Structure, colours: ReturnType<typeof coloursOf>, at: THREE.Vector3) => {
     const w = s.footprint.width + 2;
     const d = s.footprint.depth + 2;
     const geometry = new THREE.BoxGeometry(w, 1, d);
-    const [r, g, b] = afloat(s)
+    const [r, g, b] = afloat(s) || swims(s)
       ? oklchToLinear(seaColour(BIOMES[s.biome ?? 'tropical'], 'waterShallow', theme))
       : colours.table.colours[colours.biome('grass')]!;
     const colour = new Float32Array(geometry.attributes.position!.count * 3);
@@ -221,8 +227,8 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
       columns.push(list.filter((s) => s.biome === null));
       const used = columns.filter((column) => column.length > 0);
       const decoration = (DECORATION_KINDS as readonly string[]).includes(kind);
-      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'boat' ? BOAT_SPACING : kind === 'garden' ? GARDEN_SPACING : decoration ? DECORATION_SPACING : SPACING;
-      const margin = kind === 'room' || kind === 'boat' || decoration ? 2 : 4;
+      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'boat' ? BOAT_SPACING : kind === 'garden' ? GARDEN_SPACING : kind === 'fish' ? FISH_SPACING : decoration ? DECORATION_SPACING : SPACING;
+      const margin = kind === 'fish' ? 1.6 : kind === 'room' || kind === 'boat' || decoration ? 2 : 4;
       const rows = Math.max(1, ...used.map((column) => column.length));
       used.forEach((column, c) => {
         column.forEach((s, r) => {
@@ -273,8 +279,8 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
     setTheme(next: Theme) {
       theme = next;
       applyTheme(theme);
-      // The sea under boats and ships darkens at Night: redraw its patches.
-      if (kindShown === 'boat' || kindShown === 'ship') gallery.show(kindShown);
+      // The sea under boats, ships and fish darkens at Night: redraw its patches.
+      if (kindShown === 'boat' || kindShown === 'ship' || kindShown === 'fish') gallery.show(kindShown);
       else render();
     },
     /** Voxel size of the models, for reference. */

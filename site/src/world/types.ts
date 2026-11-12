@@ -298,6 +298,18 @@ export interface Cloud {
   phase: number;
 }
 
+/**
+ * A school of fish (`fish.ts`): 3–5 fish of the Biome's species swimming in
+ * the shallows, inside the square of water `centre` ± `radius` (world units;
+ * the centre is a grid corner). Every cell under it is open shallow sea.
+ */
+export interface FishSchool {
+  centre: { x: number; z: number };
+  radius: number;
+  /** How many fish swim in it: 3–5. */
+  size: number;
+}
+
 /** The World's wind (`wind.ts`): which way it blows across the ground, a unit vector in x and z. Gusts are added at runtime. */
 export interface Wind {
   direction: { x: number; z: number };
@@ -335,6 +347,8 @@ export interface World {
   particles: ParticleArea[];
   /** The clouds (`clouds.ts`): drifting down the wind high over the sea, never over an Isle. */
   clouds: Cloud[];
+  /** The fish schools (`fish.ts`): in the shallows, clear of the jetty, the boats and the ships. */
+  fish: FishSchool[];
   /** The wind, from the Seed alone: Ambient Life sways and drifts with it. */
   wind: Wind;
   views: Record<ViewLandmarkId, View>;

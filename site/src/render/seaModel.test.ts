@@ -27,6 +27,10 @@ interface Face {
   deep: number;
   opacity: number;
   swell: number;
+  /** Distance from the coastline at the voxel's corners: (x, z), (x + 1, z), (x, z + 1), (x + 1, z + 1). */
+  coast: number[];
+  /** Whether surf may break at those corners: 0 by the jetty and the moored boats. */
+  calm: number[];
 }
 
 /** Quads of a sea mesh: every 4 vertices are one face (two triangles). */
@@ -46,6 +50,8 @@ function faces(mesh: SeaMesh): Face[] {
       deep: mesh.shades[v * 3]!,
       opacity: mesh.shades[v * 3 + 1]!,
       swell: mesh.shades[v * 3 + 2]!,
+      coast: [0, 1, 2, 3].map((k) => mesh.coast[v * 4 + k]!),
+      calm: [0, 1, 2, 3].map((k) => mesh.calm[v * 4 + k]!),
     });
   }
   return out;
@@ -190,6 +196,39 @@ describe('seabed', () => {
     for (const f of bed) for (const c of f.corners) expect(c.y).toBe(0);
     for (const t of tops) expect(under.has(`${t.cell.x},${t.cell.z}`)).toBe(t.opacity < 1);
     expect(under.size).toBe(bed.length);
+  });
+});
+
+describe('surf data', () => {
+  /** Corner k of a cell: 0 (x, z), 1 (x + 1, z), 2 (x, z + 1), 3 (x + 1, z + 1). */
+  const corner = (cell: { x: number; z: number }, k: number) => ({ x: cell.x + (k % 2), z: cell.z + Math.floor(k / 2) });
+  const nearestLand = (p: { x: number; z: number }) => {
+    let best = Infinity;
+    for (let z = 0; z < depth; z++) for (let x = 0; x < width; x++) if (isLand(x, z)) best = Math.min(best, Math.hypot(x + 0.5 - p.x, z + 0.5 - p.z));
+    return best;
+  };
+
+  it('gives each water voxel\'s corners their distance from the coastline: about 0 on the land\'s edge, growing out to sea', () => {
+    for (const t of tops) {
+      for (let k = 0; k < 4; k++) {
+        const c = corner(t.cell, k);
+        // A corner on the edge of a land cell is on the coastline; else, measured from the nearest land cell's edge (half a cell from its centre), within a cell.
+        const truth = Math.max(0, nearestLand(c) - Math.SQRT1_2);
+        if (truth === 0) expect(t.coast[k], `${c.x},${c.z}`).toBeLessThanOrEqual(0.5);
+        else if (truth < 6) expect(Math.abs(t.coast[k]! - truth), `${c.x},${c.z}`).toBeLessThanOrEqual(1);
+        else expect(t.coast[k], `${c.x},${c.z}`).toBeGreaterThanOrEqual(5);
+      }
+    }
+  });
+
+  it('keeps the surf off the jetty and the moored boats: calm at every corner of their cells, and free two cells away', () => {
+    const still = [...world.landmarks.flatMap((l) => l.jetty), ...world.boats.map((b) => b.cell)];
+    expect(still.length).toBeGreaterThan(0);
+    for (const c of still) expect(topAt.get(`${c.x},${c.z}`)!.calm, `${c.x},${c.z}`).toEqual([0, 0, 0, 0]);
+    for (const t of tops) {
+      const far = still.every((c) => Math.max(Math.abs(c.x - t.cell.x), Math.abs(c.z - t.cell.z)) >= 2);
+      if (far) expect(t.calm, `${t.cell.x},${t.cell.z}`).toEqual([1, 1, 1, 1]);
+    }
   });
 });
 

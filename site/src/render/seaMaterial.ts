@@ -17,13 +17,25 @@
  * Seams and bevels are measured at the vertex's place before the bob, so
  * they ride with the voxel. The clouds' shadows drift across it
  * (`cloudShadow.ts`).
+ *
+ * The surf (`surf.ts`): on each voxel's top, every ⅛-unit square works out
+ * its distance from the coastline from the voxel's `seaCoast` corners (and
+ * its calm from `seaCalm`: none by the jetty or a moored boat), how far
+ * through its wave it is (waves arrive a little out of step along the
+ * coast) and so how much foam the wave leaves there, and is foam (a little
+ * ⅛-unit voxel top, seams and all, nearly opaque) when a hash of the square
+ * falls under it. A new pattern each wave. All in the shader on the shared
+ * clock: no work on the CPU, and a frozen clock holds the surf. At Night
+ * the foam dims (`WorldTokens.foam`) and the breaking waves glow faintly
+ * (`surfGlow`, `surfGlowStrength`).
  */
 import * as THREE from 'three/webgpu';
-import { attribute, hash, mix, normalGeometry, positionGeometry, positionLocal, positionWorld, sin, uniform, vec3 } from 'three/tsl';
+import { abs, attribute, clamp, float, floor, fract, hash, max, mix, normalGeometry, pow, positionGeometry, positionLocal, positionWorld, sin, smoothstep, step, uniform, vec2, vec3 } from 'three/tsl';
 import { cloudShade } from './cloudShadow';
 import { softVoxelLook } from './voxelMaterial';
 import { SEA_BOB, SEA_LEVEL } from './seaModel';
-import { TERRAIN } from './voxelTiers';
+import { STRUCTURE, TERRAIN } from './voxelTiers';
+import { SURF_BREAK, SURF_CREST, SURF_PERIOD, SURF_RUN, SURF_WASH } from './surf';
 import { SWELL_PERIOD, SWELL_STRIDE } from './swell';
 import type { AmbientClock } from './ambientClock';
 
@@ -32,6 +44,10 @@ export interface SeaMaterial {
   /** The Biome's shallow and deep water, in linear RGB (set them for the theme). */
   shallow: { value: THREE.Vector3 };
   deep: { value: THREE.Vector3 };
+  /** The foam's colour, the surf's glow (linear RGB) and the glow's strength (0 by Day). */
+  foam: { value: THREE.Vector3 };
+  glow: { value: THREE.Vector3 };
+  glowStrength: { value: number };
 }
 
 export function seaMaterial(clock: AmbientClock): SeaMaterial {
@@ -47,6 +63,9 @@ export function seaMaterial(clock: AmbientClock): SeaMaterial {
   const deepness = shade.x;
   const opacity = shade.y;
   const swell = shade.z;
+  const foamColour = uniform(new THREE.Vector3(1, 1, 1));
+  const glowColour = uniform(new THREE.Vector3());
+  const glowStrength = uniform(0);
 
   // The same seed and phase as `seaCellSeed` and `seaVoxelPhase` (`swell.ts`), which the vessels ride.
   const seed = cellX.add(512).add(cellZ.add(512).mul(1024));
@@ -59,7 +78,54 @@ export function seaMaterial(clock: AmbientClock): SeaMaterial {
   material.positionNode = positionLocal.add(vec3(0, bob, 0));
   material.normalNode = look.normalNode;
   // Passing clouds shade the water (`cloudShadow.ts`).
-  material.colorNode = look.shade(mix(shallow, deep, deepness)).mul(cloudShade(positionWorld));
-  material.opacityNode = opacity;
-  return { material, shallow, deep };
+  const surf = surfNodes(time, cellX, cellZ);
+  const foamLook = softVoxelLook(1 / STRUCTURE, normalGeometry, positionGeometry.sub(vec3(0, SEA_LEVEL, 0)));
+  material.colorNode = mix(look.shade(mix(shallow, deep, deepness)), foamLook.shade(foamColour), surf.foam).mul(cloudShade(positionWorld));
+  material.opacityNode = mix(opacity, float(FOAM_OPACITY), surf.foam);
+  // At Night the breaking surf glows: a soft wash where it breaks, brighter on the foam, and a faint glow on all foam.
+  material.emissiveNode = glowColour.mul(glowStrength).mul(surf.glow.mul(0.6).add(surf.foam.mul(surf.glow.add(0.25))));
+  return { material, shallow, deep, foam: foamColour, glow: glowColour, glowStrength };
+}
+
+/** How opaque a square of foam is. */
+const FOAM_OPACITY = 0.95;
+
+type FloatNode = THREE.Node<'float'>;
+
+/**
+ * The surf on a water voxel's top (`surf.ts`, the same sums): `foam` is 1
+ * on a square of foam, `glow` the breaking wave's soft glow, both 0 on the
+ * skirts and the flat water beyond the ring (its coast is far).
+ */
+function surfNodes(time: FloatNode, cellX: FloatNode, cellZ: FloatNode) {
+  const coast = attribute('seaCoast', 'vec4');
+  const calm = attribute('seaCalm', 'vec4');
+  // The ⅛-unit square, measured before the bob, and its middle's place within the voxel (0–1 each way).
+  const square = floor(positionGeometry.xz.mul(STRUCTURE));
+  const middle = square.add(0.5).div(STRUCTURE);
+  const f = clamp(middle.sub(vec2(cellX, cellZ)), 0, 1);
+  const bilinear = (v: THREE.Node<'vec4'>) => mix(mix(v.x, v.y, f.x), mix(v.z, v.w, f.x), f.y);
+  const d = bilinear(coast);
+  const still = bilinear(calm);
+  const top = step(0.5, normalGeometry.y);
+  // Waves arrive a little out of step along the coast: a slow wobble across the sea.
+  const offset = sin(middle.x.mul(0.37)).mul(0.12).add(sin(middle.y.mul(0.29).add(1.3)).mul(0.12));
+  const wave = time.div(SURF_PERIOD).add(offset);
+  const u = fract(wave);
+
+  const run = clamp(u.div(SURF_BREAK), 0, 1);
+  const running = float(1).sub(step(SURF_BREAK, u));
+  const front = float(SURF_RUN).mul(float(1).sub(run.mul(run)));
+  const crest = running.mul(float(1).sub(smoothstep(0, SURF_CREST, abs(d.sub(front))))).mul(run.mul(0.55).add(0.35));
+  const back = clamp(u.sub(SURF_BREAK).div(1 - SURF_BREAK), 0, 1);
+  const reach = back.mul(SURF_WASH).add(0.1);
+  const wash = float(1).sub(running).mul(pow(float(1).sub(back), 1.5)).mul(0.95).mul(float(1).sub(smoothstep(reach, reach.add(0.15), d)));
+  const rim = float(1).sub(smoothstep(0.05, 0.2, d)).mul(0.25);
+  const amount = clamp(max(crest, max(wash, rim)), 0, 1).mul(still).mul(top);
+
+  // Each square is foam when its hash (new each wave) falls under the amount.
+  const chance = hash(square.x.add(4096).add(square.y.add(4096).mul(8192)).add(floor(wave).mul(7919)));
+  const foam = step(chance.add(0.001), amount);
+  const glow = float(1).sub(running).mul(pow(float(1).sub(back), 2)).mul(float(1).sub(smoothstep(0.2, 0.6, d))).mul(still).mul(top);
+  return { foam, glow };
 }

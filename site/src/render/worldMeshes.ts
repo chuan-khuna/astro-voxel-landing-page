@@ -47,6 +47,7 @@ import { createAmbientClock, type AmbientClock } from './ambientClock';
 import { buildLeaves } from './leaves';
 import { buildParticles } from './particles';
 import { buildClouds } from './clouds';
+import { buildFish } from './fish';
 import { CLOUD_SHADOW, cloudShade } from './cloudShadow';
 import { cloudShadowDrift, cloudShadowStrength } from './cloudMath';
 import type { LifeTierName } from '@/lib/lifeTier';
@@ -61,8 +62,8 @@ export interface WorldObjects {
   house: HouseParts;
   /** Put everything that moves on the CPU (the ships and boats on the swell, the developer) where it is at the shared clock's `seconds`. */
   step: (seconds: number) => void;
-  /** Show as much Ambient Life as the life tier allows (the falling leaves, the Biome's particles, the clouds). */
-  setLife: (tier: LifeTierName) => void;
+  /** Show as much Ambient Life as the life tier allows (the falling leaves, the Biome's particles, the clouds, the fish and their spray); returns how many fish show. */
+  setLife: (tier: LifeTierName) => number;
   /** Fade the clouds for the camera's zoom (gone in a Landmark's close-up); returns how much of them shows, 0–1. */
   setZoom: (zoom: number) => number;
   /** Recolour the sea, light (or put out) the House's windows and lamp and the buoys' lamps, show the particles out by Day or at Night, and colour the clouds (their shadows by Day only). */
@@ -123,10 +124,12 @@ export function buildWorldObjects(
   group.add(particles.group);
   const clouds = buildClouds(world, clock);
   group.add(clouds.group);
+  const fish = buildFish(world, clock);
+  group.add(fish.group);
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + particles.triangles + clouds.triangles + sea.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + particles.triangles + clouds.triangles + fish.triangles + sea.triangles,
     ships,
     house,
     step: (seconds) => {
@@ -140,6 +143,7 @@ export function buildWorldObjects(
       leaves.setLife(life);
       particles.setLife(life);
       clouds.setLife(life);
+      return fish.setLife(life);
     },
     setZoom: (zoom) => clouds.setZoom(zoom),
     setTheme: (theme) => {
@@ -147,6 +151,7 @@ export function buildWorldObjects(
       sea.setTheme(theme);
       particles.setTheme(theme);
       clouds.setTheme(theme);
+      fish.setTheme(theme);
       CLOUD_SHADOW.strength.value = cloudShadowStrength(theme);
       house.setLights(tokens);
       lamps.setLights(tokens);
@@ -164,6 +169,7 @@ export function buildWorldObjects(
       leaves.dispose();
       particles.dispose();
       clouds.dispose();
+      fish.dispose();
       // The shadows' uniforms are the page's: leave none behind.
       CLOUD_SHADOW.strength.value = 0;
     },
@@ -241,6 +247,8 @@ function buildSea(world: World, clock: AmbientClock): {
     geometry.setAttribute('normal', new THREE.BufferAttribute(mesh.normals, 3));
     geometry.setAttribute('seaCell', new THREE.BufferAttribute(mesh.cells, 3));
     geometry.setAttribute('seaShade', new THREE.BufferAttribute(mesh.shades, 3));
+    geometry.setAttribute('seaCoast', new THREE.BufferAttribute(mesh.coast, 4));
+    geometry.setAttribute('seaCalm', new THREE.BufferAttribute(mesh.calm, 4));
     geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
     geometry.computeBoundingSphere();
     const object = new THREE.Mesh(geometry, material);
@@ -263,7 +271,11 @@ function buildSea(world: World, clock: AmbientClock): {
     setTheme: (theme) => {
       water.shallow.value.set(...oklchToLinear(seaColour(world.biome, 'waterShallow', theme)));
       water.deep.value.set(...oklchToLinear(seaColour(world.biome, 'waterDeep', theme)));
-      const shift = THEME_TOKENS[theme].world.waterShift + SEABED_SHIFT;
+      const tokens = THEME_TOKENS[theme].world;
+      water.foam.value.set(...oklchToLinear(tokens.foam));
+      water.glow.value.set(...oklchToLinear(tokens.surfGlow));
+      water.glowStrength.value = tokens.surfGlowStrength;
+      const shift = tokens.waterShift + SEABED_SHIFT;
       seabedMaterial.color.copy(linearColour(oklchToLinear(shiftLightness(world.biome.colours.sand, shift))));
     },
     dispose: () => {

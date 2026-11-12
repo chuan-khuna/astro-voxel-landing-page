@@ -1,6 +1,6 @@
 /**
  * Ambient Life in the browser: with life on, the shared clock runs (the plants sway, leaves fall, boats
- * rock, butterflies, fireflies, snow and ash fly, clouds drift) in every Biome, by Day and at Night, and nothing logs an error; under reduced motion the clock stays frozen and the World never changes. Clouds show at the Overview and are gone in a close-up.
+ * rock, butterflies, fireflies, snow and ash fly, clouds drift, surf breaks and fish swim) in every Biome, by Day and at Night, and nothing logs an error; under reduced motion the clock stays frozen and the World never changes. Clouds show at the Overview and are gone in a close-up. The fish follow the life tier.
  */
 import { expect, test } from '@playwright/test';
 import { THEME_STORAGE_KEY } from '../src/lib/theme';
@@ -50,5 +50,21 @@ test('clouds show over the sea at the Overview and are gone in a Landmark\'s clo
   await page.goto('/garden?seed=harbour&life=full');
   await worldReady(page);
   await expect(canvas).toHaveAttribute('data-clouds', '0.00');
+  expect(errors).toEqual([]);
+});
+
+test('the fish swim in every World, as many schools as the life tier allows', async ({ page }) => {
+  const errors = collectErrors(page);
+  const canvas = page.locator('#world-canvas');
+  const fish = async () => Number(await canvas.getAttribute('data-fish'));
+  await page.goto('/dock?seed=harbour&life=full');
+  await worldReady(page);
+  const all = await fish();
+  expect(all).toBeGreaterThan(0);
+  await page.goto('/dock?seed=harbour&life=reduced');
+  await worldReady(page);
+  const reduced = await fish();
+  expect(reduced).toBeGreaterThan(0);
+  expect(reduced).toBeLessThan(all);
   expect(errors).toEqual([]);
 });

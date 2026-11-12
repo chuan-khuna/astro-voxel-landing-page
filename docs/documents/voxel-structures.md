@@ -372,6 +372,28 @@ they light up with the torches and Night light ticket (16). The shed and
 windmill front on +z (`door: +z`), so the generator turns them south or
 east to face the camera.
 
+## Fish
+
+Polish ticket 13. Each Biome has one species, `fish/<biome>-1`, 1×1 (8×8)
+with the anchor `0 0 0`, drawn seen from above in a single layer: one
+⅛-unit voxel tall, since the water over the shallows is only 0.15 units
+deep and a taller fish would break the surface. The head points +z (a
+one-voxel nose, the bottom row) and the tail -z (a forked row of two);
+4 long and 3 wide, in the middle of the cell so it turns in place
+(every corner within `FISH_REACH`, 0.36 units, of the cell's middle). The
+renderer swims them (`render/fish.ts`; see `rendering-and-shading.md`,
+"Ambient Life: shore waves, fish and glowing surf"). Their colours are
+bright fixed roles (`fishOrange`, `fishWhite`, `fishSilver`,
+`fishSilverDark`, `fishGold`, `fishRed`, `fishDark`, `fishEmber`), so they
+still show through the water's tint.
+
+| Biome | Species |
+|---|---|
+| tropical | a clownfish: orange with a white band |
+| northern | a herring: silver with a dark blue-grey back |
+| autumn | a koi: gold with red patches |
+| volcanic | a black fish of the hot springs with ember spots |
+
 ## The House Interior rooms
 
 One room per Biome (polish ticket 04), drawn at 1/16 unit (`scale: 16`,
@@ -445,6 +467,12 @@ least `LANDMARK_MIN_HEIGHT` tall (Decoration by a Landmark stays below it).
 `decorationModels.test.ts` checks each piece's structure and placement, and
 which pieces each render tier shows.
 
+For the fish, `structures.test.ts` checks one species per Biome, each its
+own; that each is 1×1, anchored on the ground, one ⅛-unit voxel tall;
+4–5 voxels long and 2–3 wide, every corner within `FISH_REACH` of the
+cell's middle; and that its nose (one voxel) is the southmost row and its
+tail (two) the northmost.
+
 ## The Model Gallery
 
 `/dev/models` shows every structure of one kind (a picker) in a grid:
@@ -461,7 +489,8 @@ computer, at its own 1/16 unit; a Garden fence (kind `garden`) shows
 planted full, six flowers and three trees, as a World lays them out
 (`plantedGarden`); boats and ships float on a patch of their Biome's
 shallow sea (darker at Night), its top at sea level as in the World, the
-boats packed closer so each shows larger; the Decoration kinds sit in a
+boats packed closer so each shows larger; the fish lie on such a patch,
+its top at their underside, framed close; the Decoration kinds sit in a
 group of their own in the picker, packed closer still; **Night**
 switches the light, and the page's own colours follow (the site's theme
 tokens and fonts). On a phone the buttons show icons only (their names stay

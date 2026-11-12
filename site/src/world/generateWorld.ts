@@ -10,6 +10,7 @@ import { placeDecoration } from './decoration';
 import { windFor } from './wind';
 import { placeParticles } from './particles';
 import { placeClouds } from './clouds';
+import { placeFish } from './fish';
 import { buildStrata, buildTerrain } from './terrain';
 import { site } from '@/data/site';
 import {
@@ -74,6 +75,7 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
     const decoration = placeDecoration(seed, biome.id, terrain, bridges, paths, landmarks);
     const views = deriveViews(isles, landmarks, boats);
     const wind = windFor(seed);
+    const buoys = placeBuoys(terrain, bridges, landmarks.find((l) => l.id === 'dock'), boats.map((b) => b.cell), ships);
     return {
       seed,
       attempts: attempt + 1,
@@ -87,10 +89,11 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
       landmarks,
       boats,
       ships,
-      buoys: placeBuoys(terrain, bridges, landmarks.find((l) => l.id === 'dock'), boats.map((b) => b.cell), ships),
+      buoys,
       decoration,
       particles: placeParticles(seed, biome.id, terrain, bridges, landmarks, decoration),
       clouds: placeClouds(seed, terrain, landmarks, views.overview, wind, [...bridges.flatMap((b) => b.cells), ...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)]),
+      fish: placeFish(seed, terrain, bridges, landmarks, boats.map((b) => b.cell), buoys, ships),
       views,
       wind,
     };

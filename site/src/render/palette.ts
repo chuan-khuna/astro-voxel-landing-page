@@ -99,6 +99,13 @@ export const FIXED_COLOURS = {
   petalBlue: oklch(0.66, 0.09, 280),
   pollen: oklch(0.8, 0.1, 80),
   leafGold: oklch(0.74, 0.1, 75),
+  // The fish (polish 13): bright, so they still show through the shallows.
+  fishOrange: oklch(0.72, 0.17, 50),
+  fishWhite: oklch(0.96, 0.01, 90),
+  fishSilver: oklch(0.86, 0.02, 230),
+  fishGold: oklch(0.84, 0.15, 85),
+  fishDark: oklch(0.32, 0.02, 30),
+  fishEmber: oklch(0.66, 0.2, 35),
 } as const satisfies Record<string, Oklch>;
 
 export type FixedColour = keyof typeof FIXED_COLOURS;

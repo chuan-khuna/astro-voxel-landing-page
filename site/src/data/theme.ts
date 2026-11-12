@@ -55,6 +55,11 @@ export interface WorldTokens {
   cloud: Oklch;
   /** How much a cloud's shadow darkens the ground (0–1): none at Night. */
   cloudShadow: number;
+  /** The shore's foam: white by Day, dimmed at Night. */
+  foam: Oklch;
+  /** The faint bioluminescent glow where waves break, and how strong it is (0 by Day). */
+  surfGlow: Oklch;
+  surfGlowStrength: number;
 }
 
 export interface ThemeTokens {
@@ -89,6 +94,9 @@ export const THEME_TOKENS: Record<Theme, ThemeTokens> = {
       buoyLight: oklch(0.88, 0.1, 60),
       cloud: oklch(0.99, 0.008, 240),
       cloudShadow: 0.2,
+      foam: oklch(0.97, 0.01, 220),
+      surfGlow: oklch(0.8, 0.13, 190),
+      surfGlowStrength: 0,
     },
   },
   night: {
@@ -117,6 +125,9 @@ export const THEME_TOKENS: Record<Theme, ThemeTokens> = {
       buoyLight: oklch(0.88, 0.1, 60),
       cloud: oklch(0.45, 0.03, 265),
       cloudShadow: 0,
+      foam: oklch(0.72, 0.03, 240),
+      surfGlow: oklch(0.8, 0.13, 190),
+      surfGlowStrength: 0.8,
     },
   },
 };

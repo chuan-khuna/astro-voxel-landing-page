@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, MAX_SCHOOLS, FISH_AREA, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -1258,6 +1258,71 @@ describe('generateWorld', { timeout: 20_000 }, () => {
           const seen = { x: mid.x + cloud.size.x / 2 - lift, z: mid.z + cloud.size.z / 2 - lift };
           expect(Math.hypot(seen.x - target.x, seen.z - target.z), seed).toBeLessThan(radius * 1.6);
         }
+      }
+    });
+  });
+
+  describe('Fish', () => {
+    /** Every cell under a school's square of water. */
+    const schoolCells = (s: World['fish'][number]) => {
+      const cells: Array<{ x: number; z: number }> = [];
+      for (let z = Math.floor(s.centre.z - s.radius); z < Math.ceil(s.centre.z + s.radius); z++)
+        for (let x = Math.floor(s.centre.x - s.radius); x < Math.ceil(s.centre.x + s.radius); x++) cells.push({ x, z });
+      return cells;
+    };
+
+    it('is deterministic: the same Seed and counts give the same schools', () => {
+      expect(generateWorld('harbour', counts).fish).toEqual(generateWorld('harbour', counts).fish);
+      for (const seed of sampledSeeds.slice(0, 20)) expect(generateWorld(seed, counts).fish, seed).toEqual(worldFor(seed).fish);
+    });
+
+    it('gives nearly every World a few schools of 3–5 fish, never more than the cap', () => {
+      let some = 0;
+      for (const seed of sampledSeeds) {
+        const { fish } = worldFor(seed);
+        expect(fish.length, seed).toBeLessThanOrEqual(MAX_SCHOOLS);
+        if (fish.length >= 2) some++;
+        for (const school of fish) {
+          expect(school.size, seed).toBeGreaterThanOrEqual(3);
+          expect(school.size, seed).toBeLessThanOrEqual(5);
+          expect(school.radius, seed).toBe(FISH_AREA);
+        }
+      }
+      expect(some).toBeGreaterThanOrEqual(sampledSeeds.length * 0.9);
+    });
+
+    it('keeps every school in shallow water: each cell under it is sea within 2 cells of the land', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const { width, depth, isle } = world.terrain;
+        const land = (x: number, z: number) => x >= 0 && z >= 0 && x < width && z < depth && isle[z * width + x] !== -1;
+        for (const school of world.fish) {
+          for (const c of schoolCells(school)) {
+            expect(c.x >= 0 && c.z >= 0 && c.x < width && c.z < depth, `${seed} ${c.x},${c.z}`).toBe(true);
+            expect(land(c.x, c.z), `${seed} ${c.x},${c.z} is land`).toBe(false);
+            // An independent measure: some land cell within 2 cells, centre to centre.
+            let near = false;
+            for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) if (Math.hypot(dx, dz) <= 2 && land(c.x + dx, c.z + dz)) near = true;
+            expect(near, `${seed} ${c.x},${c.z} is out of the shallows`).toBe(true);
+          }
+        }
+      }
+    });
+
+    it('keeps schools off and clear of the jetty and the moored boats, off bridges, buoys and the ships\' loops, and apart', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const key = (c: { x: number; z: number }) => `${c.x},${c.z}`;
+        const near = (cells: Array<{ x: number; z: number }>) => cells.flatMap((c) => [-1, 0, 1].flatMap((dz) => [-1, 0, 1].map((dx) => key({ x: c.x + dx, z: c.z + dz }))));
+        const banned = new Set([
+          ...near([...world.landmarks.flatMap((l) => l.jetty), ...world.boats.map((b) => b.cell)]),
+          ...world.bridges.flatMap((b) => b.cells).map(key),
+          ...world.buoys.map(key),
+          ...world.ships.flatMap((s) => s.cells).map(key),
+        ]);
+        for (const school of world.fish) for (const c of schoolCells(school)) expect(banned.has(key(c)), `${seed} ${key(c)}`).toBe(false);
+        for (const [i, a] of world.fish.entries())
+          for (const b of world.fish.slice(i + 1)) expect(Math.hypot(a.centre.x - b.centre.x, a.centre.z - b.centre.z), seed).toBeGreaterThanOrEqual(3);
       }
     });
   });
