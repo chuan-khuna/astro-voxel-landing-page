@@ -2,7 +2,8 @@
  * The clouds' soft shadows (ADR 0005): computed in the shader, never cast
  * into the shadow map. A scrolling noise mask over the ground darkens the
  * colour of every voxel material (`voxelMaterial.ts`: terrain, bridges,
- * Landmarks, plants, Decoration, boats and ships) and the sea's water and
+ * stairs, Landmarks, the House's lid and room, plants, Decoration, boats,
+ * ships and the Guide) and the sea's water and
  * seabed wherever a shadow lies, so the shadows cross the Isles and the sea
  * alike. They do not follow the cloud bodies, which keep to the sea
  * (`world/clouds.ts`).
@@ -12,7 +13,8 @@
  *   (`cloudShadowDrift`, from the shared clock's seconds in
  *   `WorldObjects.step`), so they hold still wherever the clock is frozen;
  * - `strength`: how dark a shadow is (`cloudShadowStrength`): 0 at Night,
- *   and 0 until a World sets it, so the Model Gallery has none.
+ *   and 0 until a World sets it (and again once it is disposed), so the
+ *   Model Gallery has none.
  *
  * The shadow darkens the surface's colour (light from the sky dims with it,
  * not only the sun's): a soft blot, which reads as a passing cloud's shade.

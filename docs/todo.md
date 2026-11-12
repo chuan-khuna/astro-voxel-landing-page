@@ -238,3 +238,14 @@ Fixed before the commit: vessels now ride their own water voxel's phase (the sha
 - [ ] **Instanced structures' look changed slightly.** Their seams and colour jitter now come from the geometry as meshed, so every copy of one structure has the same jitter pattern (before, it varied with the copy's place), and a sailing ship's seams are exact at any heading.
 - [ ] **The e2e test checks the clock, not the pixels.** With life on it checks that the clock runs and nothing logs an error; that plants, leaves and boats move was checked by eye on frame sequences.
 - [ ] **Small smells:** the sea's seed and phase are written twice, in TSL (`seaMaterial.ts`) and on the CPU (`swell.ts`), with comments pointing at each other; `Moorings` names the boats' builder result while the other builders return an inline `{ group, triangles, dispose }`; `worldMeshes.ts` imports `@/lib/lifeTier` after its `./` imports.
+
+## Code review of polish 12 (22fc8c5..edd7e82)
+
+Fixed: clouds now keep off (and out of the camera's view of) bridges, the Dock's jetty and the moored boats as well as the Isles; the cloud shadows' strength goes back to 0 when a World's objects are disposed; a duplicate import and a stale comment.
+
+Deferred:
+- [ ] `cloudsShown` repeats `swarmShown` (and the leaves' share): one shared "life tier's share of N" helper in `lib/lifeTier.ts` would do for all three.
+- [ ] The shadows' drift reads `world.wind` on the CPU, and the cloud bodies' drift is baked into `World.clouds`; neither reads the shared `clock.wind` uniform (the same value today).
+- [ ] `cloudFade` assumes the World's closest close-up zoom is well above 1 (it is at least about 1.45 on the Isle sizes we generate); a World whose close-up were zoom 1 would show clouds in it.
+- [ ] The clouds are one transparent mesh writing depth: a cloud behind another (rare, they keep apart) is hidden, not blended. The fade's `smoothstep(1, 0.85, u)` (edges reversed, as in `particles.ts`) is fine in WGSL but undefined in GLSL, if a WebGL fallback is ever used.
+- [ ] No test checks the phone Story Scroll framings' fade in the browser; `cloudMath.test.ts` covers them (0.8× a close-up's zoom).

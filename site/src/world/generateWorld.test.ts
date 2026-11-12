@@ -1214,14 +1214,15 @@ describe('generateWorld', { timeout: 20_000 }, () => {
       }
     });
 
-    it('keeps every cloud over the sea all the way along its drift: never over an Isle, nor between the camera and one', () => {
+    it('keeps every cloud over open sea all the way along its drift: never over an Isle, a bridge, the jetty or a boat, nor between the camera and one', () => {
       for (const seed of sampledSeeds.slice(0, 60)) {
         const world = worldFor(seed);
         const { width, depth, isle } = world.terrain;
+        const kept = new Set([...world.bridges.flatMap((b) => b.cells), ...world.landmarks.flatMap((l) => l.jetty), ...world.boats.map((b) => b.cell)].map(key));
         const land = (x: number, z: number) => {
           const cx = Math.floor(x);
           const cz = Math.floor(z);
-          return cx >= 0 && cz >= 0 && cx < width && cz < depth && isle[cz * width + cx] !== -1;
+          return kept.has(key({ x: cx, z: cz })) || (cx >= 0 && cz >= 0 && cx < width && cz < depth && isle[cz * width + cx] !== -1);
         };
         const over: string[] = [];
         for (const cloud of world.clouds) {

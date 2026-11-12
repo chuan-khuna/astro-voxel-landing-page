@@ -27,7 +27,6 @@
  */
 import * as THREE from 'three/webgpu';
 import { materialColor, positionWorld } from 'three/tsl';
-import { cloudShade } from './cloudShadow';
 import type { World } from '@/world';
 import { triangleCount, type ChunkMesh } from './mesher';
 import { oklchToLinear, shiftLightness } from './palette';
@@ -48,7 +47,7 @@ import { createAmbientClock, type AmbientClock } from './ambientClock';
 import { buildLeaves } from './leaves';
 import { buildParticles } from './particles';
 import { buildClouds } from './clouds';
-import { CLOUD_SHADOW } from './cloudShadow';
+import { CLOUD_SHADOW, cloudShade } from './cloudShadow';
 import { cloudShadowDrift, cloudShadowStrength } from './cloudMath';
 import type { LifeTierName } from '@/lib/lifeTier';
 
@@ -165,6 +164,8 @@ export function buildWorldObjects(
       leaves.dispose();
       particles.dispose();
       clouds.dispose();
+      // The shadows' uniforms are the page's: leave none behind.
+      CLOUD_SHADOW.strength.value = 0;
     },
   };
 }

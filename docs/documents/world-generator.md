@@ -396,7 +396,8 @@ It tries up to 300 clouds and keeps up to 8 (`MAX_CLOUDS`):
 - **Over the sea**: all the way along its drift (checked every ¼ unit),
   every column of the cloud, straight down and down the camera's view ray
   from its top to the ground (towards (−1, −1) one cell per unit of
-  height), meets no land nor any cell beside land. A cloud therefore never
+  height), meets no land, bridge, jetty cell or moored boat, nor any cell
+  beside one. A cloud therefore never
   floats over an Isle, nor between the camera and one, wherever the camera
   pans or zooms (the camera never turns). A table of how far down the ray
   the nearest land lies, worked out once per World from each cell's
@@ -578,7 +579,8 @@ Seeds, never snapshots:
   inside its box, every layer no bigger than the one below, its long side
   down the wind; each drifts more than 4 units straight down the wind at
   0.1–0.6 units a second, its underside 2 units or more above every
-  Landmark's top; all along its drift no column of it is over land,
+  Landmark's top; all along its drift no column of it is over land, a
+  bridge, the jetty or a boat,
   straight down or down the view ray from its top (an independent march
   over 60 Seeds); and it is seen within 1.6 Overview radii of the
   Overview's centre;

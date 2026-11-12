@@ -90,7 +90,7 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
       buoys: placeBuoys(terrain, bridges, landmarks.find((l) => l.id === 'dock'), boats.map((b) => b.cell), ships),
       decoration,
       particles: placeParticles(seed, biome.id, terrain, bridges, landmarks, decoration),
-      clouds: placeClouds(seed, terrain, landmarks, views.overview, wind),
+      clouds: placeClouds(seed, terrain, landmarks, views.overview, wind, [...bridges.flatMap((b) => b.cells), ...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)]),
       views,
       wind,
     };

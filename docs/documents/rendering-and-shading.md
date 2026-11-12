@@ -796,8 +796,9 @@ Isles, and their soft shadows cross the whole World.
   voxels from the Seed (3–8 long down the wind, 2–5 wide, 2–3 high), its
   underside 2–4 units above the tallest Landmark, and a drift of 6–14 units
   down the wind at 0.2–0.4 units a second. All along its drift no column of
-  it is over an Isle, straight down or down the camera's view ray, so a
-  cloud never floats over an Isle nor hides one, wherever the camera goes.
+  it is over an Isle, a bridge, the jetty or a moored boat, straight down or
+  down the camera's view ray, so a cloud never floats over one nor hides
+  one, wherever the camera goes.
 - **The body** (`clouds.ts`). Each cloud is meshed with the mesher (hidden
   faces culled, light AO), so the translucent body shows one skin, and all
   of them are merged into one mesh, cloud after cloud. Per vertex: its
@@ -833,7 +834,8 @@ Isles, and their soft shadows cross the whole World.
   (`cloudShadowDrift`), set from the clock's seconds in `objects.step`, so
   they stop with the clock. `strength` is `WorldTokens.cloudShadow`: 0.2 by
   Day (a shadow darkens to 80%), 0 at Night. Both uniforms are shared by
-  the page; the Model Gallery never sets them, so it has no shadows. The
+  the page; disposing a World's objects puts `strength` back to 0, and the
+  Model Gallery never sets it, so it has no shadows. The
   shadow darkens the surface's colour, not just the sun's light, so the sky
   light under a shadow dims too: it reads as a passing cloud's shade.
 - **Never in the way.** Clouds cast no shadow-map shadow, are never

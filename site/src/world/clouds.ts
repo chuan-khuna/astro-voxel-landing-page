@@ -12,9 +12,9 @@
  * - a cloud floats at least `CLOUD_LIFT` units above the tallest Landmark;
  * - its drift runs down the wind, `DRIFT_LENGTH` long, at `DRIFT_SPEED`;
  * - all the way along its drift its body is over the sea: never over an
- *   Isle (straight down), nor between the camera and one (down the
- *   isometric view ray, −(1, 1, 1), from its top to the ground), with a
- *   cell of sea to spare;
+ *   Isle, a bridge, the Dock's jetty or a moored boat (straight down), nor
+ *   between the camera and one (down the isometric view ray, −(1, 1, 1),
+ *   from its top to the ground), with a cell of sea to spare;
  * - it is seen within reach of the Overview (`REACH` × its radius);
  * - clouds keep apart, and a World has at most `MAX_CLOUDS`.
  *
@@ -23,7 +23,7 @@
  */
 import { LANDMARK_HEIGHT } from './landmarks';
 import { createRng } from './prng';
-import type { Cloud, PlacedLandmark, Terrain, View, Wind } from './types';
+import type { Cell, Cloud, PlacedLandmark, Terrain, View, Wind } from './types';
 
 /** The most clouds a World has. */
 export const MAX_CLOUDS = 8;
@@ -43,15 +43,19 @@ const TRIES = 300;
 
 type Rng = () => number;
 
-/** Place the World's clouds over the sea round its Isles. */
-export function placeClouds(seed: string, terrain: Terrain, landmarks: PlacedLandmark[], overview: View, wind: Wind): Cloud[] {
+/**
+ * Place the World's clouds over the sea round its Isles. `kept` are sea
+ * cells no cloud may hide either: the bridges, the Dock's jetty and its
+ * moored boats.
+ */
+export function placeClouds(seed: string, terrain: Terrain, landmarks: PlacedLandmark[], overview: View, wind: Wind, kept: ReadonlyArray<Cell>): Cloud[] {
   const rng = createRng(`${seed}/clouds`);
   const between = (lo: number, hi: number) => lo + rng() * (hi - lo);
   const { direction } = wind;
   const tallest = Math.max(...landmarks.map((l) => l.y + LANDMARK_HEIGHT[l.id]));
   // Every cell a cloud may reach: the Overview's reach, lifted as high as a cloud floats, and a drift.
   const pad = Math.ceil(Math.max(...[overview.target.x, overview.target.z].map(Math.abs)) + overview.radius * REACH + tallest + CLOUD_LIFT + 5 + DRIFT_LENGTH[1] + 10);
-  const blocked = viewBlocked(terrain, pad);
+  const blocked = viewBlocked(terrain, kept, pad);
 
   const clouds: Cloud[] = [];
   /** Each placed cloud's drift line: its middle, and its half-length. */
@@ -106,7 +110,8 @@ export function placeClouds(seed: string, terrain: Terrain, landmarks: PlacedLan
 
 /**
  * Whether a unit column standing on cell (`cx`, `cz`) up to height `top`
- * would be over land with a cell of sea to spare, straight down or down the
+ * would be over land, or a `kept` sea cell (bridges, the jetty, the moored
+ * boats), with a cell of sea to spare, straight down or down the
  * view ray: the column shifted by every s in [0, top] towards (−1, −1)
  * covers cells (cx − k − a, cz − k − b), k from 0 to ⌈top⌉, a and b 0 or 1.
  *
@@ -114,16 +119,30 @@ export function placeClouds(seed: string, terrain: Terrain, landmarks: PlacedLan
  * ray the nearest such land is (k), each cell from the one diagonally before
  * it. A cell past the pad counts as blocked, so no cloud goes there.
  */
-function viewBlocked(terrain: Terrain, pad: number): (cx: number, cz: number, top: number) => boolean {
+/** Cells round the grid where a kept sea cell (a boat's berth) may lie. */
+const RING = 4;
+
+function viewBlocked(terrain: Terrain, kept: ReadonlyArray<Cell>, pad: number): (cx: number, cz: number, top: number) => boolean {
   const { width, depth, isle } = terrain;
-  // Land, or a cell beside it (8 neighbours), on the grid and a ring of one round it.
-  const nw = width + 2;
-  const nd = depth + 2;
+  // Land and the kept sea cells, or a cell beside one (8 neighbours), on the grid and a ring of `RING` round it.
+  const nw = width + 2 * RING;
+  const nd = depth + 2 * RING;
   const near = new Uint8Array(nw * nd);
-  for (let z = 0; z < depth; z++)
-    for (let x = 0; x < width; x++)
-      if (isle[z * width + x] !== -1) for (let dz = 0; dz <= 2; dz++) for (let dx = 0; dx <= 2; dx++) near[(z + dz) * nw + x + dx] = 1;
-  const nearLand = (x: number, z: number) => x >= -1 && z >= -1 && x <= width && z <= depth && near[(z + 1) * nw + x + 1] === 1;
+  const mark = (x: number, z: number) => {
+    for (let dz = -1; dz <= 1; dz++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const i = x + dx + RING;
+        const j = z + dz + RING;
+        if (i >= 0 && j >= 0 && i < nw && j < nd) near[j * nw + i] = 1;
+      }
+  };
+  for (let z = 0; z < depth; z++) for (let x = 0; x < width; x++) if (isle[z * width + x] !== -1) mark(x, z);
+  for (const c of kept) mark(c.x, c.z);
+  const nearLand = (x: number, z: number) => {
+    const i = x + RING;
+    const j = z + RING;
+    return i >= 0 && j >= 0 && i < nw && j < nd && near[j * nw + i] === 1;
+  };
 
   const lo = -pad;
   const span = Math.max(width, depth) + 2 * pad;
