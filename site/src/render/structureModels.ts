@@ -31,7 +31,8 @@ type Paint = (x: number, y: number, z: number, colour: number) => void;
 /** A colour role's colour id in a World's colour table. */
 export function structureColour(colours: Pick<WorldColours, 'biome' | 'fixed'>, role: StructureRole): number {
   const colour: RoleColour = STRUCTURE_ROLES[role];
-  return 'biome' in colour ? colours.biome(colour.biome, colour.dl ?? 0) : colours.fixed(colour.fixed, colour.dl ?? 0);
+  const glow = colour.glow ?? 0;
+  return 'biome' in colour ? colours.biome(colour.biome, colour.dl ?? 0, glow) : colours.fixed(colour.fixed, colour.dl ?? 0, glow);
 }
 
 /** Where a structure goes: its anchor's World voxel (⅛ units), and the way its door faces. */

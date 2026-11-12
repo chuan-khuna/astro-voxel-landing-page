@@ -9,7 +9,7 @@ Gallery.
 - Files: `site/src/structures/<kind>/<biome>-<variant>.structure` (`house`,
   `station`, `mailbox`, `dock`, `garden`; `service` for the Station's
   Services (`<biome>-<kind>`); `tree` and `flower`; `boat` and
-  `ship`; `room` and `developer` for the House Interior; the Decoration kinds `grass`, `clump`, `rocks`, `bush`, `sapling`, `fence`, `lamp`, `shed`, `windmill`)
+  `ship`; `room` and `developer` for the House Interior; the Decoration kinds `grass`, `clump`, `rocks`, `bush`, `sapling`, `fence`, `lamp`, `shed`, `windmill`; `torch`)
 - Code: `site/src/structures/` (parser, roles, registry, Vite plugin),
   `site/src/render/structureModels.ts` (placing), `structureMeshes.ts`
   (instancing), `interiorModel.ts` (the House Interior's room), `site/src/dev/` and `site/src/integrations/modelGallery.ts`
@@ -47,7 +47,7 @@ layers 2-7
 
 | Field | Meaning |
 |---|---|
-| `kind` | What the structure is: a Landmark (`house`, `station`, `mailbox`, `dock`, `garden`: the Garden's fence), a Garden plant (`tree`, `flower`), a Client's `boat` or a Partner's `ship`, a House Interior `room` or the `developer`, a piece of Decoration (`grass`, `clump`, `rocks`, `bush`, `sapling`, `fence`, `lamp`, `shed`, `windmill`); later creatures. |
+| `kind` | What the structure is: a Landmark (`house`, `station`, `mailbox`, `dock`, `garden`: the Garden's fence), a Garden plant (`tree`, `flower`), a Client's `boat` or a Partner's `ship`, a House Interior `room` or the `developer`, a piece of Decoration (`grass`, `clump`, `rocks`, `bush`, `sapling`, `fence`, `lamp`, `shed`, `windmill`), a `torch`, a Service's structure (`service`), the `fish`, a land `animal`, a `bird` or a `bat`. |
 | `biome` | The Biome whose style it is (`tropical`, `northern`, `autumn`, `volcanic`), or `any` for one shared by every Biome. |
 | `variant` | Its Variant number within that kind and Biome, from 1 with no gaps. For a boat or ship it is the vessel's kind. |
 | `footprint` | Its footprint in cells, `<width>x<depth>`; each cell is `scale` voxels (8 by default), so every layer is `scale × width` characters wide and `scale × depth` rows deep. |
@@ -56,6 +56,7 @@ layers 2-7
 | `interior` | Optional: a box of voxels (min x y z, then max x y z, max exclusive) that must stay empty, for a room. |
 | `scale` | Optional: voxels a unit, `8` (the default, ⅛ unit) or `16` (1/16 unit: the House Interior's rooms and the developer). |
 | `developer` | Optional, a room's: the voxel (x y z) where the seated developer's anchor goes. |
+| `light` | Optional, a Light Source's (polish ticket 16): `<reach> <strength>`, how many cells its block light reaches (1–8) and how strong it is at its source (over 0, up to 1). Its light is at the middle of its `flame` and `glow` voxels (`lightCentre`); its colour is a theme token (`torchLight`), never in the file. A structure with a `flame` or `glow` voxel and no `light` only glows (a ship's lamp). |
 | `key:` | One line per character: the character, a colour role, and optionally a part (`lid`, `head`, `leftHand`, `rightHand`, `wingLeft`, `wingRight`; the default is `base`). |
 | `layer N` / `layers A-B` | One block of rows for layer N, or the same block for every layer A to B. Every layer from 0 to the top appears exactly once. |
 
@@ -80,11 +81,12 @@ the terrain:
 | Ground and floors | `plinth`, `concrete`, `floor`, `rug`, `post`, `postDark`, `deck`, `deckDark` |
 | Walls | `wall`, `wallShade`, `bamboo`, `bambooDark`, `timber`, `timberDark`, `brick`, `brickDark`, `mortar`, `stone`, `stoneDark` |
 | Roofs | `roof`, `thatch`, `thatchDark`, `shingle`, `shingleDark`, `tile`, `tileDark`, `slate`, `slateDark`, `snow` |
-| Openings and trim | `door`, `doorWood`, `window`, `frame`, `trim`, `accent` (the Biome's accent), `metal`, `metalDark`, `flag` (a mailbox's red flag), `canvas` (sail, awning, rope), `lamp` |
+| Openings and trim | `door`, `doorWood`, `window`, `frame`, `trim`, `accent` (the Biome's accent), `metal`, `metalDark`, `flag` (a mailbox's red flag), `canvas` (sail, awning, rope), `lamp` (a lamp's glass, unlit) |
+| Light Sources | `flame` (fire's colour; it glows at Night and flickers) and `glow` (a lamp's glass; it glows steady): polish ticket 16. Every lamp, room, lighthouse and torch has one and declares its `light`; a Dock's lanterns (Variant 2) and the boats' and ships' lamps use `glow` too |
 | Hulls | `hullRed`, `hullRedDark`, `hullNavy`, `hullNavyDark` (painted hulls; wooden and iron hulls use `bamboo`, `timber`, `slate` and their dark shades) |
 | Plants | `foliage`, `foliageLight`, `foliageDark` (the Biome's foliage), `leafGold` (autumn leaves), `flower`, `flowerLight`, and for the Garden's flowers `stem`, `stemLight`, `stemDark` (one green in every Biome), `petalWhite`, `petalYellow`, `petalOrange`, `petalRed`, `petalBlue`, `petalBlueLight` and `pollen` |
 | Decoration | `rock`, `rockDark` (the Biome's stone, for rock piles), `turf`, `turfLight` (the Biome's grass, darker or lighter, for tufts) |
-| House Interior | `screen` (the computer's screen, which glows with code), `fire` (a hearth or brazier), `desk`, `chair`, and the developer's `skin`, `hair`, `shirt`, `trousers`, `shoe` |
+| House Interior | `screen` (the computer's screen, which glows with code), `fire` (fire's colour, unlit: the volcanic Garden's ember petals; a room's hearth or brazier is `flame`), `desk`, `chair`, and the developer's `skin`, `hair`, `shirt`, `trousers`, `shoe` |
 
 A new material is a new role in `roles.ts` (and, if needed, a fixed colour
 with chroma at most 0.10 in `palette.ts`).
@@ -229,7 +231,7 @@ lighthouse is 16×16, 47 layers (just under 6 units, the tallest thing in
 the World, well over the House's 4), its door 4×10 on +z: a round tower
 tapering from radius 5.2 to 4.4 voxels on a paved square and a plinth ring,
 windows up the front and the east side, a gallery with a railing at layer
-34, a lantern of `lamp` glass between four posts (layers 35–40), a conical
+34, a lantern of `glow` glass (`light: 6 1`, polish ticket 16) between four posts (layers 35–40), a conical
 cap and a finial:
 
 | Biome | Style |
@@ -283,13 +285,13 @@ door faces):
   crates (bamboo, timber or stone) and a coil of rope; snow on the northern
   crates.
 - **2, a lamp and barrels:** a lamp on a post (an ember lamp in the volcanic
-  Biome), barrels, a bollard, and the Biome's touch: a potted palm in the
+  Biome; a Light Source since polish ticket 16, `light: 3 0.7`), barrels, a bollard, and the Biome's touch: a potted palm in the
   tropics, pumpkins in autumn, a coil of rope otherwise.
 
 `structures.test.ts` checks every Landmark Variant: as many per Biome as
 `LANDMARK_VARIANTS`, numbered from 1; never taller above the ground than
 `LANDMARK_HEIGHT`; the Station a lighthouse: 2×2, 44–48 layers, taller
-than every House, `lamp` glass in its top part, its door 4 wide and 10 tall
+than every House, `glow` glass in its top part, its door 4 wide and 10 tall
 on the front; every Service kind in every Biome, each 2×2, 12–20 layers
 (at most `SERVICE_HEIGHT`) and lower than the lighthouse, no two kinds of a
 Biome the same shape; the Mailbox 1×1, 8–10 layers, its box at most 6 across;
@@ -402,10 +404,32 @@ no file may stand taller than `DECORATION_HEIGHT` for its kind.
 | `windmill` | a 4×5 tower, sails on +z, 15 tall | bamboo, thatch cap, canvas sails | timber, snowy shingle cap | whitewash, tiled cap | stone, slate cap, red sails |
 
 The small tree (`sapling`) is a different, smaller species than each
-Biome's Garden tree. The lamps' glass and flames are plain colours for now;
-they light up with the torches and Night light ticket (16). The shed and
+Biome's Garden tree. The lamps are Light Sources (`flame` or `glow`,
+`light: 4 0.8`, polish ticket 16): at Night their glass or flame glows and
+lights the cells round them, and the reduced render tier keeps every lamp.
+The shed and
 windmill front on +z (`door: +z`), so the generator turns them south or
 east to face the camera.
+
+## Torches
+
+Polish ticket 16. Each Biome has two torch Variants, `torch/<biome>-1`
+(tall: 12 voxels, 1.5 units, `light: 5 1`) and `torch/<biome>-2` (short: 6
+voxels, 0.75 units, `light: 4 0.85`, low enough to stand by the Dock and
+the Garden), all 1×1 (8×8), standing on the ground, `door: none` (they
+face south). `TORCH_HEIGHT` (`world/torches.ts`) is their height exactly;
+the generator places them (`world-generator.md`, "Torches") and
+`render/torches.ts` draws one `InstancedMesh` per structure.
+
+| Biome | 1, tall | 2, short |
+|---|---|---|
+| tropical | a tiki torch: a bamboo pole, a lashed thatch cup, a flame | a half coconut shell of oil on beach stones, burning |
+| northern | an iron lantern on a post, its glass lit, snow on its cap | a stone lantern in the snow, its window lit |
+| autumn | a lantern hung from a wooden post's arm, a flame behind glass | a carved pumpkin, its candle showing through its carved front and side |
+| volcanic | a basalt brazier on a pillar, its bowl full of fire | a low stone brazier, burning |
+
+They were drawn with a throwaway generator script and committed as plain
+ASCII; edit the files directly.
 
 ## Fish
 
@@ -493,7 +517,8 @@ screen; their head and hands are moving parts.
   placed. The room never turns with the door (the box is square in plan).
 - `developerBox`, `screenFace`, `roomLight`: the developer's box in the
   room, the screen's face (for its glowing code) and the middle of the
-  lamps and fires (for the Night light).
+  lamps and fires (`lightCentre`: where the room's Light Source shines
+  from at Night).
 - `developerBounds(world)`: the developer's box in a World, in world units,
   for their link to Team.
 
@@ -529,6 +554,14 @@ least `LANDMARK_MIN_HEIGHT` tall (Decoration by a Landmark stays below it).
 `decorationModels.test.ts` checks each piece's structure and placement, and
 which pieces each render tier shows.
 
+For the Light Sources (polish ticket 16), `structures.test.ts` checks
+that a structure declares a `light` only with a `flame` or `glow` voxel,
+reaching 1–8 cells; that every lamp, room, lighthouse and torch is a Light
+Source; that every Biome has torch Variants 1 and 2, each 1×1 on the
+ground and exactly `TORCH_HEIGHT` tall; and that each torch's flame or
+glass is above its foot, its light reaching 3–5 cells, the tall one's
+farther. `parse.test.ts` checks the `light` field and its errors.
+
 For the fish, `structures.test.ts` checks one species per Biome, each its
 own; that each is 1×1, anchored on the ground, one ⅛-unit voxel tall;
 4–5 voxels long and 2–3 wide, every corner within `FISH_REACH` of the
@@ -554,7 +587,7 @@ phone) the Biomes wrap two to a band, each band with its Variants down it,
 so the models stay large enough to judge; the grid re-lays when the screen
 turns. It uses the World's
 renderer (`WebGPURenderer`, WebGL 2 fallback), soft-voxel material, sun,
-sky light and Day and Night tokens (the light only: window glow shows in the World, not here). **Turn** turns every model a quarter
+sky light and Day and Night tokens; at Night the Light Sources' flames and lamp glass glow and bloom (polish ticket 16; no block light round them here, and the House's windows glow only in the World). **Turn** turns every model a quarter
 turn; **Lift lids** lifts the House lids to show the interior; a House
 Interior room (kind `room`) shows furnished, the developer at the
 computer, at its own 1/16 unit; a Garden fence (kind `garden`) shows

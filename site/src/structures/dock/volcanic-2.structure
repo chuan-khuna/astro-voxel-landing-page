@@ -6,12 +6,13 @@ variant: 2
 footprint: 2x1
 door: none
 anchor: 0 -2 0
+light: 3 0.7
 key:
   m metalDark
   M metal
   T timber
   V canvas
-  X accent
+  X flame
 layer 0
 m...T......VVV..
 ...TTT.T...V.V..

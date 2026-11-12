@@ -17,10 +17,11 @@ import { drawHousePart, drawStructures } from './structureModels';
 import { boatsOf, vesselStructure } from './vesselModels';
 import { gardenPlantsOf } from './gardenPlants';
 import { decorationOf } from './decorationModels';
+import { torchStructure } from './torchModels';
 import { structureVoxels } from '@/structures/parse';
 
 /** The kinds counted, in the order the overlay lists them. */
-export const VOXEL_KINDS = ['terrain', 'landmarks', 'plants', 'decoration', 'houseRoom', 'boats', 'ships', 'buoys', 'bridges', 'stairs'] as const;
+export const VOXEL_KINDS = ['terrain', 'landmarks', 'plants', 'decoration', 'torches', 'houseRoom', 'boats', 'ships', 'buoys', 'bridges', 'stairs'] as const;
 export type VoxelKind = (typeof VOXEL_KINDS)[number];
 
 /**
@@ -33,6 +34,7 @@ export type VoxelKind = (typeof VOXEL_KINDS)[number];
  * - `plants`: the Garden's flowers and trees, one per planted Project.
  * - `decoration`: every piece of Decoration (instanced, ⅛ unit), as the
  *   full render tier shows it; the reduced tier shows half.
+ * - `torches`: every torch (instanced, ⅛ unit, polish ticket 16).
  * - `houseRoom`: the House Interior's room as the World shows it while the
  *   lid is up, at 1/16 unit (`furnishedRoom`), the developer included.
  * - `boats`: every Client's moored boat (instanced, so not in the grids).
@@ -41,7 +43,7 @@ export type VoxelKind = (typeof VOXEL_KINDS)[number];
 export type VoxelCounts = Record<VoxelKind, number> & {
   /** Every kind together. */
   total: number;
-  /** Voxels in the World's three meshed grids (terrain, detail and structure): all but the separate meshes (the House's lid and room, the instanced plants, Decoration, boats and ships). */
+  /** Voxels in the World's three meshed grids (terrain, detail and structure): all but the separate meshes (the House's lid and room, the instanced plants, Decoration, torches, boats and ships). */
   inGrids: number;
 };
 
@@ -75,6 +77,7 @@ export function countVoxels(world: World): VoxelCounts {
   for (const ship of world.ships) counts.ships += [...structureVoxels(vesselStructure('ship', world.biome.id, ship.kind))].length;
   for (const plant of gardenPlantsOf(world)) counts.plants += [...structureVoxels(plant.structure)].length;
   for (const { structure } of decorationOf(world, 'full')) counts.decoration += [...structureVoxels(structure)].length;
+  for (const torch of world.torches) counts.torches += [...structureVoxels(torchStructure(world, torch.variant))].length;
 
   const total = VOXEL_KINDS.reduce((sum, kind) => sum + counts[kind], 0);
   return { ...counts, total, inGrids };

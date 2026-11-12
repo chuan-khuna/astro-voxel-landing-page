@@ -5,6 +5,7 @@ import { countVoxels, VOXEL_KINDS } from './voxelCounts';
 import { plantStructure } from './gardenPlants';
 import { vesselStructure } from './vesselModels';
 import { decorationStructure } from './decorationModels';
+import { torchStructure } from './torchModels';
 import { worldToVoxels } from './worldVoxels';
 import { furnishedRoom } from './interiorModel';
 
@@ -28,7 +29,7 @@ describe('countVoxels', () => {
   });
 
   it('counts every kind present in this World', () => {
-    for (const kind of ['terrain', 'landmarks', 'plants', 'decoration', 'houseRoom', 'boats', 'ships', 'buoys', 'bridges', 'stairs'] as const) {
+    for (const kind of ['terrain', 'landmarks', 'plants', 'decoration', 'torches', 'houseRoom', 'boats', 'ships', 'buoys', 'bridges', 'stairs'] as const) {
       if (kind === 'bridges' && world.bridges.length === 0) continue;
       if (kind === 'stairs' && world.stairs.length === 0) continue;
       expect(tally[kind], kind).toBeGreaterThan(0);
@@ -45,6 +46,11 @@ describe('countVoxels', () => {
   it('counts every piece of Decoration as the structure of its kind', () => {
     expect(world.decoration.length).toBeGreaterThan(0);
     expect(tally.decoration).toBe(world.decoration.reduce((sum, d) => sum + voxelsIn(decorationStructure(world.biome.id, d.kind)), 0));
+  });
+
+  it('counts every torch as the structure of its Variant', () => {
+    expect(world.torches.length).toBeGreaterThan(0);
+    expect(tally.torches).toBe(world.torches.reduce((sum, t) => sum + voxelsIn(torchStructure(world, t.variant)), 0));
   });
 
   it('counts the House room as the World shows it: the Biome’s furnished room at 1/16 unit, the developer seated in it', () => {

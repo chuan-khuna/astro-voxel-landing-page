@@ -121,6 +121,7 @@ export function createGuide({ frame, button, bubble, covers = () => [], landmark
   geometry.setAttribute('position', new THREE.BufferAttribute(chunk!.positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(chunk!.normals, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(chunk!.colours, 3));
+  geometry.setAttribute('glow', new THREE.BufferAttribute(chunk!.glow, 1));
   geometry.setIndex(new THREE.BufferAttribute(chunk!.indices, 1));
   geometry.translate(-offset * model.size, -offset * model.size, -offset * model.size);
   geometry.computeBoundingSphere();

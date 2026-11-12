@@ -22,18 +22,27 @@ import { meshVoxels, VoxelGrid, type ChunkMesh } from './mesher';
 import { FIXED_COLOURS, LOOK, oklchToLinear, shiftLightness, type FixedColour, type Rgb } from './palette';
 import { drawStructures } from './structureModels';
 import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
+import { bakeBlockLight, type LightVolume } from './blockLight';
+import type { Glow } from '@/structures/roles';
 
-/** A colour list that hands out one id per distinct colour. */
+/**
+ * A colour list that hands out one id per distinct colour and glow: a
+ * flame's colour that glows at Night gets its own id beside the same colour
+ * unlit (an ember-red petal), so the mesher can tell them apart.
+ */
 export class ColourTable {
   readonly colours: Rgb[] = [];
+  /** How each colour id glows at Night (`Glow`: 0 none, 1 steady, 2 a flame). */
+  readonly glows: Glow[] = [];
   private readonly ids = new Map<string, number>();
 
-  id(colour: Oklch): number {
-    const k = `${colour.l},${colour.c},${colour.h}`;
+  id(colour: Oklch, glow: Glow = 0): number {
+    const k = `${colour.l},${colour.c},${colour.h},${glow}`;
     let id = this.ids.get(k);
     if (id === undefined) {
       id = this.colours.length;
       this.colours.push(oklchToLinear(colour));
+      this.glows.push(glow);
       this.ids.set(k, id);
     }
     return id;
@@ -43,8 +52,8 @@ export class ColourTable {
 /** Colour ids for a World: its Biome's roles plus the fixed colours. */
 export interface WorldColours {
   table: ColourTable;
-  biome: (role: BiomeColourRole, dl?: number) => number;
-  fixed: (name: FixedColour, dl?: number) => number;
+  biome: (role: BiomeColourRole, dl?: number, glow?: Glow) => number;
+  fixed: (name: FixedColour, dl?: number, glow?: Glow) => number;
 }
 
 export interface WorldVoxels {
@@ -52,6 +61,8 @@ export interface WorldVoxels {
   detail: VoxelGrid;
   structure: VoxelGrid;
   colours: Rgb[];
+  /** How each colour id glows at Night (`ColourTable.glows`). */
+  glows: Glow[];
   /** Is the terrain solid at this world point? */
   terrainSolid: (x: number, y: number, z: number) => boolean;
 }
@@ -60,8 +71,8 @@ export function worldColours(world: Pick<World, 'biome'>): WorldColours {
   const table = new ColourTable();
   return {
     table,
-    biome: (role, dl = 0) => table.id(shiftLightness(world.biome.colours[role], dl)),
-    fixed: (name, dl = 0) => table.id(shiftLightness(FIXED_COLOURS[name], dl)),
+    biome: (role, dl = 0, glow = 0) => table.id(shiftLightness(world.biome.colours[role], dl), glow),
+    fixed: (name, dl = 0, glow = 0) => table.id(shiftLightness(FIXED_COLOURS[name], dl), glow),
   };
 }
 
@@ -75,13 +86,16 @@ export interface MeshedWorld {
   structure: ChunkMesh[];
   /** Voxel size of the terrain, detail and structure grids, in world units. */
   voxelSizes: [number, number, number];
+  /** The World's block light at Night (`blockLight.ts`), baked beside the meshes. */
+  light: LightVolume;
 }
 
-/** Mesh a World's voxel grids into chunk meshes (world units). No GPU work. */
+/** Mesh a World's voxel grids into chunk meshes (world units) and bake its block light. No GPU work. */
 export function meshWorld(world: World): MeshedWorld {
   const voxels = worldToVoxels(world);
   const terrain = meshVoxels(voxels.terrain, {
     colours: voxels.colours,
+    glows: voxels.glows,
     aoStrength: LOOK.aoStrength,
     chunkSize: CHUNK_UNITS,
     solidOutside: (_x, y) => y < 0,
@@ -89,6 +103,7 @@ export function meshWorld(world: World): MeshedWorld {
   const s = 1 / GROUND_DETAIL;
   const detail = meshVoxels(voxels.detail, {
     colours: voxels.colours,
+    glows: voxels.glows,
     aoStrength: LOOK.aoStrength,
     chunkSize: CHUNK_UNITS * GROUND_DETAIL,
     solidOutside: (x, y, z) => voxels.terrainSolid((x + 0.5) * s, (y + 0.5) * s, (z + 0.5) * s),
@@ -98,13 +113,14 @@ export function meshWorld(world: World): MeshedWorld {
   const ratio = STRUCTURE / GROUND_DETAIL;
   const structure = meshVoxels(voxels.structure, {
     colours: voxels.colours,
+    glows: voxels.glows,
     aoStrength: LOOK.aoStrength,
     chunkSize: CHUNK_UNITS * STRUCTURE,
     solidOutside: (x, y, z) =>
       voxels.terrainSolid((x + 0.5) * e, (y + 0.5) * e, (z + 0.5) * e) ||
       voxels.detail.has(Math.floor(x / ratio), Math.floor(y / ratio), Math.floor(z / ratio)),
   });
-  return { terrain, detail, structure, voxelSizes: [voxels.terrain.size, voxels.detail.size, voxels.structure.size] };
+  return { terrain, detail, structure, voxelSizes: [voxels.terrain.size, voxels.detail.size, voxels.structure.size], light: bakeBlockLight(world) };
 }
 
 export function worldToVoxels(world: World): WorldVoxels {
@@ -146,7 +162,7 @@ export function worldToVoxels(world: World): WorldVoxels {
   const structure = new VoxelGrid(1 / STRUCTURE);
   drawStructures(world, colours, (x, y, z, colour) => structure.set(x, y, z, colour));
 
-  return { terrain, detail, structure, colours: colours.table.colours, terrainSolid };
+  return { terrain, detail, structure, colours: colours.table.colours, glows: colours.table.glows, terrainSolid };
 }
 
 /** What `drawDetail` has just drawn: a group of parts, or one Landmark. */

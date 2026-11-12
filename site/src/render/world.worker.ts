@@ -17,8 +17,9 @@ self.onmessage = (event: MessageEvent<WorldRequest>) => {
     const generateMs = performance.now() - started;
     const meshed = meshWorld(world);
     for (const chunk of [...meshed.terrain, ...meshed.detail, ...meshed.structure]) {
-      transfer.push(chunk.positions.buffer, chunk.normals.buffer, chunk.colours.buffer, chunk.indices.buffer);
+      transfer.push(chunk.positions.buffer, chunk.normals.buffer, chunk.colours.buffer, chunk.glow.buffer, chunk.indices.buffer);
     }
+    transfer.push(meshed.light.data.buffer);
     response = { id, world, meshed, ms: performance.now() - started, generateMs };
   } catch (error) {
     response = { id, error: error instanceof Error ? error.message : String(error) };

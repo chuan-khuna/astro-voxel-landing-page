@@ -2,12 +2,12 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, BIRD_REACH, CREATURE_SETS, BIOME_IDS, BOAT_KINDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, PLACED_LANDMARK_IDS, SERVICE_HEIGHT, SERVICE_KINDS, SERVICE_MIN_HEIGHT, SHIP_KINDS } from '@/world';
+import { ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, BIRD_REACH, CREATURE_SETS, BIOME_IDS, BOAT_KINDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, PLACED_LANDMARK_IDS, SERVICE_HEIGHT, SERVICE_KINDS, SERVICE_MIN_HEIGHT, SHIP_KINDS, TORCH_HEIGHT, type TorchVariant } from '@/world';
 import { GROUND_DETAIL, INTERIOR, STRUCTURE } from '@/render/voxelTiers';
 import { STRUCTURES, STRUCTURE_FILES, variantsOf } from './index';
 import { FISH_REACH } from '@/render/schools';
 import { parseStructure, structureVoxels, voxelAt, type Structure } from './parse';
-import { STRUCTURE_ROLES } from './roles';
+import { LIGHT_ROLES, STRUCTURE_ROLES } from './roles';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const files = (dir: string): string[] =>
@@ -45,6 +45,59 @@ describe('structure files', () => {
   });
 });
 
+describe('the Light Sources', () => {
+  const lit = (s: Structure) => [...structureVoxels(s)].some((v) => LIGHT_ROLES.includes(v.role));
+
+  it('declares a light only with a flame or a glow to throw it, reaching 1–8 cells', () => {
+    for (const s of STRUCTURES.filter((s) => s.light)) {
+      expect(lit(s), s.name).toBe(true);
+      expect(s.light!.reach, s.name).toBeGreaterThanOrEqual(1);
+      expect(s.light!.reach, s.name).toBeLessThanOrEqual(8);
+    }
+  });
+
+  it('makes every lamp, room, lighthouse and torch a Light Source', () => {
+    for (const kind of ['lamp', 'room', 'station', 'torch']) {
+      for (const s of STRUCTURES.filter((s) => s.kind === kind)) {
+        expect(lit(s), s.name).toBe(true);
+        expect(s.light, s.name).not.toBeNull();
+      }
+    }
+  });
+});
+
+describe('the torches', () => {
+  const tallest = (s: Structure) => s.size.y - s.anchor.y;
+  const torches = STRUCTURES.filter((s) => s.kind === 'torch');
+
+  it('gives every Biome two Variants: 1 tall, 2 short', () => {
+    for (const biome of BIOME_IDS) expect(variantsOf('torch', biome).map((s) => s.variant), biome).toEqual([1, 2]);
+  });
+
+  it('stands each on one cell from the ground, exactly as tall as the generator allows its Variant (`TORCH_HEIGHT`)', () => {
+    for (const s of torches) {
+      expect(s.footprint, s.name).toEqual({ width: 1, depth: 1 });
+      expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
+      expect(s.scale, s.name).toBe(STRUCTURE);
+      expect(tallest(s) / STRUCTURE, s.name).toBe(TORCH_HEIGHT[s.variant as TorchVariant]);
+    }
+  });
+
+  it('burns a flame or lights a glass above its foot, and throws light 3–5 cells, the tall one farther', () => {
+    for (const s of torches) {
+      const lights = [...structureVoxels(s)].filter((v) => LIGHT_ROLES.includes(v.role));
+      expect(lights.length, s.name).toBeGreaterThan(0);
+      expect(Math.max(...lights.map((v) => v.y)), s.name).toBeGreaterThanOrEqual(tallest(s) / 3);
+      expect(s.light!.reach, s.name).toBeGreaterThanOrEqual(3);
+      expect(s.light!.reach, s.name).toBeLessThanOrEqual(5);
+    }
+    for (const biome of BIOME_IDS) {
+      const [tall, short] = variantsOf('torch', biome);
+      expect(tall!.light!.reach, biome).toBeGreaterThan(short!.light!.reach);
+    }
+  });
+});
+
 describe('the Landmark Variants', () => {
   const KINDS = ['house', 'station', 'mailbox', 'dock', 'garden'] as const;
   /** How far a structure reaches above the ground, in ⅛ voxels (its anchor may sit below its first layer). */
@@ -74,7 +127,7 @@ describe('the Landmark Variants', () => {
       expect(s.door, s.name).toBe('+z');
       expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
       // The lantern: lamp glass in the top quarter.
-      const lamp = [...structureVoxels(s)].filter((v) => v.role === 'lamp');
+      const lamp = [...structureVoxels(s)].filter((v) => v.role === 'glow');
       expect(lamp.length, s.name).toBeGreaterThan(0);
       for (const v of lamp) expect(v.y, s.name).toBeGreaterThanOrEqual(s.size.y * 0.7);
       // The door: 4 wide and 10 tall, each voxel the frontmost of its column on that row.
@@ -330,9 +383,10 @@ describe('the House Interior rooms', () => {
     }
   });
 
-  it('has a light for the Night: a lamp or a fire in every room', () => {
+  it('has a light for the Night: a lamp or a fire in every room, a Light Source that lights the room', () => {
     for (const room of STRUCTURES.filter((s) => s.kind === 'room')) {
-      expect([...structureVoxels(room)].some((v) => v.role === 'lamp' || v.role === 'fire'), room.name).toBe(true);
+      expect([...structureVoxels(room)].some((v) => LIGHT_ROLES.includes(v.role)), room.name).toBe(true);
+      expect(room.light, room.name).not.toBeNull();
     }
   });
 });

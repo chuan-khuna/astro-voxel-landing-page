@@ -7,6 +7,7 @@ import { sailingRoutes } from './ships';
 import { BOAT_KINDS, SHIP_KINDS, vesselIds, vesselKind } from './vessels';
 import { placeBuoys } from './buoys';
 import { placeDecoration } from './decoration';
+import { placeTorches } from './torches';
 import { windFor } from './wind';
 import { placeParticles } from './particles';
 import { placeClouds } from './clouds';
@@ -75,6 +76,9 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
     const routes = sailingRoutes(terrain, isles, bridges, [...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)], counts.partners);
     const ships = withKinds(routes, counts.partnerIds, 'partner', SHIP_KINDS);
     const decoration = placeDecoration(seed, biome.id, terrain, bridges, paths, landmarks);
+    const torches = placeTorches(seed, terrain, bridges, paths, landmarks, decoration);
+    // Torches stand like a lamp of the Decoration's: particles and animals keep off them.
+    const standing = [...decoration, ...torches.map((t) => ({ kind: 'lamp' as const, cell: t.cell, facing: 'south' as const }))];
     const views = deriveViews(isles, landmarks, boats);
     const wind = windFor(seed);
     const buoys = placeBuoys(terrain, bridges, landmarks.find((l) => l.id === 'dock'), boats.map((b) => b.cell), ships);
@@ -93,10 +97,11 @@ export function generateWorld(givenSeed: string, counts: ContentCounts): World {
       ships,
       buoys,
       decoration,
-      particles: placeParticles(seed, biome.id, terrain, bridges, landmarks, decoration),
+      torches,
+      particles: placeParticles(seed, biome.id, terrain, bridges, landmarks, standing),
       clouds: placeClouds(seed, terrain, landmarks, views.overview, wind, [...bridges.flatMap((b) => b.cells), ...landmarks.flatMap((l) => l.jetty), ...boats.map((b) => b.cell)]),
       fish: placeFish(seed, terrain, bridges, landmarks, boats.map((b) => b.cell), buoys, ships),
-      animals: placeAnimals(seed, biome.id, terrain, isles, bridges, paths, landmarks, decoration),
+      animals: placeAnimals(seed, biome.id, terrain, isles, bridges, paths, landmarks, standing),
       birds: placeBirds(seed, biome.id, terrain, isles, landmarks),
       views,
       wind,

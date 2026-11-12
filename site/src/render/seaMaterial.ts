@@ -16,7 +16,8 @@
  *
  * Seams and bevels are measured at the vertex's place before the bob, so
  * they ride with the voxel. The clouds' shadows drift across it
- * (`cloudShadow.ts`).
+ * (`cloudShadow.ts`). At Night the block light lights a soft rim of water
+ * along the shore and no further (`SHORE_LIGHT`).
  *
  * The surf (`surf.ts`): on each voxel's top, every ⅛-unit square works out
  * its distance from the coastline from the voxel's `seaCoast` corners (and
@@ -30,8 +31,9 @@
  * (`surfGlow`, `surfGlowStrength`).
  */
 import * as THREE from 'three/webgpu';
-import { abs, attribute, clamp, float, floor, fract, hash, max, mix, normalGeometry, pow, positionGeometry, positionLocal, positionWorld, sin, smoothstep, step, uniform, vec2, vec3 } from 'three/tsl';
+import { abs, attribute, clamp, diffuseColor, float, floor, fract, hash, max, mix, normalGeometry, output, pow, positionGeometry, positionLocal, positionWorld, sin, smoothstep, step, uniform, vec2, vec3, vec4 } from 'three/tsl';
 import { cloudShade } from './cloudShadow';
+import { blockLightAdded } from './blockLightNode';
 import { softVoxelLook } from './voxelMaterial';
 import { SEA_BOB, SEA_LEVEL } from './seaModel';
 import { STRUCTURE, TERRAIN } from './voxelTiers';
@@ -83,9 +85,16 @@ export function seaMaterial(clock: AmbientClock): SeaMaterial {
   material.colorNode = mix(look.shade(mix(shallow, deep, deepness)), foamLook.shade(foamColour), surf.foam).mul(cloudShade(positionWorld));
   material.opacityNode = mix(opacity, float(FOAM_OPACITY), surf.foam);
   // At Night the breaking surf glows: a soft wash where it breaks, brighter on the foam, and a faint glow on all foam.
-  material.emissiveNode = glowColour.mul(glowStrength).mul(surf.glow.mul(0.6).add(surf.foam.mul(surf.glow.add(0.25))));
+  // Added after the lighting, not as emissive: the surf is no Light Source, so the bloom (`outline.ts`) leaves it be.
+  const surfGlow = glowColour.mul(glowStrength).mul(surf.glow.mul(0.6).add(surf.foam.mul(surf.glow.add(0.25))));
+  // The block light at Night (`blockLightNode.ts`) reaches only a soft rim of water along the shore, never the open sea.
+  const shore = float(1).sub(smoothstep(SHORE_LIGHT.from, SHORE_LIGHT.to, surf.coast));
+  material.outputNode = output.add(vec4(surfGlow.add(blockLightAdded(diffuseColor.rgb).mul(shore)), 0));
   return { material, shallow, deep, foam: foamColour, glow: glowColour, glowStrength };
 }
+
+/** The block light's rim along the shore: whole up to `from` units out from the coastline, gone by `to`. */
+const SHORE_LIGHT = { from: 0.3, to: 1.2 } as const;
 
 /** How opaque a square of foam is. */
 const FOAM_OPACITY = 0.95;
@@ -127,5 +136,5 @@ function surfNodes(time: FloatNode, cellX: FloatNode, cellZ: FloatNode) {
   const chance = hash(square.x.add(4096).add(square.y.add(4096).mul(8192)).add(floor(wave).mul(7919)));
   const foam = step(chance.add(0.001), amount);
   const glow = float(1).sub(running).mul(pow(float(1).sub(back), 2)).mul(float(1).sub(smoothstep(0.2, 0.6, d))).mul(still).mul(top);
-  return { foam, glow };
+  return { foam, glow, coast: d };
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, MAX_SCHOOLS, FISH_AREA, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, CREATURE_SETS, ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, MAX_ANIMALS_PER_ISLE, MAX_BIRDS, BIRD_REACH, BIRD_BELOW, BIRD_ABOVE, SERVICE_HEIGHT, SERVICE_KINDS, SERVICE_MIN_HEIGHT, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, MAX_SCHOOLS, FISH_AREA, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, CREATURE_SETS, ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, MAX_ANIMALS_PER_ISLE, MAX_BIRDS, BIRD_REACH, BIRD_BELOW, BIRD_ABOVE, SERVICE_HEIGHT, SERVICE_KINDS, SERVICE_MIN_HEIGHT, TORCH_HEIGHT, torchSightCells, generateWorld, type ContentCounts, type World } from './index';
 
 const SERVICE_IDS = ['data-engineering', 'data-platforms', 'analytics', 'machine-learning'];
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3, serviceIds: SERVICE_IDS };
@@ -1071,6 +1071,105 @@ describe('generateWorld', { timeout: 20_000 }, () => {
           expect(['south', 'east'], seed).toContain(b.facing);
           for (const other of buildings.slice(n + 1)) expect(chebyshev(b.cell, other.cell), seed).toBeGreaterThanOrEqual(3);
         });
+      }
+    });
+  });
+
+  describe('Torches', () => {
+    const chebyshev = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+    const top = (t: World['torches'][number]) => t.y + TORCH_HEIGHT[t.variant];
+
+    it('places the same torches for the same Seed', () => {
+      for (const seed of sampledSeeds.slice(0, 20)) expect(generateWorld(seed, counts).torches, seed).toEqual(worldFor(seed).torches);
+    });
+
+    it('stands at least one torch by every Landmark, and some along the path and at bridge ends', () => {
+      const by = new Set<string>();
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        for (const id of PLACED) expect(world.torches.filter((t) => t.by === id).length, `${seed} ${id}`).toBeGreaterThanOrEqual(1);
+        for (const id of PLACED) expect(world.torches.filter((t) => t.by === id).length, `${seed} ${id}`).toBeLessThanOrEqual(2);
+        for (const t of world.torches) by.add(t.by);
+        // Each torch stands within five cells of what it lights (nearly always one or two).
+        for (const t of world.torches) {
+          const l = world.landmarks.find((l) => l.id === t.by);
+          if (l) expect(Math.min(...coveredCells(l).map((c) => chebyshev(c, t.cell))), `${seed} ${t.by}`).toBeLessThanOrEqual(5);
+        }
+      }
+      expect(by).toContain('path');
+      expect(by).toContain('bridge');
+    });
+
+    it('uses both Variants, the tall one where there is room', () => {
+      const variants = new Set(sampledSeeds.flatMap((seed) => worldFor(seed).torches.map((t) => t.variant)));
+      expect([...variants].toSorted()).toEqual([1, 2]);
+    });
+
+    it('never stands on a footprint, the jetty (but on its end, by the Dock), a path, a bridge end, Decoration or beside another torch', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const { width, isle, heights } = world.terrain;
+        const path = new Set(world.paths.flatMap((p) => p.cells.map(key)));
+        const bridgeEnds = new Set(world.bridges.flatMap((b) => b.cells.flatMap((c) => SIDES.map(([dx, dz]) => key({ x: c.x + dx, z: c.z + dz })))));
+        const covered = new Set(world.landmarks.flatMap(coveredCells).map(key));
+        const decorated = new Set(world.decoration.map((d) => key(d.cell)));
+        const dock = world.landmarks.find((l) => l.id === 'dock')!;
+        world.torches.forEach((t, n) => {
+          const at = `${seed} ${t.by} ${key(t.cell)}`;
+          if (t.onJetty) {
+            expect(t.by, at).toBe('dock');
+            expect(key(t.cell), at).toBe(key(dock.jetty.at(-1)!));
+            expect(t.y, at).toBe(dock.y);
+          } else {
+            expect(isle[t.cell.z * width + t.cell.x], at).not.toBe(-1);
+            expect(t.y, at).toBe(heights[t.cell.z * width + t.cell.x]);
+            expect(covered.has(key(t.cell)), at).toBe(false);
+          }
+          expect(path.has(key(t.cell)), at).toBe(false);
+          expect(bridgeEnds.has(key(t.cell)), at).toBe(false);
+          expect(decorated.has(key(t.cell)), at).toBe(false);
+          for (const other of world.torches.slice(n + 1)) expect(chebyshev(t.cell, other.cell), at).toBeGreaterThanOrEqual(2);
+        });
+      }
+    });
+
+    it('never stands taller than the nearest Landmark', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        for (const t of world.torches) {
+          const distance = (l: World['landmarks'][number]) => Math.min(...coveredCells(l).map((c) => Math.hypot(c.x - t.cell.x, c.z - t.cell.z)));
+          const nearest = Math.min(...world.landmarks.map(distance));
+          const height = (l: World['landmarks'][number]) => (l.id === 'station' ? SERVICE_MIN_HEIGHT : LANDMARK_MIN_HEIGHT[l.id]);
+          const cap = Math.min(...world.landmarks.filter((l) => distance(l) === nearest).map(height));
+          expect(TORCH_HEIGHT[t.variant], `${seed} ${key(t.cell)}`).toBeLessThanOrEqual(cap);
+        }
+      }
+    });
+
+    it('never hides a Landmark from the isometric camera (the House\'s yard is open ground; the jetty\'s torch stands on the Dock\'s own deck)', () => {
+      for (const seed of sampledSeeds) {
+        const world = worldFor(seed);
+        const hidden: string[] = [];
+        for (const t of world.torches) {
+          for (const l of world.landmarks) {
+            const cells = t.onJetty ? torchSightCells(l) : [...torchSightCells(l), ...l.jetty];
+            for (const c of cells) {
+              for (let i = 0; i <= 4; i++) {
+                for (let k = 0; k <= 4; k++) {
+                  const px = c.x + i / 4;
+                  const pz = c.z + k / 4;
+                  for (let s = 0.001; l.y + s <= top(t); s += 0.02) {
+                    if (Math.floor(px + s) === t.cell.x && Math.floor(pz + s) === t.cell.z) {
+                      hidden.push(`${l.id} by ${t.by} at ${key(t.cell)}`);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        expect(hidden, seed).toEqual([]);
       }
     });
   });

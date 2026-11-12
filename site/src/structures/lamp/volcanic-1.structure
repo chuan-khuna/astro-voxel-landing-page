@@ -1,15 +1,16 @@
 # Lamp, volcanic: a stone lantern with fire inside, under a slate roof.
-# Decoration: 13 voxels tall. Its fire lights up once torches give light (ticket 16).
+# Decoration: 13 voxels tall. A Light Source (ticket 16): its fire glows at Night and lights the cells round it.
 kind: lamp
 biome: volcanic
 variant: 1
 footprint: 1x1
 door: none
 anchor: 0 0 0
+light: 4 0.8
 key:
   a accent
   d stoneDark
-  f fire
+  f flame
   k slate
   s stone
 layers 0-1

@@ -7,6 +7,7 @@ export { generateWorld } from './generateWorld';
 export { BIOME_COLOUR_ROLES, BIOME_IDS, LANDMARK_IDS, PLACED_LANDMARK_IDS, VIEW_LANDMARK_IDS } from './types';
 export { MAX_SEED_LENGTH } from './generateWorld';
 export { DECORATION_HEIGHT, MINOR_BUILDINGS } from './decoration';
+export { TORCH_HEIGHT, torchSightCells } from './torches';
 export { ANIMAL_SPECIES_IDS, DECORATION_KINDS, PARTICLE_KINDS } from './types';
 export { PARTICLE_SETS } from './particles';
 export { MAX_CLOUDS } from './clouds';

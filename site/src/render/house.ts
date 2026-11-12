@@ -14,9 +14,9 @@
  *   that scrolls lines of code on the shared clock. The room shows only
  *   while the lid is lifted or lifting, so a shut House draws none of it,
  *   and it is the same room at every stage of opening: nothing in it ever
- *   changes resolution. At Night its lamp or fire lights it warmly: a light
- *   worked out in the room's own material (`roomLamp`), so the rest of the
- *   World pays nothing for it.
+ *   changes resolution. At Night its lamp or fire glows and lights it
+ *   warmly: a Light Source (`lightSources.ts`), its block light baked with
+ *   the World's (polish ticket 16).
  *
  * The lid and the room use the soft-voxel material in local space, built at
  * the House's place in the World (whole voxels), so seams stay on voxel
@@ -27,7 +27,7 @@
  */
 import * as THREE from 'three/webgpu';
 import type { UniformNode } from 'three/webgpu';
-import { clamp, diffuseColor, dot, float, floor, fract, hash, length, max, mix, normalWorld, normalize, positionWorld, step, uniform, uv, vec2, vec3 } from 'three/tsl';
+import { float, floor, fract, hash, mix, step, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { Oklch, World } from '@/world';
 import { structureVoxels } from '@/structures/parse';
 import type { StructurePart } from '@/structures/roles';
@@ -40,7 +40,8 @@ import { worldColours } from './worldVoxels';
 import { INTERIOR, STRUCTURE } from './voxelTiers';
 import { drawHousePart, houseWindowFaces, structureColour } from './structureModels';
 import { developerPose, roofLift } from './houseMotion';
-import { DEVELOPER_PARTS, developerBounds, furnishedRoom, interiorPlacement, roomLight, screenFace, type DeveloperPart } from './interiorModel';
+import { DEVELOPER_PARTS, developerBounds, furnishedRoom, interiorPlacement, screenFace, type DeveloperPart } from './interiorModel';
+import { glowMaterial } from './blockLightNode';
 import { createAmbientClock, type AmbientClock } from './ambientClock';
 
 export interface HouseParts {
@@ -57,7 +58,7 @@ export interface HouseParts {
   developerParts: THREE.Mesh[];
   /** Lift the lid: 0 shut, 1 fully open. The room shows whenever it is above 0. */
   setOpening(opening: number): void;
-  /** Light the windows and the room's lamp, or not, as the theme says. */
+  /** Light the windows, or not, as the theme says (the room's lamp glows with every Light Source, `blockLightNode.ts`). */
   setLights(world: WorldTokens): void;
   /** Pose the developer `seconds` into their work (the shared clock's seconds). */
   work(seconds: number): void;
@@ -70,13 +71,6 @@ const LINES_PER_SECOND = 2.5;
 const SCREEN_GRID = { cols: 14, rows: 7 };
 /** How far in front of the screen voxels the code plane sits, in world units. */
 const SCREEN_LIFT = 0.002;
-/**
- * The warm light at the room's lamp or fire, by Night: its colour, its
- * strength (as a three.js point light's, in candela), how far it reaches
- * and how far above the lamp's voxels it sits, in world units.
- */
-const LAMP = { colour: { l: 0.86, c: 0.09, h: 70 } satisfies Oklch, intensity: 6, distance: 5, lift: 0.15 };
-
 const linear = (colour: Oklch) => {
   const [r, g, b] = oklchToLinear(colour);
   return vec3(r, g, b);
@@ -97,6 +91,7 @@ export function buildHouse(world: World, clock: AmbientClock = createAmbientCloc
   const gridMesh = (name: string, grid: VoxelGrid, meshMaterial: THREE.Material): [THREE.Mesh, number] => {
     const chunks = meshVoxels(grid, {
       colours: colours.table.colours,
+      glows: colours.table.glows,
       aoStrength: LOOK.aoStrength,
       chunkSize: 128,
       solidOutside: () => false,
@@ -116,7 +111,8 @@ export function buildHouse(world: World, clock: AmbientClock = createAmbientCloc
 
   // The lights: a glowing square a hair in front of each open face of window glass,
   // one mesh for the lid's (its child, so they lift with it) and one for the base's.
-  const lightMaterial = new THREE.MeshBasicNodeMaterial();
+  const windowLight = uniform(new THREE.Color());
+  const lightMaterial = glowMaterial(windowLight);
   materials.push(lightMaterial);
   const panes: THREE.Mesh[] = [];
   const faces = houseWindowFaces(world);
@@ -140,10 +136,8 @@ export function buildHouse(world: World, clock: AmbientClock = createAmbientCloc
   const furnished = furnishedRoom(world.biome.id);
   const at = interiorPlacement(world);
   const e = 1 / INTERIOR;
-  const light = roomLight(furnished);
-  const lampOn = uniform(0);
+  // At Night the room's lamp or fire glows and lights it: a Light Source like any other (`lightSources.ts`).
   const roomMaterial = voxelMaterial(e, 'local');
-  roomMaterial.emissiveNode = roomLamp(new THREE.Vector3((at.x + light.x) * e, (at.y + light.y) * e + LAMP.lift, (at.z + light.z) * e), lampOn);
   materials.push(roomMaterial);
   let roomTriangles = 0;
 
@@ -195,11 +189,10 @@ export function buildHouse(world: World, clock: AmbientClock = createAmbientCloc
     developer,
     lid,
     developerParts: [...parts.values()],
-    setLights: ({ lightsOn, windowLight }) => {
-      const [r, g, b] = oklchToLinear(windowLight);
-      lightMaterial.color.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+    setLights: ({ lightsOn, windowLight: colour }) => {
+      const [r, g, b] = oklchToLinear(colour);
+      windowLight.value.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
       for (const pane of panes) pane.visible = lightsOn;
-      lampOn.value = lightsOn ? 1 : 0;
     },
     setOpening: (opening) => {
       lid.position.y = roofLift(opening);
@@ -214,27 +207,6 @@ export function buildHouse(world: World, clock: AmbientClock = createAmbientCloc
       for (const m of materials) m.dispose();
     },
   };
-}
-
-/**
- * The warm light of the room's lamp or fire at `at` (world units), as the
- * room's emissive term: what a three.js point light there (`LAMP`, no
- * shadow) would add to a diffuse surface, worked out in this material only.
- * `on` is 1 by Night and 0 by Day.
- */
-function roomLamp(at: THREE.Vector3, on: UniformNode<'float'>) {
-  const toLamp = vec3(at.x, at.y, at.z).sub(positionWorld);
-  const d = length(toLamp);
-  // three's punctual light falloff: inverse square, eased to nothing at `distance`.
-  const cutoff = clamp(float(1).sub(d.div(LAMP.distance).pow(4)), 0, 1).pow(2);
-  const falloff = cutoff.div(max(d.mul(d), 0.01));
-  const facing = max(dot(normalWorld, normalize(toLamp)), 0);
-  // Lambert: the diffuse colour over π.
-  return diffuseColor.rgb
-    .mul(linear(LAMP.colour))
-    .mul(on.mul(LAMP.intensity / Math.PI))
-    .mul(falloff)
-    .mul(facing);
 }
 
 /**

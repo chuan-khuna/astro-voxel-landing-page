@@ -12,8 +12,9 @@
  * snow, grass, ash and the sea, by Day and at Night). Hard edges, no blur.
  * The colours are `WorldTokens.outline` and `.outlineEdge` (`data/theme.ts`).
  *
- * While nothing is outlined the World renders as it always has, straight
- * to the canvas: no extra pass, no extra cost. While something is:
+ * While nothing is outlined and nothing blooms (by Day, or at Night below
+ * the full life tier) the World renders as it always has, straight to the
+ * canvas: no extra pass, no extra cost. While something is outlined:
  *
  * 1. the model's mask proxies (`outlineModels.ts`) render flat white into a
  *    mask one texel a block, with no depth from the rest of the World, so
@@ -27,15 +28,27 @@
  * The mask pass draws only the outlined model's triangles, into a mask
  * `BLOCK`² times smaller than the canvas; the scene pass is what the
  * renderer does anyway for tone mapping. Both are skipped while nothing is
- * outlined.
+ * outlined or blooming.
+ *
+ * At Night at the full life tier the same pipeline also blooms what glows
+ * (`setBloom`, polish ticket 16): the scene pass writes its emissive (the
+ * Light Sources' flames and lamp glass, the lit windows, the fireflies) to
+ * a second target, `BloomNode` blurs it and it is added to the scene's
+ * colour before tone mapping, so nothing else blooms; the outline, if any,
+ * goes over that (an empty mask when nothing is outlined). The HTML over the
+ * canvas never blurs.
  */
 import * as THREE from 'three/webgpu';
-import { Fn, float, floor, max, mix, pass, renderOutput, screenUV, texture, uniform, vec2, vec4 } from 'three/tsl';
+import { Fn, emissive, float, floor, max, mix, mrt, output, pass, renderOutput, screenUV, texture, uniform, vec2, vec4 } from 'three/tsl';
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { THEME_TOKENS } from '@/data/theme';
 import type { Theme } from '@/lib/theme';
 import { oklchToLinear } from './palette';
 import type { OutlineProxy } from './outlineModels';
 import { outlineKey, outlinedKeys, type OutlineLinkState } from './outlineTargets';
+
+/** The bloom round glowing parts at Night: how strong and how wide (`BloomNode`'s strength and radius). */
+const BLOOM = { strength: 0.9, radius: 0.45 } as const;
 
 /** A block of the pixelated outline, in CSS px (rounded to whole device px): the width of its bright ring, and of its dark edge. */
 export const BLOCK = 3;
@@ -50,6 +63,8 @@ const ringOffsets = (r: number) => {
 export interface Outline {
   /** Outline these models' proxies (none: render the World as it is). */
   set(proxies: readonly OutlineProxy[]): void;
+  /** Bloom the glowing parts (the full life tier at Night, polish ticket 16), or not. */
+  setBloom(on: boolean): void;
   /** The outline's colours for the theme. */
   setTheme(theme: Theme): void;
   /** Render one frame of the World, outlined or not. */
@@ -73,31 +88,49 @@ export function createOutline(renderer: THREE.WebGPURenderer, scene: THREE.Scene
   const edgeColour = uniform(new THREE.Vector3(0, 0, 0));
   const blocks = uniform(new THREE.Vector2(1, 1));
   const maskTexture = texture(mask.texture);
-  // The scene's pass is made outside the overlay's `Fn`, so it renders (and sizes its target) every frame.
-  const world = renderOutput(pass(scene, camera));
-  const overlay = Fn(() => {
-    const block = floor(screenUV.mul(blocks));
-    const at = (x: number, y: number) => maskTexture.sample(block.add(vec2(x + 0.5, y + 0.5)).div(blocks)).a;
-    const ring = (r: number) => {
-      const near = float(0).toVar();
-      for (const [x, y] of ringOffsets(r)) near.assign(max(near, at(x, y)));
-      return near;
-    };
-    const outside = at(0, 0).oneMinus();
-    const first = ring(1).mul(outside);
-    const second = ring(2).mul(outside).mul(first.oneMinus());
-    return mix(mix(world, vec4(edgeColour, 1), second), vec4(colour, 1), first);
-  });
-  let pipeline: THREE.RenderPipeline | null = null;
-  /** Built the first time something is outlined: a World never hovered never compiles it. */
-  const outlined = () => {
-    if (pipeline) return pipeline;
-    pipeline = new THREE.RenderPipeline(renderer);
-    // The scene tone-mapped as the renderer would, then the outline in display colour over it.
+  /** The outline laid over the World's tone-mapped colour `world`. */
+  const overlay = (world: THREE.Node<'vec4'>) =>
+    Fn(() => {
+      const block = floor(screenUV.mul(blocks));
+      const at = (x: number, y: number) => maskTexture.sample(block.add(vec2(x + 0.5, y + 0.5)).div(blocks)).a;
+      const ring = (r: number) => {
+        const near = float(0).toVar();
+        for (const [x, y] of ringOffsets(r)) near.assign(max(near, at(x, y)));
+        return near;
+      };
+      const outside = at(0, 0).oneMinus();
+      const first = ring(1).mul(outside);
+      const second = ring(2).mul(outside).mul(first.oneMinus());
+      return mix(mix(world, vec4(edgeColour, 1), second), vec4(colour, 1), first);
+    })();
+  const pipelines: { plain: THREE.RenderPipeline | null; bloom: THREE.RenderPipeline | null } = { plain: null, bloom: null };
+  /**
+   * The pipeline for an outlined or blooming frame, built the first time it
+   * is needed: a World never hovered and never at Night never compiles one.
+   * Plain: the scene tone-mapped as the renderer would, then the outline in
+   * display colour over it. Bloom: the scene's colour and its emissive parts
+   * (`mrt`) apart, the emissive blurred (`bloom`) and added to the colour
+   * before tone mapping, so only what glows blooms; then the outline.
+   */
+  const pipelineFor = (glow: boolean) => {
+    const key = glow ? 'bloom' : 'plain';
+    const built = pipelines[key];
+    if (built) return built;
+    const pipeline = new THREE.RenderPipeline(renderer);
     pipeline.outputColorTransform = false;
-    pipeline.outputNode = overlay();
+    if (glow) {
+      const scenePass = pass(scene, camera);
+      scenePass.setMRT(mrt({ output, emissive }));
+      const glowing = bloom(scenePass.getTextureNode('emissive'), BLOOM.strength, BLOOM.radius, 0);
+      pipeline.outputNode = overlay(renderOutput(scenePass.getTextureNode('output').add(glowing)));
+    } else {
+      // The scene's pass is made outside the overlay's `Fn`, so it renders (and sizes its target) every frame.
+      pipeline.outputNode = overlay(renderOutput(pass(scene, camera)));
+    }
+    pipelines[key] = pipeline;
     return pipeline;
   };
+  let bloomOn = false;
   let proxies: readonly OutlineProxy[] = [];
   const size = new THREE.Vector2();
   const clear = new THREE.Color();
@@ -113,11 +146,15 @@ export function createOutline(renderer: THREE.WebGPURenderer, scene: THREE.Scene
       colour.value.copy(display(oklchToLinear(tokens.outline)));
       edgeColour.value.copy(display(oklchToLinear(tokens.outlineEdge)));
     },
+    setBloom(on) {
+      bloomOn = on;
+    },
     render() {
-      if (proxies.length === 0) {
+      if (proxies.length === 0 && !bloomOn) {
         renderer.render(scene, camera);
         return;
       }
+      // With nothing outlined the mask renders empty: it clears.
       for (const p of proxies) p.sync();
       renderer.getDrawingBufferSize(size);
       const side = Math.max(1, Math.round(BLOCK * renderer.getPixelRatio()));
@@ -131,12 +168,13 @@ export function createOutline(renderer: THREE.WebGPURenderer, scene: THREE.Scene
       renderer.render(maskScene, camera);
       renderer.setRenderTarget(target);
       renderer.setClearColor(clear, alpha);
-      outlined().render();
+      pipelineFor(bloomOn).render();
     },
     dispose() {
       maskScene.clear();
       mask.dispose();
-      pipeline?.dispose();
+      pipelines.plain?.dispose();
+      pipelines.bloom?.dispose();
     },
   };
 }

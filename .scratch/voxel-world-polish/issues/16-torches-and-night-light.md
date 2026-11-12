@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02, 09, 17 (the House room now lives in the World) · builds on the Day/Night theme (`.scratch/voxel-world-landing/issues/13-day-night-theme.md`). Ticket 08's lamps use this ticket's light once both are in.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 Scale: structures are ⅛ unit (ADR 0006). Sizes: `.scratch/voxel-world-polish/README.md`.
 
@@ -53,3 +53,36 @@ Record: `docs/records/2026-11-12-station-group-and-night-light.md`
 - [ ] **Light in the House room, from what is already there.** Each Biome's room already has a lamp, hearth fire, floor lamp or brazier (ticket 04). Make those Light Sources that throw block light in the room at Night; the room is in the World since ticket 17. Add no new lamps or candles.
 - [ ] **Moonlight dims a little.** Lower the Night moonlight by about 20–30% so torches stand out, while every Landmark still reads across the Isle and Night text and UI keep their WCAG contrast. Note the exact change in the theme tokens.
 - Ember particles stay optional, to decide in review.
+
+## Comments
+
+**Built (2026-11-12).** Torches and Night light. ADR 0007 records the main decision, and the docs are updated: `rendering-and-shading.md` ("Night light"), `world-generator.md` ("Torches"), `voxel-structures.md` ("Torches", the `light:` field, roles `flame` and `glow`), `GLOSSARY.md` (Light Source) and the spec.
+
+- **Light Sources.** New roles `flame` (flickers) and `glow` (steady), and an optional header `light: <reach> <strength>`; the light's colour is a Night theme token (`torchLight` per Biome, `windowLight`, `buoyLight`).
+  - Torches: `structures/torch/<biome>-1` is tall (12 voxels) and `-2` is short (6 voxels). The tropical pair is a tiki torch and a coconut-shell lamp, northern an iron lantern and a stone lantern, autumn a hanging lantern and a carved pumpkin, volcanic a pillar brazier and a low brazier.
+  - Existing models that became Light Sources: the Decoration's lamps, the lighthouse's lantern, the Dock Variant 2's lanterns, and the House rooms' lamp or fire. Per the user's decision, no new lamps were added; the rooms' own light now replaces `roomLamp`. The House's front windows and the buoys are Light Sources too.
+  - Boats' and ships' lamps (`glow`) and fireflies only glow.
+- **Placement** (`world/torches.ts`, from `<seed>/torches`, after the Decoration). Each Landmark gets one or two torches, at its own place first: beside the House's door, the Mailbox's corner, the Garden's gate, or on the end of the Dock's jetty. If none fits, a torch goes in the rings round the footprint, up to 5 cells out. Up to 3 more stand along the path and one by each bridge.
+  - The Decoration's rules apply. A short torch stands wherever a tall one would be taller than the nearest Landmark.
+  - Two relaxations, both recorded in `docs/todo.md`: the House's yard counts as open ground in the sight-line check, and the Dock's own deck does not count as hidden for the jetty's torch.
+  - Over 400 Seeds every Landmark has at least one torch, about 11 per World. Particles and animals keep off the torches.
+- **Block light.** The worker flood-fills the 1-unit cells, with only the terrain solid, and turns the result into a 3D texture that every voxel material samples. This deviates from the per-vertex attribute the ticket asked for: per-vertex light would split the mesher's merged quads and could not reach instanced structures.
+  - The sea is lit only on a rim along the shore. Switching the theme sets one uniform.
+  - Flames flicker on the shared clock, each cell at the phase of its strongest source, so nothing flickers while the clock is frozen.
+- **Glow.** At the full life tier, emissive parts bloom through an MRT pass that shares the outline's `RenderPipeline`. The reduced tier shows halos (one mesh) and the still tier neither. The tiers follow the life tier, so phones get halos. `canvas.dataset.glow` reports which is on, and an e2e test covers it.
+- **Moonlight** is about a quarter dimmer: sun 1.2 → 0.9, sky 0.95 → 0.75. The UI tokens are unchanged.
+- **Ember particles** were not built; the decision is left to review.
+- **Performance** (`seed-1`, headless Chrome, WebGPU on Metal, uncapped):
+  - Full tier: 2.24 ms per frame before, 2.39 ms by Day (block light) and 3.13 ms at Night (bloom costs about 0.75 ms).
+  - Phone reduced tier: the same fps as before, Day and Night.
+  - SwiftShader: the phone tier held 30 fps. The full tier on `lighthouse` ran at 5.5 fps before, 4.5 by Day and 3.1 at Night.
+  - The torches add about 1,500–1,900 triangles. The bake takes about 5 ms per World.
+- **Tests.**
+  - `floodLight` as pure logic: the light falls by one per cell, walls stop it, and the brighter source wins.
+  - The bake and the source list on real Worlds.
+  - Torch placement through `generateWorld` over 200 Seeds.
+  - The torch and Light Source structure files, the `light` header, the voxel counts, and which pieces of Decoration the reduced tier keeps.
+  - The test seams were picked without confirming them, as in earlier polishes.
+- **Browser check.** Screenshots in `.scratch/voxel-world-polish/screenshots/16-*` (not committed) cover four Seeds, one per Biome, on desktop and phone, by Day and at Night, at the Overview and every close-up, plus the Model Gallery's torches and lamps. None logged a console error.
+- **Code review.** These were fixed: clouds, fish and spray bloomed, so their own light is now added after the lighting; the room's light leaked round a shut House, so its reach is now 2; some docs were stale; the flicker code was duplicated; there were import and type smells. What is left for the user is in `docs/todo.md`, under "Code review of polish 16".
+

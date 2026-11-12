@@ -7,12 +7,13 @@ variant: 1
 footprint: 2x2
 door: +z
 anchor: 0 0 0
+light: 6 1
 key:
   B brick
   C concrete
   k doorWood
   f foliage
-  O lamp
+  O glow
   y leafGold
   M metal
   m metalDark

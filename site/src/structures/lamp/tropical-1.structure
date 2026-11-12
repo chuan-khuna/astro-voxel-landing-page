@@ -1,15 +1,16 @@
 # Lamp, tropical: a tiki torch, bamboo with a thatch cup and a flame.
-# Decoration: 14 voxels tall. Its flame lights up once torches give light (ticket 16).
+# Decoration: 14 voxels tall. A Light Source (ticket 16): its flame glows at Night and lights the cells round it.
 kind: lamp
 biome: tropical
 variant: 1
 footprint: 1x1
 door: none
 anchor: 0 0 0
+light: 4 0.8
 key:
   b bamboo
   d bambooDark
-  f fire
+  f flame
   h thatch
 layer 0
 ........

@@ -38,6 +38,7 @@ import {
 import { PARTICLE_KINDS, type ParticleKind, type World } from '@/world';
 import type { LifeTierName } from '@/lib/lifeTier';
 import type { Theme } from '@/lib/theme';
+import { glowsWith } from './blockLightNode';
 import { windAt, type AmbientClock } from './ambientClock';
 import { BUTTERFLY_BOB, FALL_GUST, FALL_SWAY, PARTICLE_SIZE, particlesOut, swarmShown, swarms, SWARM_MOTION, type SwarmParticle } from './swarms';
 
@@ -127,11 +128,11 @@ function particleMaterial(kind: ParticleKind, clock: AmbientClock): THREE.NodeMa
       material.colorNode = colour;
       return material;
     }
-    // A firefly glows on its own, dim between blinks.
+    // A firefly glows on its own, dim between blinks: all its light emissive, so it blooms at Night (it throws no block light).
     const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
     const blink = vertexStage(pow(max(float(0), pulse), 3));
     material.positionNode = at.add(positionGeometry);
-    material.colorNode = colour.mul(blink.mul(0.6).add(0.4));
+    glowsWith(material, colour.mul(blink.mul(0.6).add(0.4)));
     material.opacityNode = blink.mul(0.85).add(0.15);
     return material;
   }

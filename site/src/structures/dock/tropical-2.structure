@@ -6,6 +6,7 @@ variant: 2
 footprint: 2x1
 door: none
 anchor: 0 -2 0
+light: 3 0.7
 key:
   A bamboo
   f foliage
@@ -13,7 +14,7 @@ key:
   L tile
   m metalDark
   T timber
-  Y lamp
+  Y glow
 layer 0
 A...T......LLL..
 ...TTT.T...LLL..

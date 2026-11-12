@@ -7,10 +7,11 @@ variant: 1
 footprint: 2x2
 door: +z
 anchor: 0 0 0
+light: 6 1
 key:
   X accent
   k doorWood
-  O lamp
+  O glow
   M metal
   m metalDark
   Q rock

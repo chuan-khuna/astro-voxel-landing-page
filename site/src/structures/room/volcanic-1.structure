@@ -7,6 +7,7 @@ variant: 1
 footprint: 2x2
 door: none
 anchor: 0 0 0
+light: 2 1
 scale: 16
 developer: 9 1 4
 key:
@@ -23,7 +24,7 @@ key:
   R brickDark
   S stone
   u wall
-  x fire
+  x flame
 layer 0
 eeeeSSSSeeeeSSSSeeeeSSSSeeeeSSSS
 eeeeSSSSeeeeSSSSeeeeSSSSeeeeSSSS

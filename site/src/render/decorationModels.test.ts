@@ -29,11 +29,13 @@ describe('decoration models', () => {
     }
   });
 
-  it('shows about half the pieces on the reduced tier, spread over the World, and never one the full tier lacks', () => {
+  it('shows about half the pieces on the reduced tier, spread over the World, every lamp, and never one the full tier lacks', () => {
     for (const seed of seeds) {
       const world = generateWorld(seed, counts);
       const reduced = decorationOf(world, 'reduced').map((d) => d.piece);
-      expect(reduced.length, seed).toBe(Math.ceil(world.decoration.length / 2));
+      const lampsLeft = world.decoration.filter((d, i) => i % 2 === 1 && d.kind === 'lamp').length;
+      expect(reduced.length, seed).toBe(Math.ceil(world.decoration.length / 2) + lampsLeft);
+      for (const lamp of world.decoration.filter((d) => d.kind === 'lamp')) expect(reduced, seed).toContain(lamp);
       for (const piece of reduced) expect(world.decoration, seed).toContain(piece);
       // Spread: the kept pieces reach as far across the World as all of them do, within a few cells.
       const reach = (pieces: typeof reduced) => Math.max(...pieces.map((d) => d.cell.x)) - Math.min(...pieces.map((d) => d.cell.x));

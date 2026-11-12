@@ -13,6 +13,7 @@
  *   single voxels.
  */
 import type { Rgb } from './palette';
+import type { Glow } from '@/structures/roles';
 
 /** Coordinates go from -OFFSET to SPAN - OFFSET - 1 on every axis. */
 const OFFSET = 4096;
@@ -73,6 +74,8 @@ export class VoxelGrid {
 export interface MeshOptions {
   /** Linear sRGB per colour id. */
   colours: readonly Rgb[];
+  /** How each colour id glows at Night (0 none, 1 steady, 2 a flickering flame: `structures/roles.ts`); none if absent. */
+  glows?: readonly Glow[];
   /** 0 = no AO, 1 = fully dark corners. */
   aoStrength: number;
   /** Chunk edge length, in voxels of this grid. */
@@ -90,6 +93,8 @@ export interface ChunkMesh {
   positions: Float32Array;
   normals: Float32Array;
   colours: Float32Array;
+  /** Per vertex: how its colour glows at Night (`MeshOptions.glows`). */
+  glow: Float32Array;
   indices: Uint32Array;
   /** Quads after merging. Each quad is two triangles. */
   quads: number;
@@ -138,6 +143,7 @@ function meshChunk(grid: VoxelGrid, voxels: { x: number; y: number; z: number }[
   const positions: number[] = [];
   const normals: number[] = [];
   const colours: number[] = [];
+  const glow: number[] = [];
   const indices: number[] = [];
   let quads = 0;
   const s = grid.size;
@@ -226,6 +232,7 @@ function meshChunk(grid: VoxelGrid, voxels: { x: number; y: number; z: number }[
     const colourId = Math.floor((value - 1) / 256);
     const aoBits = (value - 1) % 256;
     const rgb = options.colours[colourId] ?? [1, 0, 1];
+    const glowLevel = options.glows?.[colourId] ?? 0;
     const base = positions.length / 3;
     const order = sign > 0 ? [0, 1, 2, 3] : [3, 2, 1, 0];
     const ao: number[] = [];
@@ -243,6 +250,7 @@ function meshChunk(grid: VoxelGrid, voxels: { x: number; y: number; z: number }[
       ao.push(open);
       const shade = 1 + (open - 1) * options.aoStrength;
       colours.push(rgb[0] * shade, rgb[1] * shade, rgb[2] * shade);
+      glow.push(glowLevel);
     }
     // Flip the diagonal so AO interpolates without anisotropy.
     if (ao[0]! + ao[2]! < ao[1]! + ao[3]!) indices.push(base + 1, base + 2, base + 3, base + 1, base + 3, base);
@@ -254,6 +262,7 @@ function meshChunk(grid: VoxelGrid, voxels: { x: number; y: number; z: number }[
     positions: new Float32Array(positions),
     normals: new Float32Array(normals),
     colours: new Float32Array(colours),
+    glow: new Float32Array(glow),
     indices: new Uint32Array(indices),
     quads,
   };

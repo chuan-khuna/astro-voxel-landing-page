@@ -23,6 +23,7 @@ import {
   float,
   fract,
   normalGeometry,
+  output,
   positionGeometry,
   sign,
   sin,
@@ -32,6 +33,7 @@ import {
   uniform,
   vec2,
   vec3,
+  vec4,
   vertexStage,
 } from 'three/tsl';
 import type { World } from '@/world';
@@ -210,8 +212,8 @@ function fishMaterial(clock: AmbientClock, pivot: { x: number; z: number }, glow
   material.normalNode = transformNormalToView(turnPoint(normalGeometry)).normalize();
   const colour = softVoxelLook(FISH_THICKNESS, normalGeometry, positionGeometry).shade(attribute('color', 'vec3'));
   material.colorNode = colour;
-  // A little light of their own, so the fish still read through the shallows' tint.
-  material.emissiveNode = colour.mul(glow);
+  // A little light of their own, so the fish still read through the shallows' tint: after the lighting, not emissive, so they never bloom.
+  material.outputNode = output.add(vec4(colour.mul(glow), 0));
   return material;
 }
 
@@ -237,6 +239,7 @@ function sprayMaterialOf(
   const material = new THREE.MeshStandardNodeMaterial({ roughness: 0.6, metalness: 0 });
   material.positionNode = vec3(across.x, height, across.y).add(positionGeometry.mul(flying));
   material.colorNode = spray.colour;
-  material.emissiveNode = spray.glow.mul(spray.strength).mul(0.5);
+  // Its Night glow is added after the lighting, not as emissive: the spray is no Light Source, so it never blooms.
+  material.outputNode = output.add(vec4(spray.glow.mul(spray.strength).mul(0.5), 0));
   return material;
 }

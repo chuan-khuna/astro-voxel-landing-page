@@ -1,13 +1,14 @@
 # Lamp, northern: an iron lamp post, snow on its cap.
-# Decoration: 16 voxels tall. Its glass lights up once lamps give light (ticket 16).
+# Decoration: 16 voxels tall. A Light Source (ticket 16): its glass glows at Night and lights the cells round it.
 kind: lamp
 biome: northern
 variant: 1
 footprint: 1x1
 door: none
 anchor: 0 0 0
+light: 4 0.8
 key:
-  g lamp
+  g glow
   k metalDark
   s snow
 layers 0-1

@@ -1,3 +1,4 @@
+import { GLOW_STEADY } from '@/structures/roles';
 import { describe, expect, it } from 'vitest';
 import { generateWorld } from '@/world';
 import { VoxelGrid } from './mesher';
@@ -29,7 +30,7 @@ describe('buoy model', () => {
   });
 
   it('puts the lamp on top: the box that glows at Night is the buoy’s lamp voxel', () => {
-    const lampColour = colours.fixed('lamp');
+    const lampColour = colours.fixed('lamp', 0, GLOW_STEADY);
     for (const cell of world.buoys) {
       const grid = new VoxelGrid(1 / GROUND_DETAIL);
       drawBuoy(cell, grid, colours);

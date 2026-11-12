@@ -20,7 +20,7 @@
  * them) and are never a raycast target.
  */
 import * as THREE from 'three/webgpu';
-import { attribute, float, fract, normalGeometry, positionGeometry, smoothstep, uniform, vec3, vec4, vertexStage } from 'three/tsl';
+import { attribute, float, fract, normalGeometry, output, positionGeometry, smoothstep, uniform, vec3, vec4, vertexStage } from 'three/tsl';
 import type { World } from '@/world';
 import type { LifeTierName } from '@/lib/lifeTier';
 import type { Theme } from '@/lib/theme';
@@ -87,8 +87,8 @@ export function buildClouds(world: World, clock: AmbientClock): Clouds {
   const look = softVoxelLook(1, normalGeometry, positionGeometry);
   material.normalNode = look.normalNode;
   material.colorNode = vec4(look.shade(colour.mul(attribute('color', 'vec3'))), 1);
-  // A little light of their own, so the shaded sides stay soft rather than stony.
-  material.emissiveNode = colour.mul(CLOUD_GLOW);
+  // A little light of their own, so the shaded sides stay soft rather than stony: added after the lighting, not as emissive, so the Night bloom (`outline.ts`) leaves the clouds be.
+  material.outputNode = output.add(vec4(colour.mul(CLOUD_GLOW), 0));
   const ends01 = vertexStage(smoothstep(0, EDGE_FADE, u).mul(smoothstep(1, 1 - EDGE_FADE, u)));
   material.opacityNode = ends01.mul(fade).mul(float(CLOUD_OPACITY));
 

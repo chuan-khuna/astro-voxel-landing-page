@@ -21,6 +21,9 @@
  *                          or 16 (1/16 unit, the House Interior's rooms)
  * developer: 9 0 14        optional, a room's: where the developer's anchor
  *                          goes (the seated figure, `developer/any-1`)
+ * light: 4 0.8             optional, a Light Source's (a `flame` or `glow`
+ *                          role): how many cells its block light reaches
+ *                          (1–8) and how strong it is at its source (0–1)
  * key:
  *   P plinth               character, colour role, optional part (`lid`)
  *   w wall lid
@@ -35,7 +38,7 @@
  */
 // Relative, not `@/`: this module loads with the Vite and Vitest configs, before the alias exists.
 import { BIOME_IDS, type BiomeId } from '../world/types';
-import { STRUCTURE_PARTS, isStructureRole, type StructurePart, type StructureRole } from './roles';
+import { LIGHT_ROLES, STRUCTURE_PARTS, isStructureRole, type StructurePart, type StructureRole } from './roles';
 import { INTERIOR, STRUCTURE } from '../render/voxelTiers';
 
 export type DoorFace = '+x' | '-x' | '+z' | '-z';
@@ -71,6 +74,8 @@ export interface Structure {
   interior: { min: Point; max: Point } | null;
   /** A room's developer anchor: where the seated developer's own anchor goes, in the room's voxels. */
   developer: Point | null;
+  /** A Light Source's declared light: the cells its block light reaches and its strength (0–1); null for none. */
+  light: { reach: number; strength: number } | null;
   /** `voxels` holds 0 for empty, or 1 + an index into this list. */
   palette: StructureVoxel[];
   /** One byte per voxel, at `x + size.x · (z + size.z · y)`. */
@@ -150,6 +155,14 @@ export function parseStructure(text: string, name: string): Structure {
   const [ax, ay, az] = numbers('anchor', 3);
   const interiorBox = header.has('interior') ? numbers('interior', 6) : null;
   const developer = header.has('developer') ? numbers('developer', 3) : null;
+  let light: Structure['light'] = null;
+  if (header.has('light')) {
+    const [reach, strength, ...more] = need('light').split(/\s+/).map(Number);
+    if (more.length > 0 || !Number.isInteger(reach) || reach! < 1 || reach! > 8 || !(strength! > 0 && strength! <= 1)) {
+      fail(header.get('light')!.line, '"light" takes a reach of 1–8 cells and a strength over 0, up to 1');
+    }
+    light = { reach: reach!, strength: strength! };
+  }
   const scale = header.has('scale') ? Number(need('scale')) : STRUCTURE;
   if (!SCALES.includes(scale)) fail(header.get('scale')!.line, `scale is one of ${SCALES.join(', ')} voxels a unit`);
 
@@ -194,6 +207,7 @@ export function parseStructure(text: string, name: string): Structure {
       max: { x: interiorBox[3]!, y: interiorBox[4]!, z: interiorBox[5]! },
     },
     developer: developer && { x: developer[0]!, y: developer[1]!, z: developer[2]! },
+    light,
     palette,
     voxels,
   };
@@ -218,4 +232,15 @@ export function* structureVoxels(s: Structure): Generator<Point & StructureVoxel
       }
     }
   }
+}
+
+/**
+ * Where a Light Source's light is: the middle of its `flame` and `glow`
+ * voxels, in its own voxels (each voxel's middle); null if it has none.
+ */
+export function lightCentre(s: Structure): Point | null {
+  const lights = [...structureVoxels(s)].filter((v) => LIGHT_ROLES.includes(v.role));
+  if (lights.length === 0) return null;
+  const mean = (axis: 'x' | 'y' | 'z') => lights.reduce((sum, v) => sum + v[axis] + 0.5, 0) / lights.length;
+  return { x: mean('x'), y: mean('y'), z: mean('z') };
 }

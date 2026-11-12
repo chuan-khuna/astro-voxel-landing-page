@@ -1,14 +1,15 @@
 # Lamp, autumn: a lantern hung from a crooked iron post, trimmed in the Biome's green.
-# Decoration: 13 voxels tall. Its glass lights up once lamps give light (ticket 16).
+# Decoration: 13 voxels tall. A Light Source (ticket 16): its glass glows at Night and lights the cells round it.
 kind: lamp
 biome: autumn
 variant: 1
 footprint: 1x1
 door: none
 anchor: 0 0 0
+light: 4 0.8
 key:
   a accent
-  g lamp
+  g glow
   k metalDark
 layer 0
 ........

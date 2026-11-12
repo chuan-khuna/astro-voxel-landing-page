@@ -10,7 +10,16 @@
 import type { BiomeColourRole } from '@/world';
 import type { FixedColour } from '@/render/palette';
 
-export type RoleColour = { biome: BiomeColourRole; dl?: number } | { fixed: FixedColour; dl?: number };
+/**
+ * How a colour glows at Night (polish ticket 16): 0 not at all, `GLOW_STEADY`
+ * (a lamp's glass, a lit window) or `GLOW_FLAME` (a flame, which flickers).
+ * By Day it shows its plain colour.
+ */
+export const GLOW_STEADY = 1;
+export const GLOW_FLAME = 2;
+export type Glow = 0 | typeof GLOW_STEADY | typeof GLOW_FLAME;
+
+export type RoleColour = ({ biome: BiomeColourRole; dl?: number } | { fixed: FixedColour; dl?: number }) & { glow?: Glow };
 
 export const STRUCTURE_ROLES = {
   // Ground and floors.
@@ -59,8 +68,16 @@ export const STRUCTURE_ROLES = {
   flag: { fixed: 'flagRed' },
   /** Pale cloth and rope: sails, awnings, a coil of rope. */
   canvas: { fixed: 'sail' },
-  /** A lamp's glass. */
+  /** A lamp's glass, unlit (a ship's or boat's lamps glow through `glow`). */
   lamp: { fixed: 'lamp' },
+  /**
+   * The Light Sources' roles (polish ticket 16): a structure with either
+   * glows at Night, and one that declares its light (`light:` in its
+   * header) throws block light round it. `flame` flickers; `glow` (a
+   * lamp's glass) shines steady.
+   */
+  flame: { fixed: 'fire', glow: GLOW_FLAME },
+  glow: { fixed: 'lamp', glow: GLOW_STEADY },
   // Boats and ships: painted hulls (wood hulls use `bamboo`, `timber`; iron ones `slate`).
   hullRed: { fixed: 'hullRed' },
   hullRedDark: { fixed: 'hullRed', dl: -0.08 },
@@ -134,6 +151,9 @@ export const STRUCTURE_ROLES = {
 } as const satisfies Record<string, RoleColour>;
 
 export type StructureRole = keyof typeof STRUCTURE_ROLES;
+
+/** The roles that make a structure a Light Source. */
+export const LIGHT_ROLES: readonly StructureRole[] = ['flame', 'glow'];
 
 export const isStructureRole = (role: string): role is StructureRole => Object.hasOwn(STRUCTURE_ROLES, role);
 

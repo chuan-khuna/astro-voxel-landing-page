@@ -5,14 +5,15 @@
  * structure is one `InstancedMesh` (`decoration.ts`).
  *
  * On the reduced render tier (phones, `lib/renderTier.ts`) every other piece
- * is left out; Landmarks are never reduced.
+ * is left out, but never a lamp (a Light Source, polish ticket 16);
+ * Landmarks are never reduced.
  *
  * Pure: no three.js.
  */
 import type { BiomeId, Decoration, DecorationKind, World } from '@/world';
 import type { RenderTierName } from '@/lib/renderTier';
 import { variantsOf, type Structure } from '@/structures';
-import { FACING_TURNS, type InstancePlacement } from './structureMeshes';
+import { FACING_TURNS, type InstancePlacement } from './instancePlacement';
 
 /** The structure of a piece of `kind` in a Biome's style. */
 export function decorationStructure(biome: BiomeId, kind: DecorationKind): Structure {
@@ -30,9 +31,10 @@ export function decorationPlacement(world: Pick<World, 'terrain'>, piece: Decora
 /**
  * The pieces a tier shows, each with its structure: all of them on the full
  * tier; on the reduced tier every other one in placement order (row by row),
- * so the pieces left still cover the whole World.
+ * so the pieces left still cover the whole World, and every lamp.
  */
 export function decorationOf(world: Pick<World, 'biome' | 'decoration'>, tier: RenderTierName): Array<{ piece: Decoration; structure: Structure }> {
-  const shown = tier === 'full' ? world.decoration : world.decoration.filter((_, i) => i % 2 === 0);
+  // A lamp is a Light Source: its block light is baked for every tier, so it always stands.
+  const shown = tier === 'full' ? world.decoration : world.decoration.filter((piece, i) => i % 2 === 0 || piece.kind === 'lamp');
   return shown.map((piece) => ({ piece, structure: decorationStructure(world.biome.id, piece.kind) }));
 }

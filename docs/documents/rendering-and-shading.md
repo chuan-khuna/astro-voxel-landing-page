@@ -12,8 +12,8 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 - Tests: `site/src/render/mesher.test.ts`, `cameraMath.test.ts`,
   `landmarkModels.test.ts`, `interiorModel.test.ts`, `houseMotion.test.ts`,
   `structureModels.test.ts`, `structureMeshes.test.ts`,
-  `buoyModel.test.ts`, `dataCardMath.test.ts`, `frameMeter.test.ts` and
-  `voxelCounts.test.ts` (a few behavioural checks; the World generator
+  `buoyModel.test.ts`, `dataCardMath.test.ts`, `frameMeter.test.ts`,
+  `blockLight.test.ts` and `voxelCounts.test.ts` (a few behavioural checks; the World generator
   stays the main test seam)
 
 ## Code layout
@@ -23,7 +23,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `palette.ts` | `LOOK` (the approved look settings), fixed colours (House, its room and developer, fire, building materials for the Landmark Variants, placeholder parts, boat and ship hulls and sail, the buoys' lamp) as OKLCH, `oklchToLinear`. The sky and lights are theme tokens (`data/theme.ts`). | no |
 | `voxelTiers.ts` | The voxel sizes of ADR 0006, as voxels per unit: `TERRAIN` 1, `GROUND_DETAIL` 4, `STRUCTURE` 8, `INTERIOR` 16. | no |
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
-| `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid, the ¼-unit detail grid and the ⅛-unit structure grid with a shared colour list. `drawDetail(world, grid, colours, drawn?)`: the detail grid's parts in order (bridges, stairs, each Landmark, buoys), telling `drawn` after each. `meshWorld(world)`: the three grids meshed. | no |
+| `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid, the ¼-unit detail grid and the ⅛-unit structure grid with a shared colour list (`ColourTable`: a colour and how it glows at Night). `drawDetail(world, grid, colours, drawn?)`: the detail grid's parts in order (bridges, stairs, each Landmark, buoys), telling `drawn` after each. `meshWorld(world)`: the three grids meshed and the block light baked (`blockLight.ts`). | no |
 | `interiorModel.ts` | The House Interior's room, pure (see `voxel-structures.md`, "The House Interior rooms"): `furnishedRoom(biome)` (the room with the developer seated in it, 1/16 unit), `interiorPlacement` (the room's place in the World), `developerBox`, `developerBounds` (the developer's box in world units, for their link), `screenFace`, `roomLight` and `DEVELOPER_PARTS`. | no |
 | `structureModels.ts` | Structures placed in a World (see `voxel-structures.md`): `structureColour` (a colour role's id), `drawStructure` (a structure, or one part, at a placement, turned to its door), `landmarkStructure` and `landmarkPlacement` (a placed Landmark's Variant, and where and which way it stands), `houseStructure` and `housePlacement` (the same for the House), `drawStructures` (the structure grid's contents) and `houseWindowFaces` (the lit window faces). | no |
 | `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, plants, Decoration, House room, boats, ships, buoys, bridges, stairs), the total and those in the three meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); plants are each Garden plant's structure voxels (`gardenPlantsOf`; instanced, outside the grids), the House room the House Interior's furnished room at 1/16 unit (a mesh of its own, outside the grids, drawn only while the House is open); the House's structure (base and lid, ⅛ unit) counts with the Landmarks; boats, ships and pieces of Decoration are each one's structure voxels (instanced, outside the grids; every piece, as the full tier shows it). About 2 ms. | no |
@@ -32,11 +32,15 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `gardenPlants.ts` | The Garden's plants (polish ticket 05): `plantStructure` (the Biome's tree; its flowers in turn), `gardenPlantsOf(world)` (every flower and tree with its cell and structure), `plantExtent` (a plant's box, for its link) and `plantedGarden(biome)` (a fence planted full, for the Model Gallery). | no |
 | `garden.ts` | `buildGardenPlants(world, clock)`: one `InstancedMesh` per plant structure, one instance per plant, on the Garden's ground, swaying in the wind (`windSway.ts`). | yes |
 | `plantLinks.ts` | `plantLinkSize(kind, pxPerUnit)`: a plant link's size on screen, so no link covers another plant (see "Plant links"). | no |
-| `buoyModel.ts` | `drawBuoy(cell, grid, colours)`: a buoy in the detail grid; `buoyLamp(cell)`: its lamp's box, which glows at Night. | no |
+| `buoyModel.ts` | `drawBuoy(cell, grid, colours)`: a buoy in the detail grid, its lamp a glowing voxel; `buoyLamp(cell)`: the lamp's box, where its light comes from at Night. | no |
+| `instancePlacement.ts` | Where a copy of an instanced structure goes, pure maths: `InstancePlacement`, `FACING_TURNS`, `structurePivot`, `instanceMatrix` and `transformPoint` (re-exported by `structureMeshes.ts`). | no |
+| `lightSources.ts` | The World's Light Sources (polish ticket 16, see "Night light"): `lightSources(world)` (each one's light point, reach, strength, colour, whether it flickers, its phase and whether it is inside the House). | no |
+| `torchModels.ts` | Torches as structures: `torchStructure(world, variant)` (the Biome's torch Variant) and `torchPlacement(torch)` (its cell's middle, on its ground or the jetty's deck). | no |
+| `blockLight.ts` | The block light, pure: `floodLight(grid, sources)` (the flood fill: a level less per cell, stopped by solid cells, the brighter source winning) and `bakeBlockLight(world)` (the World's light as a volume of RGBA bytes a cell, for a 3D texture), `lightColour`. Runs in the World Web Worker. | no |
 | `houseMotion.ts` | `ROOF_LIFT`, `roofLift(opening)` (the lid's height, eased), `openingStep` (the opening after a frame, toward a target from 0 to 1) and `developerPose(seconds)` (typing and reading). | no |
 | `vesselModels.ts` | The boats and ships (polish ticket 06): `vesselStructure` (a kind's structure in a Biome), `boatsOf(world)`, `boatPlacement` and `shipPlacement` (see "Boats and ships"). | no |
 | `boats.ts` | `buildBoats(world)`: one `InstancedMesh` per boat structure, one instance per moored boat; `rock(seconds)` rocks them on the swell. | yes |
-| `decorationModels.ts` | Decoration as structures: `decorationStructure(biome, kind)`, `decorationPlacement(world, piece)` (its cell's middle, on its ground, turned to its facing) and `decorationOf(world, tier)` (every piece on the full tier, every other one on the reduced tier). | no |
+| `decorationModels.ts` | Decoration as structures: `decorationStructure(biome, kind)`, `decorationPlacement(world, piece)` (its cell's middle, on its ground, turned to its facing) and `decorationOf(world, tier)` (every piece on the full tier, every other one on the reduced tier, and every lamp: a Light Source). | no |
 | `decoration.ts` | `buildDecoration(world, tier, clock)`: one `InstancedMesh` per Decoration structure, one instance per piece the tier shows; its plants sway (`windSway.ts`). | yes |
 | `windSway.ts` | `swayMaterial(structure, clock)`: the soft-voxel material with the wind sway in the vertex shader; `swaysInWind(kind)` (grass, clumps, bushes, small trees) and `MAX_SWAY` (see "Ambient Life: wind, leaves and the swell"). | yes |
 | `swell.ts` | The sea's swell, pure: `SWELL_PERIOD`, `SWELL_STRIDE`, `swellPhase` and `vesselRock(x, z, seconds)` (a vessel's heave, roll and pitch, in step with the water). | no |
@@ -61,17 +65,20 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `dataCardMath.ts` | Data Card maths: `nearestDataCard` (which card shows), `dataCardAnchors` (where a card stands or hangs), `dataCardTransform` and `placeDataCard` (the CSS `matrix3d`). | no |
 | `landmarkFocus.ts` | `landmarkFocus(world, id)`: the point to look at and the zoom for each of the seven Landmarks. | no |
 | `houseLeave.ts` | `insideHouse(state, house, half)`: whether the camera is inside the open House (`INSIDE_ZOOM`, 1.25 times the House's own close-up or closer, the House on screen); `outOfHouse`: whether it has left it (further back than the House's own close-up, or the House's middle off screen). Once inside, a pan or zoom out calls `ui.onLeaveHouse` (`mountWorld.ts`) and the page closes About or Team; the margin between the two keeps a camera still diving in from closing it. Tested in `houseLeave.test.ts`. | no |
-| `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
+| `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World, its chunk meshes and its block light back (buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
 | `seaModel.ts` | The sea, pure (see "Sea"): `seaModel(world)` (the water voxels' tops and skirts, the flat water beyond them and the seabed, as typed arrays, with each voxel's surf data: the coast's distance and the calm at its corners), `coastDistance` (from `world/coast.ts`) and `seaShade`, and `SEA_LEVEL`. | no |
-| `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?, { displace? })`: the TSL node material, in world space or (for instanced and moving meshes) the mesh's own space, optionally moving each vertex (a swaying plant), shaded by the clouds' shadows (`cloudShadow.ts`); `softVoxelLook` is the look on its own (seams, bevel, jitter) for other materials. | yes |
+| `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?, { displace? })`: the TSL node material, in world space or (for instanced and moving meshes) the mesh's own space, optionally moving each vertex (a swaying plant), shaded by the clouds' shadows (`cloudShadow.ts`), and at Night lit by the block light and glowing where its voxels glow (`blockLightNode.ts`); `softVoxelLook` is the look on its own (seams, bevel, jitter) for other materials. | yes |
+| `blockLightNode.ts` | The Night light in the shaders: `BLOCK_LIGHT` (the shared volume sample, its size, `night` and `time` uniforms), `setBlockLight(volume)`, `blockLightAdded(albedo)` (what the block light adds to a surface), `glowEmissive(colour)` (a flame's or a lamp's glass's own light, flickering) and `glowMaterial` (a plain glowing surface: the window panes). | yes |
+| `torches.ts` | `buildTorches(world)`: one `InstancedMesh` per torch structure, one instance per torch. | yes |
+| `halos.ts` | `buildHalos(world)`: a camera-facing halo round each Light Source in one mesh, the reduced life tier's glow at Night (`setShown`). | yes |
 | `ambientClock.ts` | `createAmbientClock()`: the shared Ambient Life clock (`time`, seconds, advanced only while Ambient Life is alive) and wind (`wind`, the World's direction) uniforms; `windAt(clock, position)`: the wind at a world position in the shader, gusts rolling down the wind (see "Ambient Life: loop, clock and tiers"). | yes |
 | `ambientLife.ts` | `createAmbientLife`: whether the World is seen (tab shown, canvas on screen, motion allowed) and alive (seen, at a tier that moves), the life tier watch and the clock, for `mountWorld`'s loop. | DOM only |
 | `seaMaterial.ts` | `seaMaterial(clock)`: the sea's TSL material (the soft-voxel look at 1 unit, shallow to deep colour, opacity, the bob in the vertex shader on the shared clock, the shore's surf per ⅛-unit square and its glow at Night) and its colour uniforms (water, foam, glow). | yes |
 | `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy, optionally with a material of its own), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, plus an optional heave, roll and pitch for a vessel on the swell, pure maths) and `mergeChunks`. | yes |
-| `house.ts` | `buildHouse(world, clock?)`: the House Variant's lid (⅛ unit) as a mesh, the windows' lights, and the House Interior's room at 1/16 unit (furniture, the developer's head and hands, the code screen, the Night lamp worked out in the room's material); `setOpening` lifts the lid and shows the room while it is above 0, `setLights` lights the windows and the lamp, `work(seconds)` poses the developer; `roomTriangles` and `developer` (the developer's box, for their link). | yes |
+| `house.ts` | `buildHouse(world, clock?)`: the House Variant's lid (⅛ unit) as a mesh, the windows' lights, and the House Interior's room at 1/16 unit (furniture, the developer's head and hands, the code screen; its lamp or fire a Light Source); `setOpening` lifts the lid and shows the room while it is above 0, `setLights` lights the windows, `work(seconds)` poses the developer; `roomTriangles` and `developer` (the developer's box, for their link). | yes |
 | `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops, rocking on the swell. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves, the Biome's particles, the clouds, the fish, the land animals, birds or bats and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer, the animals and birds, the clouds' shadows' drift) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves, particles, clouds, fish, animals and birds (and returns how many fish, animals and birds show); `setZoom(zoom)` fades the clouds; `setTheme` recolours the sea and the clouds, lights the lamps and windows, shows the particles, animals and birds out and sets the clouds' shadows (none at Night). | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves, the Biome's particles, the clouds, the fish, the land animals, birds or bats, the torches and the halos, as a `THREE.Group`, and shows the World's block light (`setBlockLight`); `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer, the animals and birds, the clouds' shadows' drift) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves, particles, clouds, fish, animals and birds (and returns how many fish, animals and birds show); `setZoom(zoom)` fades the clouds; `setTheme` recolours the sea and the clouds, lights the windows, turns the Night light on or off (`BLOCK_LIGHT.night`; the halos at the reduced life tier), shows the particles, animals and birds out and sets the clouds' shadows (none at Night). | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
 | `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, the render loop (continuous while Ambient Life is alive, else on demand) and the render tier, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
@@ -80,7 +87,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, the Garden's plant links over their flowers and trees and, while the House is open, the developer's link over the developer; `plantCell` says which cell a Project's plant stands in. | yes |
 | `outlineTargets.ts` | `outlineKey` (the model a link stands for: `landmark:<id>`, `plant:<project>`, `developer`, `guide`) and `outlinedKeys` (which models to outline: every shown link hovered, focused from the keyboard or `aria-current`). Pure, tested in `outlineTargets.test.ts`. | no |
 | `outlineModels.ts` | `createOutlineModels`: each model's mask proxies for the outline, built on first use per World (a Landmark's own voxels meshed alone, mirrors of the House's lid, the developer's moving parts, the Guide and the Garden's plant copies). | yes |
-| `outline.ts` | `createOutline`: the pixelated outline round the outlined models (a block mask, a `RenderPipeline` only while something is outlined); `watchOutlineLinks`: follows the links' hover, focus and `aria-current`. | yes |
+| `outline.ts` | `createOutline`: the pixelated outline round the outlined models (a block mask, a `RenderPipeline` only while something is outlined) and the bloom on glowing parts at Night (`setBloom`, the full life tier); `watchOutlineLinks`: follows the links' hover, focus and `aria-current`. | yes |
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
 meshing run in the Web Worker. Only geometry upload, materials, the sea,
@@ -183,6 +190,11 @@ non-empty chunk:
 4. **Greedy merge.** Per slice, faces with the same colour and the same four
    AO levels merge into larger rectangles (grow along u, then w). Merging
    never changes the baked AO, and the shader redraws the per-voxel detail.
+5. **Glow.** Each vertex carries a `glow` attribute from its colour id
+   (`MeshOptions.glows`, from the `ColourTable`): 0, or 1 for a lamp's glass
+   and 2 for a flame (roles `glow` and `flame`, `voxel-structures.md`). A
+   colour that glows has an id of its own, so it never merges with the same
+   colour unlit. The material lights those voxels at Night ("Night light").
 
 ## Soft-voxel material
 
@@ -229,6 +241,12 @@ From ticket 01, in `LOOK` (`palette.ts`):
 
 Unlike the prototype, the shading values are constants compiled into the
 shader rather than uniforms, and AO strength is applied when meshing.
+
+At Night every voxel material also takes the Light Sources' light
+(polish ticket 16, "Night light"): its `emissiveNode` is the glow of its
+`flame` and `glow` voxels, and its `outputNode` adds the block light,
+`albedo × light × night`, after the lighting, so it lifts the moonlit side
+too and stays out of the emissive the bloom picks out.
 
 ## Boats and ships
 
@@ -277,13 +295,13 @@ turn with the vessel.
 `buoyModel.ts` draws each of the World's buoys (`world.buoys`, placed by
 the generator; see `world-generator.md`) into the detail grid, in the
 middle of its cell: a 2×2 float, red (`flagRed`) under a white band, then
-a dark post and a lamp (`lamp`) on top, a unit tall from the sea floor, so
-it floats at the waterline like the boats. About 40 triangles each. At
-Night `worldMeshes.ts` shows a glowing box over each lamp (`buoyLamp`, a
-hair bigger than the voxel so it covers the seams), in the `buoyLight`
-token. `buoyModel.test.ts` checks each buoy stays in its cell from the sea
-floor up, a unit tall, with one lamp voxel on top that `buoyLamp` covers
-exactly.
+a dark post and a lamp (`lamp`, glowing: `GLOW_STEADY`) on top, a unit
+tall from the sea floor, so it floats at the waterline like the boats.
+About 40 triangles each. At Night the lamp voxel glows and, as a Light
+Source, throws `buoyLight` block light from the middle of its box
+(`buoyLamp`; "Night light"). `buoyModel.test.ts` checks each buoy stays in
+its cell from the sea floor up, a unit tall, with one lamp voxel on top
+that `buoyLamp` covers exactly.
 
 ## The House and its room
 
@@ -324,8 +342,9 @@ and the door on the face the House's `door` names
 - **Lights.** `houseWindowFaces(world)` finds every face of window glass
   (role `window`) that faces +x or +z with nothing of the House in front
   of it: on the front walls these face out, towards the camera; on the
-  back walls they face into the room. A `MeshBasicNodeMaterial` square a
-  hair in front of each, in the `windowLight` token, shows only at Night
+  back walls they face into the room. A glowing square (`glowMaterial`: all
+  its light emissive, so it blooms) a hair in front of each, in the
+  `windowLight` token, shows only at Night
   (`setLights`); one mesh for the lid's faces, a child of the lid so it
   lifts with it, and one for the base's. From outside the shut House shows
   lit windows, and inside the open House the back windows glow.
@@ -369,14 +388,14 @@ House as for any other Landmark close-up.
   by the shared clock's `time` uniform (`ambientClock.ts`), so it stops
   with the rest of Ambient Life.
 - **Light:** the World's own sun and sky light. At Night the room's lamp or
-  fire lights it warmly: the light a three.js point light (intensity 6,
-  reach 5 units, no shadow) at the middle of the room's lamps and fires
-  (`roomLight`) would give a diffuse surface, worked out in the room's own
-  material as its emissive term (`roomLamp` in `house.ts`). Only the room's
-  furniture and the developer catch it, not the House's walls or anything
-  else in the World, and it costs nothing elsewhere: a real light in the
-  World's scene would be evaluated by every World material. The back
-  walls' windows glow (the base's `houseWindowFaces`).
+  fire (roles `glow` and `flame`, `light: 2 1`) glows and lights it
+  warmly: a Light Source like any other since polish ticket 16, its block
+  light baked with the World's from the middle of its lamps and fires
+  (`lightCentre`, "Night light"). The House's walls and floor catch it too
+  (structures do not block block light); its reach of 2 keeps it within
+  the House's own cells, so a shut House does not light the ground round
+  it, though its walls catch a little from inside. The back walls' windows glow (the base's
+  `houseWindowFaces`).
 - **The developer at work.** `WorldObjects.step(seconds)` poses the
   developer on the shared clock (`house.work`), so they work while Ambient
   Life is alive and stop with it (reduced motion, a hidden tab, the still
@@ -533,8 +552,8 @@ water, and rock on the same swell (polish ticket 10, `swell.ts`, see
 
 - It posts `{ id, seed, counts }` to `world.worker.ts`, which runs
   `generateWorld` and `meshWorld` and posts back the World and its
-  `MeshedWorld` (chunk typed arrays). The mesh buffers are transferred, not
-  copied. `ms` is the worker's generate-plus-mesh time (about 15–55 ms per
+  `MeshedWorld` (chunk typed arrays and the block light's volume,
+  `blockLight.ts`). The buffers are transferred, not copied. `ms` is the worker's generate-plus-mesh time (about 15–55 ms per
   Seed in headless Chrome, far inside the 1 s budget). `generateMs` is the
   generate time alone; a cache hit keeps it.
 - Results are cached per Seed and content counts (the promise is cached, so
@@ -1014,21 +1033,95 @@ page's CSS:
 | Token | Day | Night |
 |---|---|---|
 | `sky` (background) | the approved pale blue | a deep blue (L 0.27) |
-| `sunLight`, `sunIntensity` | the approved warm sun, 2.4 | a cool moon, 1.2, from the same direction |
-| `skyLight`, `groundLight`, `skyIntensity` | the approved hemisphere, 1.1 | a dim blue hemisphere, 0.95 |
+| `sunLight`, `sunIntensity` | the approved warm sun, 2.4 | a cool moon, 0.9 (1.2 before polish 16), from the same direction |
+| `skyLight`, `groundLight`, `skyIntensity` | the approved hemisphere, 1.1 | a dim blue hemisphere, 0.75 (0.95 before polish 16) |
 | `waterShift` | 0 | −0.12 lightness on both water colours and the seabed |
-| `lightsOn` | off | the House's windows (`windowLight`, a warm white) and the buoys' lamps (`buoyLight`, a warm amber) glow |
+| `lightsOn` | off: torches stand unlit | every Light Source glows and throws its block light (`BLOCK_LIGHT.night` 1): the House's windows (`windowLight`, a warm white), the buoys' lamps (`buoyLight`, a warm amber), the torches, lamps, lighthouse and the room's lamp (`torchLight`, per Biome) |
+| `torchLight` | (unused by Day) | the torches' warm light per Biome: tropical L 0.84 C 0.13 h 65, northern 0.86 0.09 80, autumn 0.82 0.13 55, volcanic 0.78 0.15 42 |
 | `cloud`, `cloudShadow` | white clouds, shadows 0.2 | dark grey-blue clouds, no shadows |
 | `foam`, `surfGlow`, `surfGlowStrength` | white foam, no glow | dimmer grey-blue foam, glowing a faint cyan, brightest where waves break (0.8) |
 
 `setTheme` recolours the sky, the lights, the water's two colours, the seabed and the clouds, sets the clouds' shadows, shows
-or hides the window panes and lamp boxes, sets `canvas.dataset.theme` and
+or hides the window panes, turns the Night light on or off, sets `canvas.dataset.theme` and
 renders one frame. A new World (`show`) takes the theme in force. Nothing
 moves, nothing is added to or removed from the voxel meshes, the sun keeps
 its direction (so the static shadow map is kept), and the camera, hotspots
 and Data Cards are untouched: the layout is the same in both themes. The
-glow is unlit colour (`MeshBasicNodeMaterial`), not real lights, so it
-adds no shader variants and no per-frame cost.
+Night light is baked block light and emissive glow behind one uniform
+(`BLOCK_LIGHT.night`), not real lights, so switching adds no shader
+variants (see "Night light"). The moonlight was dimmed by about a quarter
+in polish ticket 16 so the torches stand out; the page's text and UI
+tokens are unchanged, so their contrast holds (`theme.test.ts`).
+
+## Night light
+
+Polish ticket 16, ADR 0007. A **Light Source** glows at Night and throws
+warm block light on the voxels round it; by Day it stands unlit (its flame
+or glass shows its plain colour, no light, no glow, no flicker).
+
+- **Light Sources** (`lightSources.ts`): every structure that declares a
+  `light:` (reach in cells and strength; `voxel-structures.md`), its light
+  at the middle of its `flame` and `glow` voxels (`lightCentre`): the
+  torches (`world.torches`, `world-generator.md`, "Torches"), the
+  Decoration's lamps (every one, on both render tiers), the Station's
+  lighthouse (reach 6), a Dock's lanterns (Variant 2) and the House room's
+  lamp or fire; plus the House's lit windows (a source in each cell the
+  lid's glass looks out on, reach 3, strength 0.55) and the buoys' lamps
+  (reach 3, 0.6). Fireflies only glow, and a boat's or ship's lamp (role
+  `glow`, no `light:`) only glows: neither throws block light.
+- **The bake** (`blockLight.ts`, in the World Web Worker, inside
+  `meshWorld`): a flood fill over the World's 1-unit cells, from each
+  source's cell at its reach, a level less per step along the axes; terrain
+  cells are solid and stop it (structures are smaller than a cell and let
+  it through); where sources overlap the brighter level wins. A lit cell
+  takes its source's colour (the Night tokens) times `strength · (level /
+  reach)²`, and its flicker phase (alpha: 1–255 for a flame, 0 for a steady
+  light). The volume spans the World's grid and 12 cells over its highest
+  ground, so its top layer stays dark. About 5 ms a World (median over 40
+  Seeds in Node, 13 ms at most), RGBA 4 bytes a cell (about 0.2–0.9 MB).
+- **In the shaders** (`blockLightNode.ts`): one `Data3DTexture`, a texel a
+  cell, linear filtering, sampled half a cell out from each surface along
+  its normal (so it is smooth across faces, like the baked AO) by one TSL
+  node every material shares; `setBlockLight` swaps the World's volume in.
+  Every voxel material (terrain, detail, structures, instanced structures,
+  the House's lid and room) adds `albedo × light × 1.8 × night` after its
+  lighting; the sea adds it only on a soft rim along the shore (whole to
+  0.3 units out, gone by 1.2). One texture fetch a fragment (two with the
+  flicker's), no extra draw call and no real-time light.
+- **Glow.** A voxel of role `flame` or `glow` (the mesher's `glow`
+  attribute) is its own colour × 1.6 at Night, as its material's emissive.
+  The House's window panes and the fireflies are all emissive too.
+- **Flicker.** A flame and the light it throws waver ±18%, two sine waves
+  out of tune on the shared clock (`BLOCK_LIGHT.time`, set in
+  `WorldObjects.step`), at the phase of the source that lights its cell
+  (read unfiltered, so phases never blend into ripples); a flame also warms
+  a little as it brightens. Nothing flickers while the clock is frozen
+  (reduced motion, the still tier, the Model Gallery, the build's stills).
+  Glass, windows and buoys shine steady.
+- **Bloom and halos, by life tier** (`canvas.dataset.glow`): at the full
+  tier `outline.ts` renders the World through a `RenderPipeline` whose
+  scene pass writes its emissive to a second target (`mrt`), blurs it
+  (`BloomNode`, strength 0.9, radius 0.45, no threshold: only emissive
+  parts bloom, and only the Light Sources' glow, the window panes and the
+  fireflies are emissive) and adds it before tone mapping, then lays the outline over
+  it; the HTML over the canvas never blurs. At the reduced tier a
+  camera-facing halo round each Light Source (not the room's, which the
+  walls would show through) is added over the World in one mesh
+  (`halos.ts`). The still tier keeps the block light and the glow but
+  neither. The surf's Night glow, the clouds' and fish's own faint light
+  and the spray's glow are added after the lighting (`outputNode`), not as
+  emissive, so they do not bloom.
+- **Not clickable.** Torches and halos are never raycast targets and have
+  no links: pointers reach the Landmarks through them.
+- **Cost** (polish ticket 16, `seed-1`, headless Chrome on an M-series Mac,
+  WebGPU unthrottled): full tier 2.24 ms a frame before, 2.39 ms by Day
+  (the block light's texture fetch) and 3.13 ms at Night (the bloom, about
+  0.75 ms). The reduced (phone) tier held its 30 fps cap by Day and at Night
+  (halos), as before; in SwiftShader (the e2e's software GL) the phone tier
+  held 30 fps, and the full tier drew `lighthouse` at 4.5 fps by Day and
+  3.1 at Night against 5.5 before. The torches add about 1,500–1,900
+  triangles (`data-triangles` `seed-1` 137,864 → 139,408; the reduced
+  tier also keeps every Decoration lamp).
 
 ## Camera and interaction
 
@@ -1148,8 +1241,9 @@ on the isometric axis above the target.
     terrain never hides). The World then renders through a
     `RenderPipeline` (the scene pass, tone-mapped, then 25 nearest taps of
     the mask a pixel), built on the first outline. While nothing is
-    outlined the World renders straight to the canvas as before: no extra
-    pass. Measured uncapped on a desktop GPU at 1440 × 900 with the Station
+    outlined (and nothing blooms: by Day, or at Night below the full life
+    tier, "Night light") the World renders straight to the canvas as
+    before: no extra pass. Measured uncapped on a desktop GPU at 1440 × 900 with the Station
     outlined: about 0.2 ms a frame more (2.4 → 2.6 ms), 6 k more triangles
     (the Station's proxy) and a draw call. On the phone tier (390 × 844 at
     DPR 2, headless, `/garden/archive-search` with its plant outlined, then

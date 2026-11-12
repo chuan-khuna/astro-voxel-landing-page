@@ -26,7 +26,10 @@
  *   0–1: they fade out in a Landmark's close-up), for checks;
  *   `canvas.dataset.fish`, `.animals` and `.birds` say how many fish, land
  *   animals and birds (or bats) the life tier (and theme) shows;
- *   `canvas.dataset.outline` lists the models outlined (`outline.ts`).
+ *   `canvas.dataset.outline` lists the models outlined (`outline.ts`);
+ *   `canvas.dataset.glow` says how the Light Sources glow (`bloom` at the
+ *   full life tier at Night, `halo` at the reduced, `none` by Day or at the
+ *   still tier).
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
  *   Landmark hotspots (`landmarkHotspots.ts`) and Data Cards (`dataCards.ts`)
  *   follow the camera. The model of a hotspot (or of the Guide's button)
@@ -52,8 +55,10 @@
  *   rendering frames while it flies.
  * - `setTheme(theme)` switches Day and Night (`data/theme.ts`): the sky,
  *   the lights' colours and strengths, the water's colour, and at Night the
- *   House's windows and the buoys' lamps glow. Nothing moves, so the shadow
- *   map is kept; one frame is rendered.
+ *   Light Sources (torches, lamps, the House's windows and room, the
+ *   buoys' lamps, the lighthouse) glow and throw their baked block light
+ *   (polish ticket 16). Nothing moves or is remeshed, so the shadow map is
+ *   kept; one frame is rendered.
  * - DPR is capped at 1.5 on touch devices and 2 elsewhere.
  * - The render tier (`lib/renderTier.ts`): phones get the reduced tier (no
  *   MSAA, a 1024 px shadow map, ambient motion at 30 fps, half the
@@ -219,6 +224,9 @@ export interface WorldFrame {
   lifeOverride?: string | null;
 }
 
+/** How the Light Sources glow at Night on each life tier (polish ticket 16). */
+const GLOW_BY_TIER: Record<LifeTierName, 'bloom' | 'halo' | 'none'> = { full: 'bloom', reduced: 'halo', still: 'none' };
+
 /** Closest zoom: about this many world units from the centre to the edge of the frame. */
 const CLOSEST_HALF_HEIGHT = 3;
 
@@ -340,6 +348,10 @@ export async function mountWorld(
       hotspots.place(camera);
       cards.place(camera, rig.state, viewCentre, cardFocus, cardTop);
       guide.place(camera);
+      // At Night the Light Sources glow: a bloom at the full life tier, halos at the reduced (`worldMeshes.ts`), neither at the still.
+      const glow = theme === 'night' ? GLOW_BY_TIER[life.tier()] : 'none';
+      outline.setBloom(glow === 'bloom');
+      canvas.dataset.glow = glow;
       outline.render();
       idleRenderer();
       if (frameListeners.size > 0) {

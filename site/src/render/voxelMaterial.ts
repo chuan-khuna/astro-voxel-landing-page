@@ -13,7 +13,9 @@
  *
  * `softVoxelLook` is the look on its own, for materials of their own (the
  * sea, `seaMaterial.ts`). Every voxel material takes the clouds' drifting
- * shadows (`cloudShadow.ts`).
+ * shadows (`cloudShadow.ts`) and, at Night, the block light and its glowing
+ * voxels' own light (`blockLightNode.ts`; a geometry from the mesher carries
+ * the `glow` attribute).
  */
 import * as THREE from 'three/webgpu';
 import {
@@ -21,6 +23,7 @@ import {
   abs,
   attribute,
   cameraViewMatrix,
+  diffuseColor,
   float,
   floor,
   fract,
@@ -30,6 +33,7 @@ import {
   mix,
   normalGeometry,
   normalize,
+  output,
   normalLocal,
   positionGeometry,
   positionLocal,
@@ -42,6 +46,7 @@ import {
 } from 'three/tsl';
 import { LOOK } from './palette';
 import { cloudShade } from './cloudShadow';
+import { blockLightAdded, glowEmissive } from './blockLightNode';
 
 type Vec3Node = THREE.Node<'vec3'>;
 
@@ -119,5 +124,8 @@ export function voxelMaterial(
   material.normalNode = look.normalNode;
   // Vertex colour already carries the baked AO. Passing clouds shade it (`cloudShadow.ts`).
   material.colorNode = Fn(() => vec4(shade(attribute('color', 'vec3')).mul(cloudShade(positionWorld)), 1))();
+  // At Night: a flame's or a lamp's own glow (it blooms), and the block light the Light Sources throw (it does not).
+  material.emissiveNode = glowEmissive(attribute('color', 'vec3'));
+  material.outputNode = output.add(vec4(blockLightAdded(diffuseColor.rgb), 0));
   return material;
 }

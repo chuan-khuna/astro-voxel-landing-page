@@ -88,7 +88,7 @@ layout สำรอง (safe layout) เป็นเกาะกลมเกา�
 | **detail chunk** | ¼ unit | chunk ละ 16×16×16 unit (64³ voxel) · ใช้ grid เดียวกับ terrain chunk | ของที่อยู่กับที่ทั้งหมด: พื้นสะพาน · บันได · Station · ฐานและห้องของ House · ต้นไม้และดอกไม้ใน Garden · Dock, jetty และเสา · Mailbox (เรือ Client ย้ายไปเป็น structure ⅛ ตั้งแต่ ticket 06) | `worldVoxels.ts`, `landmarkModels.ts` |
 | **เรือ (ticket 06)** | ⅛ unit | `InstancedMesh` แบบละ 1 mesh · Boat 3 แบบ (1×1) · Ship 3 แบบ (1×3) ต่อ Biome | เรือ Client จอดที่ Dock · เรือ Partner แล่นไปตามเส้นทางรอบเกาะ · แบบเรือมาจาก hash ของ id | `boats.ts`, `ships.ts`, `vesselModels.ts` |
 | **house lid mesh** | ⅛ unit (ตั้งแต่ ticket 01) | 1 mesh | หลังคาและผนังด้านหน้า 2 ด้าน (มีประตูและหน้าต่าง) · ยกขึ้นได้เมื่อเปิดดูห้อง | `house.ts` |
-| **ห้อง House Interior** (ticket 04, 17) | 1/16 unit | อยู่ใน World · mesh ห้อง 1 + หัวและมือ 3 + จอ 1 · แสดงเฉพาะตอนฝาบ้านยกหรือกำลังยก | ห้องของ Biome พร้อม Developer · จอโค้ด · กลางคืนมีแสงอุ่นจากโคมหรือเตาผิง (คำนวณใน material ของห้อง) | `house.ts`, `interiorModel.ts` |
+| **ห้อง House Interior** (ticket 04, 17) | 1/16 unit | อยู่ใน World · mesh ห้อง 1 + หัวและมือ 3 + จอ 1 · แสดงเฉพาะตอนฝาบ้านยกหรือกำลังยก | ห้องของ Biome พร้อม Developer · จอโค้ด · กลางคืนมีแสงอุ่นจากโคมหรือเตาผิง (เป็น Light Source ตั้งแต่ ticket 16: block light อบไว้รวมกับของ World) | `house.ts`, `interiorModel.ts` |
 | **ทะเล** (ticket 07) | 1 unit | mesh น้ำ 1 + พื้นทะเล 1 · น้ำทุก cell ใน grid และวงรอบอีก 8 cell · นอกนั้นเป็นแผ่นน้ำนิ่งกว้าง 6 เท่าของ World | น้ำ cell ละ 1 voxel ผิวบนอยู่ที่ระดับน้ำ 0.15 · ไล่สีจากตื้นริมฝั่งไปลึกที่ 6 cell · โปร่งแสงริมฝั่ง (เห็นพื้นทราย) ทึบที่ 3 cell · แต่ละ voxel โยกขึ้นลงเบาๆ ใน shader (หยุดเมื่อลดการเคลื่อนไหว) | `seaModel.ts`, `seaMaterial.ts`, `worldMeshes.ts` |
 
 **ส่วนที่ยังไม่เป็น voxel**
@@ -105,6 +105,7 @@ layout สำรอง (safe layout) เป็นเกาะกลมเกา�
 | สัตว์ | ⅛ unit | กวาง กระรอก นก ค้างคาว และปลา · ใช้ `InstancedMesh` | 13, 14 |
 | particle | ⅛ unit | ใบไม้ ผีเสื้อ หิ่งห้อย หิมะ เถ้า และฟองคลื่น · ใช้ `InstancedMesh` ชนิดละ 1 mesh | 10, 11, 13 |
 | เมฆ | 1 unit | ก้อนโปร่งแสง ลอยเหนือทะเลเท่านั้น | 12 |
+| คบเพลิง (Light Source) | ⅛ unit | Biome ละ 2 แบบ: สูง 12 voxel (1.5 unit) และเตี้ย 6 voxel (0.75 unit) · `InstancedMesh` แบบละ 1 mesh · กลางคืนเปลวไฟเรืองแสงและส่อง block light รอบตัว | 16 |
 
 ## Structure เทียบกับ World
 

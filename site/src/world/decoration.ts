@@ -56,6 +56,28 @@ const BIOME_DECORATION: Record<BiomeId, { density: number; weights: Record<Decor
   volcanic: { density: 0.14, weights: { grass: 2, clump: 1, rocks: 4, bush: 1.5, sapling: 2, fence: 0.6, lamp: 0.5, shed: 0.4, windmill: 0.3 } },
 };
 
+/**
+ * How tall anything placed on `cell` may stand by the Landmark nearest it
+ * (the lowest, if several are as near): its lowest Variant
+ * (`LANDMARK_MIN_HEIGHT`), or by the Station its Services'
+ * (`SERVICE_MIN_HEIGHT`), as the lighthouse stands in the middle of its
+ * group, never nearest. Distances run to the footprint's and jetty's cells.
+ * Shared by Decoration and the torches (`torches.ts`).
+ */
+export function heightCapAt(landmarks: readonly PlacedLandmark[], cell: Cell): number {
+  let nearest = Infinity;
+  let cap = Infinity;
+  for (const landmark of landmarks) {
+    const distance = Math.min(...[...landmark.footprint.cells, ...landmark.jetty].map((c) => Math.hypot(c.x - cell.x, c.z - cell.z)));
+    const height = landmark.id === 'station' ? SERVICE_MIN_HEIGHT : LANDMARK_MIN_HEIGHT[landmark.id];
+    if (distance < nearest) {
+      nearest = distance;
+      cap = height;
+    } else if (distance === nearest) cap = Math.min(cap, height);
+  }
+  return cap;
+}
+
 const FACINGS: readonly Facing[] = ['north', 'east', 'south', 'west'];
 
 /**
@@ -90,20 +112,7 @@ export function placeDecoration(
   const tallest = Math.max(...Object.values(DECORATION_HEIGHT));
   const clearance = sightClearance(terrain, covered.map(({ landmark, cells }) => ({ y: landmark.y, cells })), Math.max(...heights) + tallest);
 
-  /** How tall a piece may stand by the nearest Landmark (the lowest, if several are as near). */
-  const capAt = (cell: Cell) => {
-    let nearest = Infinity;
-    let cap = Infinity;
-    for (const { landmark, cells } of covered) {
-      const distance = Math.min(...cells.map((c) => Math.hypot(c.x - cell.x, c.z - cell.z)));
-      const height = landmark.id === 'station' ? SERVICE_MIN_HEIGHT : LANDMARK_MIN_HEIGHT[landmark.id];
-      if (distance < nearest) {
-        nearest = distance;
-        cap = height;
-      } else if (distance === nearest) cap = Math.min(cap, height);
-    }
-    return cap;
-  };
+  const capAt = (cell: Cell) => heightCapAt(landmarks, cell);
 
   const { density, weights } = BIOME_DECORATION[biome];
   const rng = createRng(`${seed}/decoration`);

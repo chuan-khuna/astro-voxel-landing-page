@@ -17,7 +17,7 @@
  */
 import type { BiomeId, World } from '@/world';
 import { STRUCTURES, variantsOf, type Structure } from '@/structures';
-import { structureVoxels, type StructureVoxel } from '@/structures/parse';
+import { lightCentre, structureVoxels, type StructureVoxel } from '@/structures/parse';
 import { houseStructure, housePlacement, turned } from './structureModels';
 import { INTERIOR } from './voxelTiers';
 
@@ -108,10 +108,9 @@ export function screenFace(room: Structure): { x: number; y0: number; y1: number
 
 /** Where a room's warm light is at Night: the middle of its lamps and fires, in the room's voxels. */
 export function roomLight(room: Structure): Point {
-  const lights = [...structureVoxels(room)].filter((v) => v.role === 'lamp' || v.role === 'fire');
-  if (lights.length === 0) throw new Error(`${room.name} has no lamp or fire`);
-  const mean = (axis: 'x' | 'y' | 'z') => lights.reduce((sum, v) => sum + v[axis] + 0.5, 0) / lights.length;
-  return { x: mean('x'), y: mean('y'), z: mean('z') };
+  const centre = lightCentre(room);
+  if (!centre) throw new Error(`${room.name} has no lamp or fire`);
+  return centre;
 }
 
 /**

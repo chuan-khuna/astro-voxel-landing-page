@@ -93,6 +93,18 @@ describe('parseStructure', () => {
     expect(t.developer).toEqual({ x: 3, y: 1, z: 4 });
   });
 
+  it('reads a Light Source\'s declared light: the cells it reaches and its strength; none by default', () => {
+    expect(s.light).toBeNull();
+    const t = parseStructure(SMALL.replace('anchor: 0 0 0', 'anchor: 0 0 0\nlight: 4 0.8'), 't');
+    expect(t.light).toEqual({ reach: 4, strength: 0.8 });
+  });
+
+  it('rejects a light out of range', () => {
+    for (const light of ['0 0.5', '9 0.5', '4 0', '4 1.5', '4', '4.5 0.5']) {
+      expect(() => parseStructure(SMALL.replace('anchor: 0 0 0', `anchor: 0 0 0\nlight: ${light}`), 'bad'), light).toThrow(/light/);
+    }
+  });
+
   it('rejects a scale other than 8 or 16', () => {
     expect(() => parseStructure(SMALL.replace('anchor: 0 0 0', 'anchor: 0 0 0\nscale: 4'), 'bad')).toThrow(/scale/);
   });

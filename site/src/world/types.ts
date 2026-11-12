@@ -269,6 +269,24 @@ export interface Decoration {
 }
 
 /**
+ * A torch: a Light Source (polish ticket 16) standing on one cell, by a
+ * Landmark, the path or a bridge's end (`by`). Its structure is the Biome's
+ * torch Variant `variant` (`structures/torch/`): 1 tall, 2 short. `y` is the
+ * ground it stands on, in units: its cell's height, or the Dock's deck on
+ * the jetty's end (`onJetty`).
+ */
+/** A torch's Variant: 1 tall, 2 short (`TORCH_HEIGHT`). */
+export type TorchVariant = 1 | 2;
+
+export interface Torch {
+  cell: Cell;
+  y: number;
+  variant: TorchVariant;
+  by: PlacedLandmarkId | 'path' | 'bridge';
+  onJetty: boolean;
+}
+
+/**
  * The kinds of Ambient Life particle (ADR 0005): single-colour ⅛-unit cubes
  * moved in the shader, with no structure file. Which are out depends on the
  * Biome and on Day or Night (`PARTICLE_SETS` in `particles.ts`). Leaves are
@@ -405,6 +423,8 @@ export interface World {
   buoys: Cell[];
   /** Decoration, in the order it was placed (`decoration.ts`): never on a footprint, a path, a bridge end or in the Garden, never in front of a Landmark. */
   decoration: Decoration[];
+  /** The torches (`torches.ts`): one or two by each Landmark, a few along the path and at bridge ends; never on a footprint, path or bridge end, never in front of a Landmark. */
+  torches: Torch[];
   /** Where the Biome's particles live (`particles.ts`): by Day and at Night; the renderer shows the ones out. */
   particles: ParticleArea[];
   /** The clouds (`clouds.ts`): drifting down the wind high over the sea, never over an Isle. */

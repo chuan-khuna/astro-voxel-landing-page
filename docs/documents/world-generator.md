@@ -49,7 +49,8 @@ imports, so the generator stays pure.
 | `station.ts` | The Station's 6×6 group: `STATION_SIZE`, `LIGHTHOUSE_CELL`, `SERVICE_PLACES` (sides, then corners), `MAX_SERVICES`, `SERVICE_HEIGHT`, `SERVICE_KINDS` and `serviceKind(id)` (a Service's structure from words in its id, else a hash). |
 | `ships.ts` | The Partners' sailing routes: loops through open sea. |
 | `buoys.ts` | The buoys: sea marks just off the Isles, nearest the Dock first. |
-| `decoration.ts` | Decoration: `placeDecoration`, `DECORATION_HEIGHT` and `MINOR_BUILDINGS`: pieces of scenery on free land, each below the nearest Landmark and out of every Landmark's sight line. |
+| `decoration.ts` | Decoration: `placeDecoration`, `DECORATION_HEIGHT` and `MINOR_BUILDINGS`: pieces of scenery on free land, each below the nearest Landmark and out of every Landmark's sight line; `heightCapAt` (how tall anything may stand by the nearest Landmark, shared with the torches). |
+| `torches.ts` | The torches (polish ticket 16): `placeTorches`, `TORCH_HEIGHT` (tall and short Variant) and `torchSightCells`: one or two by each Landmark, a few along the path and at bridge ends. |
 | `particles.ts` | Particles' spawn areas: `placeParticles`, `PARTICLE_SETS` (which particles each Biome has by Day and at Night) and `PARTICLE_AREA` (each kind's box and cap). |
 | `clouds.ts` | The clouds: `placeClouds` and `MAX_CLOUDS`: masses of 1-unit voxels shaped from the Seed, drifting down the wind high over the sea, never over an Isle nor between the camera and one. |
 | `fish.ts` | The fish schools: `placeFish`, `MAX_SCHOOLS` and `FISH_AREA`: 2×2-cell squares of open shallow water, clear of the jetty, the boats, bridges, buoys and the ships. |
@@ -94,6 +95,7 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `ships` | One per Partner, in Partner order: `cells`, a closed loop of sea cells (each an 8-neighbour of the one before, the last of the first) sailed in order, `phase` (0–1), how far round it the ship starts, and its `kind` (1 to `SHIP_KINDS`, from its Partner's id). Cells may lie past the grid's edge. |
 | `buoys` | Up to 4 (`MAX_BUOYS`) sea cells, each with a buoy (its lamp glows at Night; see `rendering-and-shading.md`). Inside the grid, clear of the ships, boats, jetty and bridges. |
 | `decoration` | Decoration, in placement order (row by row): each piece's `kind` (`DECORATION_KINDS`), land `cell` and `facing` (its structure is drawn facing south; see "Decoration"). |
+| `torches` | The torches, Light Sources (see "Torches"): each one's `cell`, the ground `y` it stands on, its `variant` (1 tall, 2 short), what it stands `by` (a Landmark's id, `path` or `bridge`) and whether it stands `onJetty` (the Dock's jetty's end, on its deck). |
 | `particles` | Spawn areas of the Biome's particles, by Day and at Night: each a `kind` (`PARTICLE_KINDS`), a box of air (`centre`, `radius` across the ground, `floor` and `top` heights) over land no higher than its `ground` (see "Particles"). |
 | `clouds` | Up to 8 (`MAX_CLOUDS`) clouds: each one's `voxels` (1-unit cells of its box, `size` across, up and across, from its corner) and `base` (its underside's height), and its drift down the wind: `from` and `to` (its box's corner at the start and end), `period` (seconds a drift takes) and `phase` (0–1, how far through at time 0). See "Clouds". |
 | `fish` | Up to 6 (`MAX_SCHOOLS`) fish schools: each one's `centre` (a grid corner), `radius` (1: the square of water it keeps to, 2×2 cells) and `size` (3–5 fish). See "Fish". |
@@ -154,12 +156,14 @@ Dock and Mailbox. The other two are views derived from the layout:
 9. **Ships.** One sailing route per Partner (see "Ships" below). No
    randomness: the loops follow from the layout, so they draw nothing from
    the PRNG.
-10. **Decoration.** Each Biome places its own Decoration over the Isles
-    (see "Decoration" below).
+10. **Decoration and torches.** Each Biome places its own Decoration over
+    the Isles (see "Decoration" below), then the torches round the
+    Landmarks, along the path and at bridge ends (see "Torches").
 11. **Particles.** After everything else, the spawn areas of the Biome's
     particles (see "Particles" below), then the clouds, the fish, the land
     animals and the birds (each from its own sequence of the Seed, so none
-    moves the layout).
+    moves the layout). The particles and the land animals keep off the
+    torches as off a lamp of the Decoration's.
 
 ### Landmark footprints
 
@@ -370,6 +374,44 @@ weights among the kinds that fit there. A piece:
 Over `seed-0`–`seed-399` (8 Projects) a World gets 46–369 pieces, 181 on
 average; placing it takes under 1 ms (at most about 3). The reduced render
 tier draws every other piece (`rendering-and-shading.md`).
+
+### Torches
+
+Polish ticket 16 (`torches.ts`). The World's torches are Light Sources
+(`GLOSSARY.md`; `rendering-and-shading.md`, "Night light"): at Night they
+glow and light the ground round them. `World.torches` lists each one's
+cell, ground, Variant and what it stands by; the renderer draws the
+Biome's torch Variant there (`voxel-structures.md`, "Torches": Variant 1
+tall, `TORCH_HEIGHT` 1.5 units; Variant 2 short, 0.75).
+
+`placeTorches` runs after the Decoration, from a sequence of the Seed's
+own (`<seed>/torches`), so it never moves the layout or the Decoration.
+For each Landmark, the most hemmed-in first (Mailbox, Dock, House,
+Garden, Station), it wants one or two torches (an even chance) and tries,
+in order: the end of the Dock's jetty (on its deck), the Landmark's own
+places (either side of the path's end before the House's door; beside the
+corner of the House's yard where the Mailbox stands, off its front; either
+side of the Garden's gate), then the cells round its footprint, one ring at
+a time up to five cells out, shuffled. Then a few along the path (every
+fifth cell, beside it, at most 3, none at its ends) and one beside an end
+of each bridge. A torch:
+
+- stands on land (or on the jetty's end), never on a footprint, the jetty,
+  a path, the land at a bridge's end or a piece of Decoration, and never
+  next to (8-neighbour) another torch;
+- is never taller than the nearest Landmark (`heightCapAt`, the
+  Decoration's rule): the Seed picks the Variant, and where the tall one
+  would be too tall the short one stands instead, so short torches stand
+  by the Dock and the Garden;
+- never stands between the camera and a Landmark: below every Landmark's
+  sight line (`sightClearance`), counted from the footprint and jetty but,
+  for the House, only the House itself (`torchSightCells`: its yard is
+  open ground, so a torch may stand by the yard's edge); on the jetty's end
+  the Dock's own deck does not count, as the torch stands on it.
+
+Over 400 Seeds every Landmark has at least one torch (the Mailbox needed
+the rings out to five cells for about 1 World in 200, in a yard hemmed in
+by the sea and the path); a World has about 11 on average.
 
 ### Particles
 
@@ -697,6 +739,13 @@ Seeds, never snapshots:
   own sea cell within 2 cells of the jetty, never on the jetty or a bridge,
   bow out along the jetty, in plain view at sea level (the ray march, with
   the jetty as a deck) and inside the Overview;
+- torches: the same for the same Seed; one or two by every Landmark, within
+  five cells of it, and some along the path and at bridge ends over the
+  sampled Seeds; both Variants used; never on a footprint, the jetty (but
+  the Dock's on its end, at the deck's height), a path, a bridge end,
+  Decoration or next to another torch; never taller than the nearest
+  Landmark; never hiding a Landmark (an independent ray march; the House's
+  yard and, for the jetty's torch, the Dock's own deck excepted);
 - ships: one per Partner for 0, 1, 3, 7 and 500; each a closed loop of
   distinct cells, 8-neighbour steps, at least 2 cells from land, bridges,
   the jetty and boats; every loop encloses all the land (so with one Isle it

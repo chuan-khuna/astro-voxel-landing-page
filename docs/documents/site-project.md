@@ -424,8 +424,12 @@ the theme toggle overrides it.
 - **The World** follows `data-theme`: the page script watches it and calls
   `view.setTheme`, and the first mount takes the theme in force. At Night
   the sky darkens, the sun becomes a dim cool moon from the same direction,
-  the water darkens, the House's windows light up and the buoys' lamps
-  glow (see `rendering-and-shading.md`, "Day and Night"). Only colours,
+  the water darkens, and the Light Sources light up: the torches by the
+  Landmarks and along the path, the lamps, the lighthouse, the House's
+  windows and room and the buoys' lamps glow and light the voxels round
+  them (polish ticket 16; see `rendering-and-shading.md`, "Day and Night"
+  and "Night light"). The moon is dimmer than before, so the torches stand
+  out; the page's colours are unchanged. Only colours,
   light and glow change: never the layout, the camera, the hotspots or the
   Data Cards.
 

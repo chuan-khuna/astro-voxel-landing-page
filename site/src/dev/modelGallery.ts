@@ -14,7 +14,9 @@
  * a patch of their Biome's sea, as in the World, and the fish lie on one;
  * birds and bats hang a unit over their grass, wings spread;
  * each kind of Decoration shows
- * its piece in every Biome, closer together. Renders on demand. Dev only
+ * its piece in every Biome, closer together. At Night the Light Sources'
+ * flames and lamps glow and bloom (`blockLightNode.ts`, `outline.ts`); the
+ * Gallery bakes no block light round them. Renders on demand. Dev only
  * (`/dev/models`).
  */
 import * as THREE from 'three/webgpu';
@@ -29,6 +31,8 @@ import type { Theme } from '@/lib/theme';
 import { LOOK, oklchToLinear } from '@/render/palette';
 import { structureInstances, type InstancePlacement } from '@/render/structureMeshes';
 import { voxelMaterial } from '@/render/voxelMaterial';
+import { BLOCK_LIGHT } from '@/render/blockLightNode';
+import { createOutline } from '@/render/outline';
 import { worldColours } from '@/render/worldVoxels';
 import { SEA_LEVEL } from '@/render/seaModel';
 import { GROUND_DETAIL, STRUCTURE } from '@/render/voxelTiers';
@@ -86,13 +90,16 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
   const ground = new THREE.Group();
   scene.add(ground);
   const groundMaterial = voxelMaterial(1);
+  const post = createOutline(renderer, scene, camera);
   let frame = 0;
   const render = () => {
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
       layoutCamera();
-      renderer.render(scene, camera);
+      // At Night the Light Sources' flames and glass glow and bloom, as in the World at the full tier (no block light: the Gallery bakes none).
+      post.setBloom(theme === 'night');
+      post.render();
       placeLabels();
     });
   };
@@ -167,6 +174,7 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
     hemisphere.intensity = t.skyIntensity;
     setColour(sun.color, t.sunLight);
     sun.intensity = t.sunIntensity;
+    BLOCK_LIGHT.night.value = t.lightsOn ? 1 : 0;
   };
   applyTheme('day');
 

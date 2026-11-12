@@ -7,9 +7,9 @@
  *
  * Which theme shows is `src/lib/theme.ts`. Edit the colours here.
  */
-import type { Biome, Oklch } from '../world';
-import { LOOK, oklchToLinear, shiftLightness } from '../render/palette';
-import type { Theme } from '../lib/theme';
+import type { Biome, BiomeId, Oklch } from '@/world';
+import { LOOK, oklchToLinear, shiftLightness } from '@/render/palette';
+import type { Theme } from '@/lib/theme';
 
 const oklch = (l: number, c: number, h: number): Oklch => ({ l, c, h });
 
@@ -45,12 +45,20 @@ export interface WorldTokens {
   skyIntensity: number;
   /** OKLCH lightness added to the Biome's water colours. */
   waterShift: number;
-  /** The House's windows and the buoys' lamps glow. */
+  /** Night: the House's windows, the buoys' lamps and every Light Source glow, and their block light is on (polish ticket 16). */
   lightsOn: boolean;
   /** The glow of the House's windows. */
   windowLight: Oklch;
   /** The glow of a buoy's lamp. */
   buoyLight: Oklch;
+  /**
+   * The colour of the light the torches, lamps and fires throw (polish
+   * ticket 16), per Biome: the block light baked into the World
+   * (`render/blockLight.ts`, which takes the Night tokens; by Day the
+   * light is off, so the Day values are never seen).
+   */
+  torchLight: Record<BiomeId, Oklch>;
+
   /** The clouds' colour: white by Day, a dark grey-blue at Night. */
   cloud: Oklch;
   /** How much a cloud's shadow darkens the ground (0–1): none at Night. */
@@ -96,6 +104,12 @@ export const THEME_TOKENS: Record<Theme, ThemeTokens> = {
       lightsOn: false,
       windowLight: oklch(0.9, 0.09, 85),
       buoyLight: oklch(0.88, 0.1, 60),
+      torchLight: {
+        tropical: oklch(0.84, 0.13, 65),
+        northern: oklch(0.86, 0.09, 80),
+        autumn: oklch(0.82, 0.13, 55),
+        volcanic: oklch(0.78, 0.15, 42),
+      },
       cloud: oklch(0.99, 0.008, 240),
       cloudShadow: 0.2,
       foam: oklch(0.97, 0.01, 220),
@@ -119,16 +133,23 @@ export const THEME_TOKENS: Record<Theme, ThemeTokens> = {
     },
     world: {
       sky: oklch(0.27, 0.045, 265),
-      // Moonlight: cool and dim, from where the sun was, so shadows stay put.
+      // Moonlight: cool and dim, from where the sun was, so shadows stay put. Dimmed by a quarter
+      // in polish 16 (sun 1.2 → 0.9, sky 0.95 → 0.75) so the torches stand out.
       sunLight: oklch(0.82, 0.04, 250),
-      sunIntensity: 1.2,
+      sunIntensity: 0.9,
       skyLight: oklch(0.55, 0.06, 260),
       groundLight: oklch(0.3, 0.03, 270),
-      skyIntensity: 0.95,
+      skyIntensity: 0.75,
       waterShift: -0.12,
       lightsOn: true,
       windowLight: oklch(0.9, 0.09, 85),
       buoyLight: oklch(0.88, 0.1, 60),
+      torchLight: {
+        tropical: oklch(0.84, 0.13, 65),
+        northern: oklch(0.86, 0.09, 80),
+        autumn: oklch(0.82, 0.13, 55),
+        volcanic: oklch(0.78, 0.15, 42),
+      },
       cloud: oklch(0.45, 0.03, 265),
       cloudShadow: 0,
       foam: oklch(0.72, 0.03, 240),

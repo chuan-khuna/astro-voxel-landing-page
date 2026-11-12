@@ -7,6 +7,7 @@ variant: 1
 footprint: 2x2
 door: +z
 anchor: 0 0 0
+light: 6 1
 key:
   a bambooDark
   D deck
@@ -15,7 +16,7 @@ key:
   K flag
   f foliage
   F foliageLight
-  O lamp
+  O glow
   M metal
   m metalDark
   W wall

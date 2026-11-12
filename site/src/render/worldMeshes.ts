@@ -7,10 +7,13 @@
  * its lid, its lights and the House Interior's room at 1/16 unit, shown
  * while the lid is up), the Garden's plants (`garden.ts`, instanced), the
  * Decoration (`decoration.ts`, instanced, thinned on the reduced tier), the
- * land animals and birds or bats (`creatureMeshes.ts`, instanced by part)
- * and the buoys' lamps.
- * `setTheme` recolours the sea, lights the lamps and the House's windows
- * at Night and shows the particles, land animals and birds or bats out
+ * land animals and birds or bats (`creatureMeshes.ts`, instanced by part),
+ * the torches (`torches.ts`) and the Light Sources' halos (`halos.ts`); it
+ * shows the World's baked block light (`blockLightNode.ts`, ADR 0007).
+ * `setTheme` recolours the sea, lights the House's windows and turns the
+ * Night light on at Night (every Light Source glows and throws its block
+ * light; the halos show at the reduced life tier) and shows the particles,
+ * land animals and birds or bats out
  * (butterflies and animals by Day, fireflies and bats at Night); it never
  * moves or adds anything.
  *
@@ -33,9 +36,11 @@ import { materialColor, positionWorld } from 'three/tsl';
 import type { World } from '@/world';
 import { triangleCount, type ChunkMesh } from './mesher';
 import { oklchToLinear, shiftLightness } from './palette';
-import { seaColour, THEME_TOKENS, type WorldTokens } from '@/data/theme';
+import { seaColour, THEME_TOKENS } from '@/data/theme';
 import type { Theme } from '@/lib/theme';
-import { buoyLamp } from './buoyModel';
+import { buildTorches } from './torches';
+import { buildHalos } from './halos';
+import { BLOCK_LIGHT, setBlockLight } from './blockLightNode';
 import { voxelMaterial } from './voxelMaterial';
 import { meshWorld, type MeshedWorld } from './worldVoxels';
 import { buildFleet, type Fleet } from './ships';
@@ -73,13 +78,13 @@ export interface WorldObjects {
   house: HouseParts;
   /** The Garden's plants, each a copy in an `InstancedMesh` (for outlining one, `outlineModels.ts`). */
   plants: GardenPlantMeshes;
-  /** Put everything that moves on the CPU (the ships and boats on the swell, the developer, the land animals and birds) where it is at the shared clock's `seconds`. */
+  /** Put everything that moves on the CPU (the ships and boats on the swell, the developer, the land animals and birds) where it is at the shared clock's `seconds`, and the flames' flicker (`BLOCK_LIGHT.time`). */
   step: (seconds: number) => void;
-  /** Show as much Ambient Life as the life tier allows (the falling leaves, the Biome's particles, the clouds, the fish and their spray, the land animals and the birds or bats); returns how many fish, animals and birds (or bats) show. */
+  /** Show as much Ambient Life as the life tier allows (the falling leaves, the Biome's particles, the clouds, the fish and their spray, the land animals and the birds or bats, and at Night the halos at the reduced tier); returns how many fish, animals and birds (or bats) show. */
   setLife: (tier: LifeTierName) => LifeShown;
   /** Fade the clouds for the camera's zoom (gone in a Landmark's close-up); returns how much of them shows, 0–1. */
   setZoom: (zoom: number) => number;
-  /** Recolour the sea, light (or put out) the House's windows and lamp and the buoys' lamps, show the particles, animals and birds or bats out by Day or at Night, and colour the clouds (their shadows by Day only). */
+  /** Recolour the sea, light (or put out) the House's windows and every Light Source (`BLOCK_LIGHT.night`), show the particles, animals and birds or bats out by Day or at Night, and colour the clouds (their shadows by Day only). */
   setTheme: (theme: Theme) => void;
   dispose: () => void;
 }
@@ -123,8 +128,15 @@ export function buildWorldObjects(
   group.add(ships.group);
   const house = buildHouse(world, clock);
   group.add(house.group);
-  const lamps = buildLamps(world);
-  group.add(lamps.group);
+  // The Light Sources (polish ticket 16): the World's block light for the voxel materials, the torches, and the halos the reduced tier shows.
+  const lightVolume = setBlockLight(meshed.light);
+  const torches = buildTorches(world);
+  group.add(torches.group);
+  const halos = buildHalos(world);
+  group.add(halos.mesh);
+  let night = false;
+  let lifeTier: LifeTierName = 'full';
+  const showHalos = () => halos.setShown(night && lifeTier === 'reduced');
   const plants = buildGardenPlants(world, clock);
   group.add(plants.group);
   const boats = buildBoats(world);
@@ -144,7 +156,7 @@ export function buildWorldObjects(
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + particles.triangles + clouds.triangles + fish.triangles + creatures.triangles + sea.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + particles.triangles + clouds.triangles + fish.triangles + creatures.triangles + torches.triangles + sea.triangles,
     ships,
     house,
     plants,
@@ -153,10 +165,13 @@ export function buildWorldObjects(
       boats.rock(seconds);
       house.work(seconds);
       creatures.step(seconds);
+      BLOCK_LIGHT.time.value = seconds;
       const drift = cloudShadowDrift(world.wind, seconds);
       CLOUD_SHADOW.drift.value.set(drift.x, drift.z);
     },
     setLife: (life) => {
+      lifeTier = life;
+      showHalos();
       leaves.setLife(life);
       particles.setLife(life);
       clouds.setLife(life);
@@ -172,7 +187,9 @@ export function buildWorldObjects(
       creatures.setTheme(theme);
       CLOUD_SHADOW.strength.value = cloudShadowStrength(theme);
       house.setLights(tokens);
-      lamps.setLights(tokens);
+      BLOCK_LIGHT.night.value = tokens.lightsOn ? 1 : 0;
+      night = tokens.lightsOn;
+      showHalos();
     },
     dispose: () => {
       ships.dispose();
@@ -180,7 +197,11 @@ export function buildWorldObjects(
       for (const g of geometries) g.dispose();
       for (const m of materials) m.dispose();
       sea.dispose();
-      lamps.dispose();
+      torches.dispose();
+      halos.dispose();
+      setBlockLight(null);
+      lightVolume?.dispose();
+      BLOCK_LIGHT.night.value = 0;
       plants.dispose();
       boats.dispose();
       decoration.dispose();
@@ -200,6 +221,7 @@ function chunkGeometry(chunk: ChunkMesh): THREE.BufferGeometry {
   geometry.setAttribute('position', new THREE.BufferAttribute(chunk.positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(chunk.normals, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(chunk.colours, 3));
+  geometry.setAttribute('glow', new THREE.BufferAttribute(chunk.glow, 1));
   geometry.setIndex(new THREE.BufferAttribute(chunk.indices, 1));
   geometry.computeBoundingSphere();
   return geometry;
@@ -207,39 +229,6 @@ function chunkGeometry(chunk: ChunkMesh): THREE.BufferGeometry {
 
 const linearColour = (rgb: readonly [number, number, number]) =>
   new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2], THREE.LinearSRGBColorSpace);
-
-/** How much bigger than its voxel a buoy's glowing lamp is, in world units each side: it covers the voxel's seams. */
-const LAMP_GROW = 0.01;
-
-/** The buoys' lamps: one glowing box over each lamp voxel (a few at most), shown at Night. */
-function buildLamps(world: World): { group: THREE.Group; setLights: (tokens: WorldTokens) => void; dispose: () => void } {
-  const group = new THREE.Group();
-  group.name = 'buoy-lamps';
-  group.visible = false;
-  const material = new THREE.MeshBasicNodeMaterial();
-  const geometries = world.buoys.map((cell) => {
-    const { min, max } = buoyLamp(cell);
-    const geometry = new THREE.BoxGeometry(
-      max.x - min.x + 2 * LAMP_GROW,
-      max.y - min.y + 2 * LAMP_GROW,
-      max.z - min.z + 2 * LAMP_GROW,
-    );
-    geometry.translate((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2);
-    group.add(new THREE.Mesh(geometry, material));
-    return geometry;
-  });
-  return {
-    group,
-    setLights: ({ lightsOn, buoyLight }) => {
-      material.color.copy(linearColour(oklchToLinear(buoyLight)));
-      group.visible = lightsOn;
-    },
-    dispose: () => {
-      for (const g of geometries) g.dispose();
-      material.dispose();
-    },
-  };
-}
 
 /** How much darker than the Biome's sand the seabed is (OKLCH lightness): wet sand under the water. */
 const SEABED_SHIFT = -0.1;

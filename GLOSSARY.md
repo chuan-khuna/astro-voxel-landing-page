@@ -32,6 +32,10 @@ _Avoid_: skin, model type
 Scenery that stands for nothing and cannot be clicked: small trees, grass, flower clumps, and minor buildings such as sheds, fences, lamps or windmills. Each Biome has its own set, and the Seed decides where it goes. Decoration never stands in a Landmark's place, inside the Garden, or in front of a Landmark, and is never taller than the Landmarks near it.
 _Avoid_: props, scatter, filler
 
+**Light Source**:
+Anything in the World that gives light at Night: a torch (each Biome's own, in two Variants, standing by every Landmark, along the path and at bridge ends), a lamp of the Decoration's, the Station's lighthouse, a Dock's lanterns, the House's lit windows and its room's lamp or fire, and the buoys' lamps. Its flame or glass glows, and it throws warm block light on the voxels round it, falling off cell by cell. By Day it stands unlit. Like Decoration it cannot be clicked. Fireflies glow but are not Light Sources: they throw no light.
+_Avoid_: lamp (one kind of Light Source), lights, point light
+
 **Ambient Life**:
 Everything in the World that moves without standing for anything: animals, birds, fish, butterflies, fireflies, falling leaves, clouds, wind in the plants and waves on the shore. Each Biome has its own creatures, and Day or Night decides which are out. Like Decoration it cannot be clicked, and it never hides a Landmark for long. It all runs on one shared clock and one wind, and scales down through three tiers (full, reduced, still) on slow devices. It stands still under reduced motion.
 _Avoid_: critters, wildlife, effects

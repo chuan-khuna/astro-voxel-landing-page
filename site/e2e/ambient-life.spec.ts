@@ -1,6 +1,6 @@
 /**
  * Ambient Life in the browser: with life on, the shared clock runs (the plants sway, leaves fall, boats
- * rock, butterflies, fireflies, snow and ash fly, clouds drift, surf breaks, fish swim, animals walk and birds or bats fly) in every Biome, by Day and at Night, and nothing logs an error; under reduced motion the clock stays frozen and the World never changes. Clouds show at the Overview and are gone in a close-up. The fish, animals and birds follow the life tier (and the animals and birds the theme).
+ * rock, butterflies, fireflies, snow and ash fly, clouds drift, surf breaks, fish swim, animals walk and birds or bats fly) in every Biome, by Day and at Night, and nothing logs an error; under reduced motion the clock stays frozen and the World never changes. Clouds show at the Overview and are gone in a close-up. The fish, animals and birds follow the life tier (and the animals and birds the theme), and so does the Light Sources' glow at Night.
  */
 import { expect, test } from '@playwright/test';
 import { THEME_STORAGE_KEY } from '../src/lib/theme';
@@ -92,5 +92,24 @@ test('land animals walk and birds fly by Day, bats at Night where the Biome has 
   await open('seed-1', 'night', 'full');
   expect(await count('animals')).toBe(0);
   expect(await count('birds')).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
+test('the Light Sources glow at Night by the life tier: a bloom at full, halos at reduced, neither at still nor by Day', async ({ page }) => {
+  const errors = collectErrors(page);
+  const canvas = page.locator('#world-canvas');
+  const open = async (theme: 'day' | 'night', life: string) => {
+    await page.addInitScript(([key, t]) => localStorage.setItem(key, t), [THEME_STORAGE_KEY, theme] as const);
+    await page.goto(`/?seed=seed-1&life=${life}`);
+    await worldReady(page);
+  };
+  await open('day', 'full');
+  await expect(canvas).toHaveAttribute('data-glow', 'none');
+  await open('night', 'full');
+  await expect(canvas).toHaveAttribute('data-glow', 'bloom');
+  await open('night', 'reduced');
+  await expect(canvas).toHaveAttribute('data-glow', 'halo');
+  await open('night', 'still');
+  await expect(canvas).toHaveAttribute('data-glow', 'none');
   expect(errors).toEqual([]);
 });
