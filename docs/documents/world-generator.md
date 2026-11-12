@@ -468,17 +468,20 @@ be on a route when:
   end; nothing on it but grass or a flower clump;
 - **its neighbours are safe for the body** (an animal reaches over the next
   cell as it turns): all 8 are land no higher than it (no wall, no drop to
-  the sea), with no Decoration taller than ½ unit;
+  the sea), with nothing on them but grass or clumps; for an animal that
+  reaches past its cell (`ANIMAL_REACH` over ½: the deer, 0.625) its four
+  neighbours are level with it, so its overhang never pokes through a
+  step's wall as it walks or lies down;
 - **it hides no Landmark**: over the cell and its 8 neighbours, no
   Landmark's sight line passes below the animal's top (`ANIMAL_HEIGHT`:
-  0.75, 1.25, 0.625 and 1.125 units), the Decoration check
-  (`sightClearance`);
+  0.8, 1.3, 0.75 and 1.2 units, the model plus the bob or hop of its walk),
+  the Decoration check (`sightClearance`);
 - **it keeps apart**: no cell of another animal's route on or beside it.
 
 The animals are listed round-robin by Isle (each Isle's first, then each
 one's second...), so a life tier that shows only the first few still has
-one on each Isle. Over the 200 test Seeds a World has 5–6 animals on
-average.
+one on each Isle. Over the 200 test Seeds a World has about 5–6 animals
+on average (the deer about 2, as they need level ground).
 
 Which creatures are out depends on the Biome and on Day or Night
 (`CREATURE_SETS`): land animals by Day in every Biome (at Night they rest
@@ -695,8 +698,8 @@ Seeds, never snapshots:
   each route starts at its rest point and takes 2–5 steps to 4-neighbours
   without coming back on itself, on level land of its Isle; no route cell
   on a path, a bridge or its end, or within a cell of a footprint or the
-  jetty; nothing but grass or a clump on it, and every neighbour land no
-  higher with nothing over ½ unit; routes a cell apart; no Landmark ground
+  jetty; nothing but grass or a clump on it or beside it, every neighbour
+  land no higher (and level along the axes for a deer); routes a cell apart; no Landmark ground
   point hidden by an animal's top over its route or beside it (an
   independent ray march); the `ANIMAL_SPECIES` and `CREATURE_SETS` tables;
 - birds: the same Seed gives the same birds; at least 2 on 90% of Worlds,
@@ -704,7 +707,7 @@ Seeds, never snapshots:
   land, 1.5–3 round, its lowest wingtip above the tallest Landmark and its
   highest below every cloud (and below 2 over that Landmark); none on a
   Landmark's sight line at 24 points round its circle (an independent
-  march over 70 Seeds);
+  march over 40 Seeds);
 
 ```sh
 cd site && bun run test

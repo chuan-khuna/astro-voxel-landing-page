@@ -111,43 +111,41 @@ export function buildCreatures(world: World): Creatures {
         }
       : null;
 
+  // Scratch matrices, and each pivot's translations worked out once: `step` builds no new objects.
   const body = new THREE.Matrix4();
   const part = new THREE.Matrix4();
-  const turn = new THREE.Matrix4();
-  const move = (p: Point) => new THREE.Matrix4().makeTranslation(p.x, p.y, p.z);
-  const back = (p: Point) => new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z);
-  /** `m` · about `p`: turn by `r`, keeping `p` in place. */
-  const about = (m: THREE.Matrix4, p: Point, r: THREE.Matrix4) => m.multiply(move(p)).multiply(r).multiply(back(p));
+  const spin = new THREE.Matrix4();
+  const tilt = new THREE.Matrix4();
+  const shift = (p: Point, sign: 1 | -1) => new THREE.Matrix4().makeTranslation(sign * p.x, sign * p.y, sign * p.z);
+  /** `body` · about a pivot: turn by `r`, keeping the pivot in place. */
+  const about = (pivot: { to: THREE.Matrix4; from: THREE.Matrix4 }, r: THREE.Matrix4) => part.copy(body).multiply(pivot.to).multiply(r).multiply(pivot.from);
+  const pivotOf = (p: Point) => ({ to: shift(p, 1), from: shift(p, -1) });
 
-  const animalPivot = animal ? structurePivot(animal) : null;
-  const neck = animal && animalParts ? headPivot(animal) : null;
-  const flyerPivot = flyer ? { ...structurePivot(flyer), y: flyer.size.y / flyer.scale / 2 } : null;
-  const hinges = flyer && birdParts ? { left: wingHinge(flyer, 'wingLeft'), right: wingHinge(flyer, 'wingRight') } : null;
+  const animalBack = animal ? shift(structurePivot(animal), -1) : null;
+  const neck = animal && animalParts ? pivotOf(headPivot(animal)) : null;
+  const flyerBack = flyer ? shift({ ...structurePivot(flyer), y: flyer.size.y / flyer.scale / 2 }, -1) : null;
+  const hinges = flyer && birdParts ? { left: pivotOf(wingHinge(flyer, 'wingLeft')), right: pivotOf(wingHinge(flyer, 'wingRight')) } : null;
 
   const step = (seconds: number) => {
-    if (animalParts && animalPivot && neck) {
+    if (animalParts && animalBack && neck) {
       animals.forEach((a, i) => {
         const pose = animalAt(a, seconds);
-        body.makeTranslation(pose.x, pose.y, pose.z).multiply(turn.makeRotationY(pose.yaw)).multiply(back(animalPivot));
+        body.makeTranslation(pose.x, pose.y, pose.z).multiply(spin.makeRotationY(pose.yaw)).multiply(animalBack);
         animalParts.body.setMatrixAt(i, body);
-        const head = new THREE.Matrix4().makeRotationY(pose.headYaw).multiply(new THREE.Matrix4().makeRotationX(pose.headPitch));
-        animalParts.head.setMatrixAt(i, about(part.copy(body), neck, head));
+        spin.makeRotationY(pose.headYaw).multiply(tilt.makeRotationX(pose.headPitch));
+        animalParts.head.setMatrixAt(i, about(neck, spin));
       });
       animalParts.body.instanceMatrix.needsUpdate = true;
       animalParts.head.instanceMatrix.needsUpdate = true;
     }
-    if (birdParts && flyerPivot && hinges) {
+    if (birdParts && flyerBack && hinges) {
       flights.forEach((f, i) => {
         const pose = birdAt(f, seconds);
-        body
-          .makeTranslation(pose.x, pose.y, pose.z)
-          .multiply(turn.makeRotationY(pose.yaw))
-          .multiply(new THREE.Matrix4().makeRotationZ(pose.bank))
-          .multiply(back(flyerPivot));
+        body.makeTranslation(pose.x, pose.y, pose.z).multiply(spin.makeRotationY(pose.yaw)).multiply(tilt.makeRotationZ(pose.bank)).multiply(flyerBack);
         birdParts.body.setMatrixAt(i, body);
         // Raising the left wing (−x) turns it the other way about the body's length from the right one (+x).
-        birdParts.left.setMatrixAt(i, about(part.copy(body), hinges.left, turn.makeRotationZ(-pose.flap)));
-        birdParts.right.setMatrixAt(i, about(part.copy(body), hinges.right, turn.makeRotationZ(pose.flap)));
+        birdParts.left.setMatrixAt(i, about(hinges.left, spin.makeRotationZ(-pose.flap)));
+        birdParts.right.setMatrixAt(i, about(hinges.right, spin.makeRotationZ(pose.flap)));
       });
       for (const mesh of [birdParts.body, birdParts.left, birdParts.right]) mesh.instanceMatrix.needsUpdate = true;
     }

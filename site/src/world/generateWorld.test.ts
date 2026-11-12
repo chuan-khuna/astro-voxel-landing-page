@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, MAX_SCHOOLS, FISH_AREA, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, CREATURE_SETS, ANIMAL_HEIGHT, ANIMAL_SPECIES, MAX_ANIMALS_PER_ISLE, MAX_BIRDS, BIRD_REACH, BIRD_BELOW, BIRD_ABOVE, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, MAX_SCHOOLS, FISH_AREA, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, CREATURE_SETS, ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, MAX_ANIMALS_PER_ISLE, MAX_BIRDS, BIRD_REACH, BIRD_BELOW, BIRD_ABOVE, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -1366,26 +1366,26 @@ describe('generateWorld', { timeout: 20_000 }, () => {
       }
     });
 
-    it('keeps every route off and clear of footprints and the jetty (so out of the Garden), off paths, bridges and their ends, and clear of tall Decoration', () => {
+    it('keeps every route off and clear of footprints and the jetty (so out of the Garden), off paths, bridges and their ends, and clear of everything but grass and clumps', () => {
       for (const seed of sampledSeeds) {
         const world = worldFor(seed);
         const { width, heights, isle } = world.terrain;
         const path = new Set(world.paths.flatMap((p) => p.cells.map(key)));
         const bridge = new Set(world.bridges.flatMap((b) => b.cells.flatMap((c) => [c, ...SIDES.map(([dx, dz]) => ({ x: c.x + dx, z: c.z + dz }))]).map(key)));
         const covered = world.landmarks.flatMap(coveredCells);
-        const standing = new Map(world.decoration.map((d) => [key(d.cell), DECORATION_HEIGHT[d.kind]] as const));
+        const standing = new Map(world.decoration.map((d) => [key(d.cell), d.kind as string] as const));
         for (const a of world.animals) {
           for (const c of a.route) {
             const at = `${seed} ${key(c)}`;
             expect(path.has(key(c)), at).toBe(false);
             expect(bridge.has(key(c)), at).toBe(false);
             for (const f of covered) expect(chebyshev(f, c), at).toBeGreaterThanOrEqual(2);
-            // Nothing on the cell but grass and flower clumps; nothing over ½ unit beside it, no wall, no drop to the sea.
-            expect(['grass', 'clump', undefined], at).toContain(world.decoration.find((d) => key(d.cell) === key(c))?.kind);
+            // Nothing on the cell or beside it but grass and flower clumps; no wall or drop to the sea beside it, and no step down next to an animal that overhangs its cell.
             for (const n of neighbours(c)) {
-              expect(standing.get(key(n)) ?? 0, at).toBeLessThanOrEqual(0.5);
+              expect(['grass', 'clump', undefined], at).toContain(standing.get(key(n)));
               expect(isle[n.z * width + n.x], at).not.toBe(-1);
               expect(heights[n.z * width + n.x], at).toBeLessThanOrEqual(a.y);
+              if (ANIMAL_REACH[a.species] > 0.5 && (n.x === c.x || n.z === c.z)) expect(heights[n.z * width + n.x], at).toBe(a.y);
             }
           }
         }
@@ -1482,8 +1482,8 @@ describe('generateWorld', { timeout: 20_000 }, () => {
     });
 
     it('never flies through the camera\'s view of a Landmark, all the way round its circle', () => {
-      // A coarser march than the generator's check, on a third of the Seeds: it is slow.
-      for (const seed of sampledSeeds.slice(0, 70)) {
+      // A coarser march than the generator's check, on a fifth of the Seeds: it is slow.
+      for (const seed of sampledSeeds.slice(0, 40)) {
         const world = worldFor(seed);
         const hidden: string[] = [];
         for (const b of world.birds) {

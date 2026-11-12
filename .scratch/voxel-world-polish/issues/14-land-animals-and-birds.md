@@ -35,3 +35,4 @@ Decisions and deviations:
 - `BIRD_BELOW` is 0.5 and `BIRD_ABOVE` 0.6: the room the World keeps for a bird's wingtips; birds fly lower than the clouds' lowest possible underside (2 over the tallest Landmark).
 - Test seams picked without confirming: `generateWorld`, the structure data tests and the pure `render/creatures.ts`.
 - Checked in the browser on `harbour`, `seed-1`, `seed-2`, `seed-3` (all four Biomes), Day and Night, desktop and phone, no console errors; one recording of squirrels walking (`14-desktop-day-autumn-garden.webm`).
+- Code review fixes: no per-frame allocations in `step`; `ANIMAL_HEIGHT` includes each walk's bob or hop; only grass and clumps beside a route, and level cells along the axes for the deer, whose body overhangs its cell (`ANIMAL_REACH`), so northern Worlds now have about 2 deer. Deferred items (the House's lifted lid against the birds' band, duplicated helpers) are in `docs/todo.md`.

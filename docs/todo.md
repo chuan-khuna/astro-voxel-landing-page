@@ -265,3 +265,16 @@ Deferred:
 - [ ] `clamp01`, `smooth` and `fract` are copied again in `schools.ts` and `surf.ts` (as in `guideMotion.ts`, `houseMotion.ts`).
 - [ ] Spray starts at the sea level, not the bobbing voxel's top (±0.04). No e2e checks the surf or fish under reduced motion beyond the existing frozen-clock screenshot test.
 - [ ] Fish give off their own colour and use new fixed colour roles (`fish*`), as the `petal*` roles did.
+
+## Code review of polish 14 (729bbea..af3e8e9)
+
+Fixed: `step` built 5–8 new matrices per creature per frame (pivots and rotations are now built once or reused); a squirrel's hop (0.12) and the others' bob reached above the height the sight-line check assumed (`ANIMAL_HEIGHT` now includes it, tested against model and gait); a deer's 0.125 overhang could poke through a step's wall when it lay down, and bodies could reach into rocks beside a route (now only grass and clumps beside a route, and level cells along the axes for an animal whose body overhangs its cell, `ANIMAL_REACH`; northern Worlds now average about 2 deer); `worldMeshes.ts`' docs still said only particles follow the theme.
+
+Deferred:
+- [ ] The House's lifted lid (6 units up in the open-House close-up) passes through the birds' height band; a bird circling near the House could cross the lifted lid. Birds are checked against `LANDMARK_HEIGHT` only. Your call: accept, or keep birds off the House's column while open.
+- [ ] `creaturesShown` is the fifth copy of `ceil(total × share)` (`swarmShown`, `cloudsShown`, `leavesShown`, `fishShown`); `clamp01`/`smooth` copied again; an Isle's land-cell loop is in both `world/animals.ts` and `world/birds.ts`. One helper each would do.
+- [ ] `'bird' | 'bat'` is spelled out in three places (could be `FlyerKind`); `CREATURE_SETS` lives in `world/animals.ts` though birds use it too; the gallery's spacing and margin ternaries grew another branch; some motion numbers in `creatures.ts` are inline (bat wobble 1.7, bob rate 1.1, burst threshold, nibble 1.5).
+- [ ] The structure-size tests and occlusion tests use the generator's constants (`ANIMAL_HEIGHT`, `BIRD_*`), now tied to the models and gaits by `creatures.test.ts`; the poses the renderer draws are not themselves ray-marched.
+- [ ] `e2e/ambient-life.spec.ts`' creature test adds an init script per visit (the last one wins).
+- [ ] `placeAnimals` takes eight arguments, like its `place*` siblings.
+

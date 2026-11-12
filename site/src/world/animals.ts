@@ -10,14 +10,15 @@
  * - every cell of a route is level land of one Isle, never on or beside
  *   (8-neighbour) a footprint or the Dock's jetty, so never in the Garden;
  *   never on a path, a bridge or a bridge's end;
- * - nothing stands on a route cell but grass or a flower clump, and every
- *   cell beside it is land no higher than it (no wall, no drop to the sea)
- *   with nothing on it taller than ½ unit, since the body reaches over it;
+ * - nothing stands on a route cell or beside it but grass or a flower
+ *   clump, and every cell beside it is land no higher than it (no wall, no
+ *   drop to the sea); for an animal that reaches past its cell
+ *   (`ANIMAL_REACH`, a deer) its four neighbours are level with it, so its
+ *   overhang never pokes through a step as it walks or lies down;
  * - no Landmark's sight line to the camera passes below the animal's top
  *   over any of those cells (`sightClearance`, the Decoration check);
  * - routes keep a cell apart, and an Isle has at most `MAX_ANIMALS_PER_ISLE`.
  */
-import { DECORATION_HEIGHT } from './decoration';
 import { createRng } from './prng';
 import { sightClearance } from './sightline';
 import type { AnimalSpecies, BiomeId, Bridge, Cell, CreatureKind, Decoration, Isle, LandAnimal, Path, PlacedLandmark, Terrain } from './types';
@@ -44,26 +45,37 @@ export const CREATURE_SETS: Record<BiomeId, { day: readonly CreatureKind[]; nigh
 };
 
 /**
- * How tall each animal stands, in units above its ground, head up (⅛-unit
- * voxels: a junglefowl 6, a deer 10, a squirrel 5, a goat 9). Placement keeps
- * every Landmark in view past it; the structure files' tests hold the models
- * to it.
+ * How high each animal reaches, in units above its ground: its model head
+ * up (⅛-unit voxels: a junglefowl 6, a deer 10, a squirrel 5, a goat 9)
+ * plus the bob or hop of its walk (`render/creatures.ts`). Placement keeps
+ * every Landmark in view past it; the tests hold the models and gaits to it.
  */
 export const ANIMAL_HEIGHT: Record<AnimalSpecies, number> = {
-  junglefowl: 0.75,
-  deer: 1.25,
-  squirrel: 0.625,
-  goat: 1.125,
+  junglefowl: 0.8,
+  deer: 1.3,
+  squirrel: 0.75,
+  goat: 1.2,
+};
+
+/**
+ * How far each animal reaches from its middle, nose or tail, in units (any
+ * way it turns). A deer reaches past its cell (over ½), so it walks only
+ * where the cells beside its route are level with it: its overhang never
+ * pokes through a step's wall when it lies down. The others fit their cell.
+ */
+export const ANIMAL_REACH: Record<AnimalSpecies, number> = {
+  junglefowl: 0.5,
+  deer: 0.625,
+  squirrel: 0.5,
+  goat: 0.5,
 };
 
 /** Animals on one Isle at most (the life tier shows its share of them). */
 export const MAX_ANIMALS_PER_ISLE = 3;
 /** Steps a route takes from its rest point: fewest and most. */
 const ROUTE_STEPS = { min: 2, max: 5 } as const;
-/** Decoration an animal may walk through. */
+/** Decoration an animal may walk through, or reach over beside its route. */
 const UNDERFOOT: readonly string[] = ['grass', 'clump'];
-/** The tallest Decoration beside a route: the body reaches over the next cell. */
-const BESIDE = 0.5;
 
 const STEPS = [
   [1, 0],
@@ -88,6 +100,7 @@ export function placeAnimals(
   const inGrid = (x: number, z: number) => x >= 0 && z >= 0 && x < width && z < depth;
   const species = ANIMAL_SPECIES[biome];
   const tall = ANIMAL_HEIGHT[species];
+  const overhangs = ANIMAL_REACH[species] > 0.5;
 
   // Cells no route may take: on or beside a footprint or the jetty, paths, bridges and their ends.
   const blocked = new Uint8Array(width * depth);
@@ -112,9 +125,10 @@ export function placeAnimals(
       for (let dx = -1; dx <= 1; dx++) {
         if (!inGrid(x + dx, z + dz)) return false;
         const n = index(x + dx, z + dz);
-        if (isle[n] === -1 || heights[n]! > y) return false;
+        // No higher anywhere beside it; level along its way where its body overhangs the next cell.
+        if (isle[n] === -1 || heights[n]! > y || (overhangs && dx * dz === 0 && heights[n] !== y)) return false;
         const beside = standing.get(n);
-        if (beside && DECORATION_HEIGHT[beside.kind] > BESIDE) return false;
+        if (beside && !UNDERFOOT.includes(beside.kind)) return false;
         if (clearance[n]! < y + tall) return false;
       }
     }

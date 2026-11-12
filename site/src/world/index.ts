@@ -11,7 +11,7 @@ export { ANIMAL_SPECIES_IDS, DECORATION_KINDS, PARTICLE_KINDS } from './types';
 export { PARTICLE_SETS } from './particles';
 export { MAX_CLOUDS } from './clouds';
 export { FISH_AREA, MAX_SCHOOLS } from './fish';
-export { ANIMAL_HEIGHT, ANIMAL_SPECIES, CREATURE_SETS, MAX_ANIMALS_PER_ISLE } from './animals';
+export { ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, CREATURE_SETS, MAX_ANIMALS_PER_ISLE } from './animals';
 export { BIRD_ABOVE, BIRD_BELOW, BIRD_REACH, MAX_BIRDS } from './birds';
 export { HOUSE_CELLS, HOUSE_PLOT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, MAX_BOATS, MAX_FLOWERS, MAX_TREES, GARDEN_BED, GARDEN_HEIGHT, GARDEN_SIZE, gardenCounts, houseYard } from './landmarks';
 export { MAX_BUOYS } from './buoys';

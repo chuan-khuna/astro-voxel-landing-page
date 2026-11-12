@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ANIMAL_HEIGHT, ANIMAL_SPECIES, BIRD_REACH, CREATURE_SETS, BIOME_IDS, BOAT_KINDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, PLACED_LANDMARK_IDS, SHIP_KINDS } from '@/world';
+import { ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, BIRD_REACH, CREATURE_SETS, BIOME_IDS, BOAT_KINDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, PLACED_LANDMARK_IDS, SHIP_KINDS } from '@/world';
 import { GROUND_DETAIL, INTERIOR, STRUCTURE } from '@/render/voxelTiers';
 import { STRUCTURES, STRUCTURE_FILES, variantsOf } from './index';
 import { FISH_REACH } from '@/render/schools';
@@ -488,15 +488,18 @@ describe('the land animals, birds and bats', () => {
     expect(looks.size).toBe(STRUCTURES.filter((s) => ['animal', 'bird', 'bat'].includes(s.kind)).length);
   });
 
-  it('stands each land animal on the ground, its head up no taller than the generator keeps clear for it (`ANIMAL_HEIGHT`), and within a unit of its middle', () => {
+  it('stands each land animal on the ground, its head up no taller than the generator keeps clear for it (`ANIMAL_HEIGHT`, with room for the bob of its walk), and within a unit of its middle', () => {
     for (const biome of BIOME_IDS) {
       for (const s of variantsOf('animal', biome)) {
         expect(s.scale, s.name).toBe(STRUCTURE);
         expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
         expect(Math.min(...[...structureVoxels(s)].map((v) => v.y)), s.name).toBe(0);
         expect(s.size.y / STRUCTURE, s.name).toBeLessThanOrEqual(ANIMAL_HEIGHT[ANIMAL_SPECIES[biome]]);
-        expect(s.size.y / STRUCTURE, s.name).toBeGreaterThan(ANIMAL_HEIGHT[ANIMAL_SPECIES[biome]] - 1 / STRUCTURE);
+        expect(s.size.y / STRUCTURE, s.name).toBeGreaterThan(ANIMAL_HEIGHT[ANIMAL_SPECIES[biome]] - 2 / STRUCTURE);
         expect(reach(s), s.name).toBeLessThanOrEqual(1);
+        // Along its length (nose or tail from the middle): what the generator assumes (`ANIMAL_REACH`).
+        const zs = [...structureVoxels(s)].map((v) => v.z);
+        expect(Math.max(s.size.z / 2 - Math.min(...zs), Math.max(...zs) + 1 - s.size.z / 2) / STRUCTURE, s.name).toBeLessThanOrEqual(ANIMAL_REACH[ANIMAL_SPECIES[biome]]);
       }
     }
   });

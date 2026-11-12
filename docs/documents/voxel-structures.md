@@ -505,8 +505,8 @@ tail (two) the northmost.
 For the land animals, birds and bats, `structures.test.ts` checks one
 animal per Biome and a bird or bat for each kind its Biome has out
 (`CREATURE_SETS`), each its own look; that each animal stands on the
-ground, no taller than `ANIMAL_HEIGHT` (and within a voxel of it), every
-corner within a unit of its middle; the deer is 4×10×10 and the squirrel
+ground, no taller than `ANIMAL_HEIGHT` (and within two voxels of it), every
+corner within a unit of its middle and nose and tail within `ANIMAL_REACH`; the deer is 4×10×10 and the squirrel
 2 wide and at most 7 long; each animal has a `head` part, its front row;
 and that each bird's or bat's wings are parts either side of its body,
 the same size, 10 voxels across for a bird and 6 for a bat, within

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BIRD_ABOVE, BIRD_BELOW, BIRD_REACH, generateWorld, type World } from '@/world';
+import { ANIMAL_HEIGHT, ANIMAL_SPECIES, BIOME_IDS, BIRD_ABOVE, BIRD_BELOW, BIRD_REACH, generateWorld, type World } from '@/world';
+import { variantsOf } from '@/structures';
 import { animalAt, birdAt, creaturesShown, walkingAnimals, ANIMAL_GAITS, FLIGHTS, type AnimalPose } from './creatures';
 
 const counts = { projects: 6, clients: 5, partners: 3 };
@@ -97,6 +98,16 @@ describe('land animals on the move', () => {
         expect(grazed, w.seed).toBeGreaterThan(0.4);
         expect(looked, w.seed).toBeGreaterThan(0.3);
       }
+    }
+  });
+});
+
+describe('the room the World keeps for an animal', () => {
+  it('fits every model and the bob of its walk under `ANIMAL_HEIGHT`, so a walking animal never reaches into a Landmark\'s sight line', () => {
+    for (const biome of BIOME_IDS) {
+      const species = ANIMAL_SPECIES[biome];
+      const [model] = variantsOf('animal', biome);
+      expect(model!.size.y / model!.scale + ANIMAL_GAITS[species].bob, species).toBeLessThanOrEqual(ANIMAL_HEIGHT[species]);
     }
   });
 });

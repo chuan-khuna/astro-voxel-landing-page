@@ -10,8 +10,9 @@
  * land animals and birds or bats (`creatureMeshes.ts`, instanced by part)
  * and the buoys' lamps.
  * `setTheme` recolours the sea, lights the lamps and the House's windows
- * at Night and shows the particles out (butterflies by Day, fireflies at
- * Night); it never moves or adds anything.
+ * at Night and shows the particles, land animals and birds or bats out
+ * (butterflies and animals by Day, fireflies and bats at Night); it never
+ * moves or adds anything.
  *
  * Everything that moves on its own runs on the shared Ambient Life clock
  * (`ambientClock.ts`): the sea bobs, the plants sway (`windSway.ts`) and the
@@ -76,7 +77,7 @@ export interface WorldObjects {
   setLife: (tier: LifeTierName) => LifeShown;
   /** Fade the clouds for the camera's zoom (gone in a Landmark's close-up); returns how much of them shows, 0–1. */
   setZoom: (zoom: number) => number;
-  /** Recolour the sea, light (or put out) the House's windows and lamp and the buoys' lamps, show the particles out by Day or at Night, and colour the clouds (their shadows by Day only). */
+  /** Recolour the sea, light (or put out) the House's windows and lamp and the buoys' lamps, show the particles, animals and birds or bats out by Day or at Night, and colour the clouds (their shadows by Day only). */
   setTheme: (theme: Theme) => void;
   dispose: () => void;
 }
