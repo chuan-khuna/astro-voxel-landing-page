@@ -1,0 +1,10 @@
+[tools]
+bun = "1.4.4"
+just = "1.59"
+node = "24"
+uv = "0.13.6"
+
+[tasks.dev]
+description = "Start the development server for the site"
+dir = "{{config_root}}/site"
+run = ["bun install", "bun run dev"]

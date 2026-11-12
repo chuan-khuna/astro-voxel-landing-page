@@ -1,0 +1,296 @@
+/**
+ * World to three.js objects: meshes the World's voxel grids into chunked
+ * `BufferGeometry` with the soft-voxel material, plus the sea (a 1-unit
+ * voxel layer that bobs, `seaModel.ts` and `seaMaterial.ts`), the
+ * Partners' sailing ships (`ships.ts`) and the Clients' moored boats
+ * (`boats.ts`), both instanced, the House's moving parts (`house.ts`:
+ * its lid, its lights and the House Interior's room at 1/16 unit, shown
+ * while the lid is up), the Garden's plants (`garden.ts`, instanced), the
+ * Decoration (`decoration.ts`, instanced, thinned on the reduced tier), the
+ * land animals and birds or bats (`creatureMeshes.ts`, instanced by part),
+ * the torches (`torches.ts`) and the Light Sources' halos (`halos.ts`); it
+ * shows the World's baked block light (`blockLightNode.ts`, ADR 0007).
+ * `setTheme` recolours the sea, lights the House's windows and turns the
+ * Night light on at Night (every Light Source glows and throws its block
+ * light; the halos show at the reduced life tier) and shows the particles,
+ * land animals and birds or bats out
+ * (butterflies and animals by Day, fireflies and bats at Night); it never
+ * moves or adds anything.
+ *
+ * Everything that moves on its own runs on the shared Ambient Life clock
+ * (`ambientClock.ts`): the sea bobs, the plants sway (`windSway.ts`) and the
+ * leaves fall (`leaves.ts`), the Biome's butterflies, fireflies, snow
+ * and ash fly (`particles.ts`) and the clouds drift over the sea
+ * (`clouds.ts`) from its uniforms in the shader, and
+ * `step(seconds)` puts what moves on the CPU (the Partners' ships and the
+ * Clients' boats on the swell, the developer at work in the House, the
+ * land animals on their routes and the birds or bats circling) where it
+ * is at the clock's `seconds` (and the clouds' shadows, `cloudShadow.ts`,
+ * how far they have drifted). `setZoom` fades the clouds as the camera
+ * zooms in. Ambient Life parts add their own motion to
+ * `step`, or read the clock's uniforms in their materials. `setLife` shows
+ * as many living things as the life tier allows.
+ */
+import * as THREE from 'three/webgpu';
+import { materialColor, positionWorld } from 'three/tsl';
+import type { World } from '@/world';
+import { triangleCount, type ChunkMesh } from './mesher';
+import { oklchToLinear, shiftLightness } from './palette';
+import { seaColour, THEME_TOKENS } from '@/data/theme';
+import type { Theme } from '@/lib/theme';
+import { buildTorches } from './torches';
+import { buildHalos } from './halos';
+import { BLOCK_LIGHT, setBlockLight } from './blockLightNode';
+import { voxelMaterial } from './voxelMaterial';
+import { meshWorld, type MeshedWorld } from './worldVoxels';
+import { buildFleet, type Fleet } from './ships';
+import { buildHouse, type HouseParts } from './house';
+import { buildGardenPlants, type GardenPlantMeshes } from './garden';
+import { buildBoats } from './boats';
+import { buildDecoration } from './decoration';
+import type { RenderTierName } from '@/lib/renderTier';
+import { seaModel, type SeaMesh } from './seaModel';
+import { seaMaterial } from './seaMaterial';
+import { createAmbientClock, type AmbientClock } from './ambientClock';
+import { buildLeaves } from './leaves';
+import { buildParticles } from './particles';
+import { buildClouds } from './clouds';
+import { buildFish } from './fish';
+import { buildCreatures } from './creatureMeshes';
+import { CLOUD_SHADOW, cloudShade } from './cloudShadow';
+import { cloudShadowDrift, cloudShadowStrength } from './cloudMath';
+import type { LifeTierName } from '@/lib/lifeTier';
+
+/** How many of the counted living things the life tier (and, for animals and birds, the theme) shows. */
+export interface LifeShown {
+  fish: number;
+  animals: number;
+  birds: number;
+}
+
+export interface WorldObjects {
+  group: THREE.Group;
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure, boats, ships, the House's lid, the Garden's plants, the Decoration the tier shows, every falling leaf, every particle of the Biome's by Day and at Night, every land animal and bird or bat) and the sea's water and seabed; not the House's room, drawn only while the lid is up (`house.roomTriangles`). */
+  triangles: number;
+  /** The Partners' ships, which sail (`step` moves them). */
+  ships: Fleet;
+  /** The House's lid, its lights and its room: `house.setOpening` lifts the lid and shows the room. */
+  house: HouseParts;
+  /** The Garden's plants, each a copy in an `InstancedMesh` (for outlining one, `outlineModels.ts`). */
+  plants: GardenPlantMeshes;
+  /** Put everything that moves on the CPU (the ships and boats on the swell, the developer, the land animals and birds) where it is at the shared clock's `seconds`, and the flames' flicker (`BLOCK_LIGHT.time`). */
+  step: (seconds: number) => void;
+  /** Show as much Ambient Life as the life tier allows (the falling leaves, the Biome's particles, the clouds, the fish and their spray, the land animals and the birds or bats, and at Night the halos at the reduced tier); returns how many fish, animals and birds (or bats) show. */
+  setLife: (tier: LifeTierName) => LifeShown;
+  /** Fade the clouds for the camera's zoom (gone in a Landmark's close-up); returns how much of them shows, 0–1. */
+  setZoom: (zoom: number) => number;
+  /** Recolour the sea, light (or put out) the House's windows and every Light Source (`BLOCK_LIGHT.night`), show the particles, animals and birds or bats out by Day or at Night, and colour the clouds (their shadows by Day only). */
+  setTheme: (theme: Theme) => void;
+  dispose: () => void;
+}
+
+/**
+ * Build the World's three.js objects. Pass `meshed` when it was meshed
+ * elsewhere (the Web Worker). The render tier only thins the Decoration
+ * (`decorationModels.ts`); every Landmark is the same on every tier. `clock`
+ * is the shared Ambient Life clock; by default a clock of its own, frozen at 0.
+ */
+export function buildWorldObjects(
+  world: World,
+  meshed: MeshedWorld = meshWorld(world),
+  tier: RenderTierName = 'full',
+  clock: AmbientClock = createAmbientClock(),
+): WorldObjects {
+  const { terrain, detail, structure, voxelSizes } = meshed;
+  const group = new THREE.Group();
+  const materials = voxelSizes.map((size) => voxelMaterial(size));
+  const geometries: THREE.BufferGeometry[] = [];
+
+  const addChunks = (chunks: ChunkMesh[], material: THREE.Material, name: string) => {
+    for (const chunk of chunks) {
+      const geometry = chunkGeometry(chunk);
+      geometries.push(geometry);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = name;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.matrixAutoUpdate = false;
+      group.add(mesh);
+    }
+  };
+  addChunks(terrain, materials[0]!, 'terrain');
+  addChunks(detail, materials[1]!, 'detail');
+  addChunks(structure, materials[2]!, 'structure');
+
+  const sea = buildSea(world, clock);
+  group.add(sea.group);
+  const ships = buildFleet(world);
+  group.add(ships.group);
+  const house = buildHouse(world, clock);
+  group.add(house.group);
+  // The Light Sources (polish ticket 16): the World's block light for the voxel materials, the torches, and the halos the reduced tier shows.
+  const lightVolume = setBlockLight(meshed.light);
+  const torches = buildTorches(world);
+  group.add(torches.group);
+  const halos = buildHalos(world);
+  group.add(halos.mesh);
+  let night = false;
+  let lifeTier: LifeTierName = 'full';
+  const showHalos = () => halos.setShown(night && lifeTier === 'reduced');
+  const plants = buildGardenPlants(world, clock);
+  group.add(plants.group);
+  const boats = buildBoats(world);
+  group.add(boats.group);
+  const decoration = buildDecoration(world, tier, clock);
+  group.add(decoration.group);
+  const leaves = buildLeaves(world, tier, clock);
+  group.add(leaves.group);
+  const particles = buildParticles(world, clock);
+  group.add(particles.group);
+  const clouds = buildClouds(world, clock);
+  group.add(clouds.group);
+  const fish = buildFish(world, clock);
+  group.add(fish.group);
+  const creatures = buildCreatures(world);
+  group.add(creatures.group);
+
+  return {
+    group,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + particles.triangles + clouds.triangles + fish.triangles + creatures.triangles + torches.triangles + sea.triangles,
+    ships,
+    house,
+    plants,
+    step: (seconds) => {
+      ships.sail(seconds);
+      boats.rock(seconds);
+      house.work(seconds);
+      creatures.step(seconds);
+      BLOCK_LIGHT.time.value = seconds;
+      const drift = cloudShadowDrift(world.wind, seconds);
+      CLOUD_SHADOW.drift.value.set(drift.x, drift.z);
+    },
+    setLife: (life) => {
+      lifeTier = life;
+      showHalos();
+      leaves.setLife(life);
+      particles.setLife(life);
+      clouds.setLife(life);
+      return { fish: fish.setLife(life), ...creatures.setLife(life) };
+    },
+    setZoom: (zoom) => clouds.setZoom(zoom),
+    setTheme: (theme) => {
+      const tokens = THEME_TOKENS[theme].world;
+      sea.setTheme(theme);
+      particles.setTheme(theme);
+      clouds.setTheme(theme);
+      fish.setTheme(theme);
+      creatures.setTheme(theme);
+      CLOUD_SHADOW.strength.value = cloudShadowStrength(theme);
+      house.setLights(tokens);
+      BLOCK_LIGHT.night.value = tokens.lightsOn ? 1 : 0;
+      night = tokens.lightsOn;
+      showHalos();
+    },
+    dispose: () => {
+      ships.dispose();
+      house.dispose();
+      for (const g of geometries) g.dispose();
+      for (const m of materials) m.dispose();
+      sea.dispose();
+      torches.dispose();
+      halos.dispose();
+      setBlockLight(null);
+      lightVolume?.dispose();
+      BLOCK_LIGHT.night.value = 0;
+      plants.dispose();
+      boats.dispose();
+      decoration.dispose();
+      leaves.dispose();
+      particles.dispose();
+      clouds.dispose();
+      fish.dispose();
+      creatures.dispose();
+      // The shadows' uniforms are the page's: leave none behind.
+      CLOUD_SHADOW.strength.value = 0;
+    },
+  };
+}
+
+function chunkGeometry(chunk: ChunkMesh): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(chunk.positions, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(chunk.normals, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(chunk.colours, 3));
+  geometry.setAttribute('glow', new THREE.BufferAttribute(chunk.glow, 1));
+  geometry.setIndex(new THREE.BufferAttribute(chunk.indices, 1));
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+const linearColour = (rgb: readonly [number, number, number]) =>
+  new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2], THREE.LinearSRGBColorSpace);
+
+/** How much darker than the Biome's sand the seabed is (OKLCH lightness): wet sand under the water. */
+const SEABED_SHIFT = -0.1;
+
+/**
+ * The sea: a 1-unit voxel layer of water (`seaModel.ts`) that bobs in the
+ * shader (`seaMaterial.ts`), and the seabed seen through its shallows.
+ * Darker at Night. The water bobs on the shared clock.
+ */
+function buildSea(world: World, clock: AmbientClock): {
+  group: THREE.Group;
+  triangles: number;
+  setTheme: (theme: Theme) => void;
+  dispose: () => void;
+} {
+  const model = seaModel(world);
+  const group = new THREE.Group();
+  group.name = 'sea';
+
+  /** Add one of the sea's meshes: never moved (the sea's material takes its own space as world space), receiving shadows. */
+  const addMesh = (mesh: SeaMesh, material: THREE.Material, name: string) => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(mesh.normals, 3));
+    geometry.setAttribute('seaCell', new THREE.BufferAttribute(mesh.cells, 3));
+    geometry.setAttribute('seaShade', new THREE.BufferAttribute(mesh.shades, 3));
+    geometry.setAttribute('seaCoast', new THREE.BufferAttribute(mesh.coast, 4));
+    geometry.setAttribute('seaCalm', new THREE.BufferAttribute(mesh.calm, 4));
+    geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
+    geometry.computeBoundingSphere();
+    const object = new THREE.Mesh(geometry, material);
+    object.name = name;
+    object.receiveShadow = true;
+    object.matrixAutoUpdate = false;
+    group.add(object);
+    return geometry;
+  };
+  const water = seaMaterial(clock);
+  const waterGeometry = addMesh(model.water, water.material, 'water');
+  const seabedMaterial = new THREE.MeshStandardNodeMaterial({ roughness: 0.9, metalness: 0 });
+  // Passing clouds shade the seabed too (`cloudShadow.ts`).
+  seabedMaterial.colorNode = materialColor.mul(cloudShade(positionWorld));
+  const seabedGeometry = addMesh(model.seabed, seabedMaterial, 'seabed');
+
+  return {
+    group,
+    triangles: model.water.triangles + model.seabed.triangles,
+    setTheme: (theme) => {
+      water.shallow.value.set(...oklchToLinear(seaColour(world.biome, 'waterShallow', theme)));
+      water.deep.value.set(...oklchToLinear(seaColour(world.biome, 'waterDeep', theme)));
+      const tokens = THEME_TOKENS[theme].world;
+      water.foam.value.set(...oklchToLinear(tokens.foam));
+      water.glow.value.set(...oklchToLinear(tokens.surfGlow));
+      water.glowStrength.value = tokens.surfGlowStrength;
+      const shift = tokens.waterShift + SEABED_SHIFT;
+      seabedMaterial.color.copy(linearColour(oklchToLinear(shiftLightness(world.biome.colours.sand, shift))));
+    },
+    dispose: () => {
+      waterGeometry.dispose();
+      seabedGeometry.dispose();
+      water.material.dispose();
+      seabedMaterial.dispose();
+    },
+  };
+}

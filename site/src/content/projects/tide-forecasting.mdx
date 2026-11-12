@@ -1,0 +1,27 @@
+---
+title: Tide tables that forecast themselves
+summary: A forecasting pipeline that predicts berth availability for a busy harbour, three days ahead.
+client: Port Meridian Authority
+year: 2025
+tags: [forecasting, pipelines, operations]
+pinned: true
+tree: tall
+---
+
+## The question
+
+The harbour master planned berths from a whiteboard and a hunch. Ships
+arrived early, late, or all at once, and every surprise cost a pilot boat
+and an afternoon.
+
+## What we built
+
+A nightly pipeline joins tide gauges, vessel tracking and the booking
+system, and a forecasting model predicts berth demand for the next three
+days. Every forecast is reproducible: the same inputs give the same answer,
+and each run records exactly which data it saw.
+
+## What changed
+
+- Berth conflicts fell by about a third in the first season.
+- The whiteboard is still there. It now shows the forecast.

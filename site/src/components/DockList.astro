@@ -1,0 +1,139 @@
+---
+/**
+ * The Dock's two lists: the Clients (each a boat moored at the Dock, in
+ * order by id; Clients beyond the Dock's boat cap have no boat but are
+ * listed all the same) and the Partners (each a larger ship sailing between
+ * the Isles), closest tier first. A logo shows when given; otherwise the
+ * name's initials stand in for it.
+ */
+import { getCollection } from 'astro:content';
+import { PARTNER_TIERS } from '../lib/contentSchemas';
+
+const byId = <T extends { id: string }>(a: T, b: T) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const clients = (await getCollection('clients')).toSorted(byId);
+const partners = (await getCollection('partners')).toSorted(
+  (a, b) => PARTNER_TIERS.indexOf(a.data.tier) - PARTNER_TIERS.indexOf(b.data.tier) || byId(a, b),
+);
+
+const TIER_LABELS: Record<(typeof PARTNER_TIERS)[number], string> = {
+  strategic: 'Strategic partner',
+  technology: 'Technology partner',
+  community: 'Community partner',
+};
+
+/** Up to two initials, skipping a leading "The". */
+const initials = (name: string) =>
+  name
+    .replace(/^the\s+/i, '')
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('');
+---
+
+<section class="group" aria-labelledby="dock-clients">
+  <h2 id="dock-clients">Clients</h2>
+  <p class="hint">Moored at the Dock: one boat each.</p>
+  {
+    clients.length === 0 ? (
+      <p>No Clients yet. The berths are waiting.</p>
+    ) : (
+      <ul class="entries" aria-label="Clients">
+        {clients.map(({ data }) => (
+          <li>
+            {data.logo ? (
+              <img class="mark" src={data.logo.src} alt={data.logo.alt} width="40" height="40" loading="lazy" />
+            ) : (
+              <span class="mark" aria-hidden="true">
+                {initials(data.name)}
+              </span>
+            )}
+            <div>
+              <h3>{data.name}</h3>
+              <p class="meta">{data.industry}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</section>
+
+<section class="group" aria-labelledby="dock-partners">
+  <h2 id="dock-partners">Partners</h2>
+  <p class="hint">Sailing between the Isles: one ship each.</p>
+  {
+    partners.length === 0 ? (
+      <p>No Partners yet. The horizon is clear.</p>
+    ) : (
+      <ul class="entries" aria-label="Partners">
+        {partners.map(({ data }) => (
+          <li>
+            {data.logo ? (
+              <img class="mark ship" src={data.logo.src} alt={data.logo.alt} width="40" height="40" loading="lazy" />
+            ) : (
+              <span class="mark ship" aria-hidden="true">
+                {initials(data.name)}
+              </span>
+            )}
+            <div>
+              <h3>{data.name}</h3>
+              <p class="meta">{TIER_LABELS[data.tier]}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</section>
+
+<style>
+  .group {
+    margin: 1.25rem 0 0;
+  }
+  h2 {
+    margin: 0;
+    font-size: 1.875rem;
+  }
+  .hint {
+    margin: 0.15rem 0 0;
+    font-size: 1rem;
+    opacity: 0.8;
+  }
+  .entries {
+    display: grid;
+    gap: 0.7rem;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .entries li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .mark {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    background: color-mix(in oklch, var(--brand) 14%, transparent);
+    color: var(--brand-ink);
+    font-size: 1.1rem;
+    object-fit: contain;
+  }
+  .mark.ship {
+    border-radius: 50%;
+  }
+  h3 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+  .meta {
+    margin: 0;
+    font-size: 1rem;
+    opacity: 0.85;
+  }
+</style>

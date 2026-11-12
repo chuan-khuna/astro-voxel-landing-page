@@ -1,0 +1,136 @@
+import { describe, expect, it } from 'vitest';
+import { clientSchema, guideSchema, partnerSchema, projectSchema, serviceSchema, teamMemberSchema, tourLinesSchema } from './contentSchemas';
+
+const valid = {
+  title: 'Tide tables that forecast themselves',
+  summary: 'A forecasting pipeline for a harbour authority.',
+  client: 'Port Meridian Authority',
+  year: 2024,
+  tags: ['forecasting', 'pipelines'],
+};
+
+describe('projectSchema', () => {
+  it('accepts a Project with the required fields, and the optional pinned flag, tree hint and cover', () => {
+    expect(projectSchema.parse(valid)).toEqual(valid);
+    const full = { ...valid, pinned: true, tree: 'tall', cover: { src: '/covers/tide.png', alt: 'A tide chart' } };
+    expect(projectSchema.parse(full)).toEqual(full);
+  });
+
+  it('defaults tags to none', () => {
+    const { tags: _, ...noTags } = valid;
+    expect(projectSchema.parse(noTags).tags).toEqual([]);
+  });
+
+  it('rejects a Project with a missing title, a bad year or an unknown tree hint', () => {
+    const { title: _, ...noTitle } = valid;
+    expect(projectSchema.safeParse(noTitle).success).toBe(false);
+    expect(projectSchema.safeParse({ ...valid, year: '2024' }).success).toBe(false);
+    expect(projectSchema.safeParse({ ...valid, year: 1899 }).success).toBe(false);
+    expect(projectSchema.safeParse({ ...valid, tree: 'palm-ish' }).success).toBe(false);
+    expect(projectSchema.safeParse({ ...valid, summary: '' }).success).toBe(false);
+    expect(projectSchema.safeParse({ ...valid, pinned: 'yes' }).success).toBe(false);
+  });
+});
+
+describe('serviceSchema', () => {
+  const service = { title: 'Data engineering', summary: 'Pipelines that give the same answer twice.', icon: 'pipeline', order: 1 };
+
+  it('accepts a Service with a title, summary, known icon and order', () => {
+    expect(serviceSchema.parse(service)).toEqual(service);
+  });
+
+  it('rejects a Service with an unknown icon, a missing summary or an order that is not a whole number from 1', () => {
+    expect(serviceSchema.safeParse({ ...service, icon: 'rocket' }).success).toBe(false);
+    const { summary: _, ...noSummary } = service;
+    expect(serviceSchema.safeParse(noSummary).success).toBe(false);
+    expect(serviceSchema.safeParse({ ...service, order: 0 }).success).toBe(false);
+    expect(serviceSchema.safeParse({ ...service, order: 1.5 }).success).toBe(false);
+  });
+});
+
+describe('clientSchema', () => {
+  const client = { name: 'Port Meridian Authority', industry: 'Logistics' };
+
+  it('accepts a Client with a name and industry, and an optional logo', () => {
+    expect(clientSchema.parse(client)).toEqual(client);
+    const withLogo = { ...client, logo: { src: '/logos/port-meridian.svg', alt: 'Port Meridian Authority' } };
+    expect(clientSchema.parse(withLogo)).toEqual(withLogo);
+  });
+
+  it('rejects a Client with no name, an empty industry or a logo without a source', () => {
+    const { name: _, ...noName } = client;
+    expect(clientSchema.safeParse(noName).success).toBe(false);
+    expect(clientSchema.safeParse({ ...client, industry: '' }).success).toBe(false);
+    expect(clientSchema.safeParse({ ...client, logo: { alt: 'x' } }).success).toBe(false);
+  });
+});
+
+describe('partnerSchema', () => {
+  const partner = { name: 'Cumulus Cloudworks', tier: 'strategic' };
+
+  it('accepts a Partner with a name and a known tier, and an optional logo', () => {
+    expect(partnerSchema.parse(partner)).toEqual(partner);
+    const withLogo = { ...partner, logo: { src: '/logos/cumulus.svg', alt: 'Cumulus Cloudworks' } };
+    expect(partnerSchema.parse(withLogo)).toEqual(withLogo);
+  });
+
+  it('rejects a Partner with an unknown tier or no name', () => {
+    expect(partnerSchema.safeParse({ ...partner, tier: 'platinum-plus' }).success).toBe(false);
+    const { name: _, ...noName } = partner;
+    expect(partnerSchema.safeParse(noName).success).toBe(false);
+  });
+});
+
+describe('teamMemberSchema', () => {
+  const member = { name: 'Aroha Bennett', role: 'Principal data engineer', order: 1 };
+
+  it('accepts a Team Member with a name, role and order, and an optional avatar', () => {
+    expect(teamMemberSchema.parse(member)).toEqual(member);
+    const withAvatar = { ...member, avatar: { src: '/team/aroha.png', alt: 'Aroha Bennett' } };
+    expect(teamMemberSchema.parse(withAvatar)).toEqual(withAvatar);
+  });
+
+  it('rejects a Team Member with no name, an empty role, an order that is not a whole number from 1, or an avatar without a source', () => {
+    const { name: _, ...noName } = member;
+    expect(teamMemberSchema.safeParse(noName).success).toBe(false);
+    expect(teamMemberSchema.safeParse({ ...member, role: '' }).success).toBe(false);
+    expect(teamMemberSchema.safeParse({ ...member, order: 0 }).success).toBe(false);
+    expect(teamMemberSchema.safeParse({ ...member, order: 2.5 }).success).toBe(false);
+    expect(teamMemberSchema.safeParse({ ...member, avatar: { alt: 'x' } }).success).toBe(false);
+  });
+});
+
+describe('guideSchema', () => {
+  it('accepts the Guide lines, each with a mood that defaults to neutral', () => {
+    const parsed = guideSchema.parse({
+      greeting: [{ say: 'Hello.' }, { say: 'Still here.', mood: 'smug' }],
+      reform: [{ say: 'Seed {seed}.', mood: 'happy' }],
+    });
+    expect(parsed.greeting).toEqual([
+      { say: 'Hello.', mood: 'neutral' },
+      { say: 'Still here.', mood: 'smug' },
+    ]);
+    expect(parsed.welcomeBack).toEqual([]);
+    expect(parsed.idle).toEqual([]);
+  });
+
+  it('rejects an empty line or an unknown mood', () => {
+    expect(guideSchema.safeParse({ idle: [{ say: '' }] }).success).toBe(false);
+    expect(guideSchema.safeParse({ idle: [{ say: 'Hm.', mood: 'furious' }] }).success).toBe(false);
+  });
+});
+
+describe('tourLinesSchema', () => {
+  it('accepts a Landmark’s Tour lines, each with a mood that defaults to neutral', () => {
+    expect(tourLinesSchema.parse([{ say: 'Data comes in here.' }, { say: 'And leaves tidier.', mood: 'smug' }])).toEqual([
+      { say: 'Data comes in here.', mood: 'neutral' },
+      { say: 'And leaves tidier.', mood: 'smug' },
+    ]);
+  });
+
+  it('rejects no lines at all, an empty line or an unknown mood', () => {
+    expect(tourLinesSchema.safeParse([]).success).toBe(false);
+    expect(tourLinesSchema.safeParse([{ say: '' }]).success).toBe(false);
+    expect(tourLinesSchema.safeParse([{ say: 'Hm.', mood: 'furious' }]).success).toBe(false);
+  });
+});

@@ -1,0 +1,50 @@
+# Boat, tropical, kind 1: a canoe with an outrigger: two arms out to a float on the east side, a pink bow post; bamboo and thatch, pink trim.
+# The bow points +z. It stands on the sea floor: layer 0 is under the water.
+kind: boat
+biome: tropical
+variant: 1
+footprint: 1x1
+door: none
+anchor: 0 0 0
+key:
+  D deck
+  H bamboo
+  O post
+  T accent
+  f postDark
+layer 0
+...HH...
+...HH..f
+...HH..f
+...HH..f
+...HH..f
+...HH..f
+........
+........
+layer 1
+..HHHH..
+..HDDH.f
+..HDDH.f
+..HDDH.f
+..HDDH.f
+..HDDH.f
+...HH...
+........
+layer 2
+..TTTT..
+..T..T..
+..TDDTOO
+..T..T..
+..TDDTOO
+..T..T..
+...TT...
+........
+layer 3
+........
+........
+........
+........
+........
+........
+...TT...
+........

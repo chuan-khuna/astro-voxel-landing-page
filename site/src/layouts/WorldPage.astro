@@ -1,0 +1,1462 @@
+---
+/**
+ * Every page of the site: the World full screen, with its hotspots and Data
+ * Cards, and the UI floating over it as cards: the company name (top left),
+ * the Landmark menu (top right), the dice and Seed (bottom left), and the
+ * section's panel or the Overview's intro. The full-screen layout is on only
+ * while `<html data-world="live">` (set in `Base.astro` when the browser
+ * can draw the World; dropped if it fails to mount); without it the page is
+ * a normal page that scrolls.
+ *
+ * The World's frame and its controls carry `transition:persist`, so the
+ * client router moves the same canvas, renderer, meshes and camera into each
+ * new page; only the panel and the rest of the page are swapped. The script
+ * runs once and follows the route on every `astro:after-swap`.
+ *
+ * The Guide floats in the World too: a button over it (under the Landmark
+ * hotspots, so it never takes their clicks) and its speech bubble. It
+ * greets the visitor once the World has mounted and it has assembled
+ * (`greeting` on a first visit, one `welcomeBack` line after), says a
+ * `reform` line whenever a new World is rolled, and an `idle` line when
+ * back by the Station after the Tour. Its lines come from the `pages`
+ * collection (`guide` on the home page), its name from the site data module.
+ *
+ * The Tour (`lib/tour.ts`): the Tour button or a click on the idle Guide
+ * starts it. At each Landmark in Story Order the Guide flies ahead, the
+ * camera follows and the Guide says that Landmark's `tour` lines; the
+ * Tour's card (persisted, in place of the intro or panel) has next,
+ * previous and exit, and the arrow keys and Escape work too. Free
+ * exploration (pan, zoom) or any navigation ends it; it never changes the
+ * URL.
+ *
+ * In `astro dev`, or with `?stats` in the URL, the script also loads the
+ * render stats overlay (`render/statsOverlay.ts`): a toggle after the dice
+ * and a stats card. Otherwise none of it loads.
+ */
+import Base from './Base.astro';
+import LandmarkMenu from '@/components/LandmarkMenu.astro';
+import SectionPanel from '@/components/SectionPanel.astro';
+import SectionContent from '@/components/SectionContent.astro';
+import Logo from '@/components/Logo.astro';
+import ThemeToggle from '@/components/ThemeToggle.astro';
+import { getCollection, getEntry, render } from 'astro:content';
+import { site, landmarksInStoryOrder, type DataCardMetric } from '@/data/site';
+import { PLACED_LANDMARK_IDS } from '@/world';
+import type { ContentCounts, LandmarkId } from '@/world';
+import { gardenCountsOf, plantedProjects, projectOrder } from '@/lib/gardenPlants';
+import { serviceOrder } from '@/lib/services';
+import type { GuideLines } from '@/lib/contentSchemas';
+import { tourSteps } from '@/lib/tour';
+import { STILL_SIZE, stillPath, stillSrcset } from '@/lib/worldStill';
+import type { PageImage } from '@/lib/seo';
+import { landmarkForPath, sameRoute } from '@/lib/landmarkRoutes';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** The page's link preview picture; the World still by default (see `Base.astro`). */
+  image?: PageImage;
+}
+const { title, description, image } = Astro.props;
+const hasPanel = Astro.slots.has('panel');
+
+/*
+ * The Story Scroll (phones): every section stands on every page, in Story
+ * Order after the intro, so a phone reads the site top to bottom over the
+ * World. The page's own panel takes its section's place (a Project's page
+ * comes right after the Garden's); the others are marked `data-extra` and
+ * show only on the Story Scroll. Each item says its route, its Landmark and
+ * the page title the browser shows while it is in view.
+ */
+const path = Astro.url.pathname;
+const sections = landmarksInStoryOrder.filter((l) => l.route !== '/');
+const pages = await getCollection('pages');
+const pageTitle = (id: LandmarkId) => {
+  const page = pages.find((p) => p.data.landmark === id);
+  return page ? `${page.data.title} · ${site.company.name}` : site.seo.title;
+};
+/** The section whose place the page's own panel takes, or after which it comes (a Project's page, after the Garden). */
+const ownSection = hasPanel ? sections.find((l) => sameRoute(l.route, path)) : undefined;
+const parentSection = hasPanel && !ownSection ? landmarkForPath(path) : null;
+
+const projects = projectOrder(await getCollection('projects'));
+// The generator gets counts and ids only: Projects and Pinned Projects for the Garden's plants, a boat per Client and a
+// ship per Partner, each in id order; a boat's or ship's kind comes from its owner's id. The Services' ids, in content
+// order, stand round the Station's lighthouse, each as the structure its id names.
+const idsOf = (entries: Array<{ id: string }>) => entries.map((e) => e.id).toSorted();
+const clientIds = idsOf(await getCollection('clients'));
+const partnerIds = idsOf(await getCollection('partners'));
+const counts: ContentCounts = {
+  ...gardenCountsOf(projects),
+  clients: clientIds.length,
+  partners: partnerIds.length,
+  clientIds,
+  partnerIds,
+  serviceIds: serviceOrder(await getCollection('services')).map((s) => s.id),
+};
+
+// One hotspot link per placed Landmark; the World positions them over its model.
+const hotspots = site.landmarks.filter((l) => (PLACED_LANDMARK_IDS as readonly string[]).includes(l.id));
+// The developer inside the House links to Team; the World shows it while the House is open.
+const team = site.landmarks.find((l) => l.id === 'house-interior')!;
+// One link per Garden plant, right after the Garden's own link, in Garden order: the flowers, then the trees.
+const plantLinks = plantedProjects(projects);
+// One Data Card per Landmark with a metric in site data, in Story Order; the World lays each over its Landmark.
+const metrics: Partial<Record<LandmarkId, DataCardMetric>> = site.dataCards;
+const dataCards = landmarksInStoryOrder.flatMap((landmark) => {
+  const metric = metrics[landmark.id];
+  return metric ? [{ id: landmark.id, metric }] : [];
+});
+// The Guide's lines (filled in with the Seed and its name on the client).
+const home = await getEntry('pages', 'home');
+// The home page's intro copy, for the Story Scroll's intro on every other page (the home page passes its own).
+const HomeIntro = hasPanel && home ? (await render(home)).Content : null;
+const guideLines: GuideLines = home?.data.guide ?? { greeting: [], welcomeBack: [], reform: [], idle: [] };
+const guideName = site.guide.name;
+// The Tour: a step per Landmark in Story Order, with the Guide's lines from each Landmark's `pages` entry (`tour`).
+const tour = tourSteps(
+  landmarksInStoryOrder,
+  (await getCollection('pages')).map((page) => ({ landmark: page.data.landmark, tour: page.data.tour })),
+);
+// The World still's description: what the picture shows, for anyone who cannot see it (also the OG image's).
+const stillAlt = site.seo.imageAlt;
+---
+
+<Base title={title} description={description} image={image}>
+  <!--
+    The HUD: every UI element floats over the full-screen World as a card.
+    Top: the company name (left) and the Landmark menu (right); then the
+    section panel or the Overview's intro, and the dice with the Seed. The
+    World itself is fixed behind it all. Without the full-screen layout (no
+    JS, no WebGPU or WebGL) the same HTML is a normal page that scrolls.
+  -->
+  <div class="hud">
+    <header class="hud-bar" data-covers-world>
+      {
+        hasPanel ? (
+          <a class="brand" href="/" data-seed-link>
+            <Logo />
+            <span class="brand-name">{site.company.name}</span>
+          </a>
+        ) : (
+          <h1 class="brand">
+            <Logo />
+            <span class="brand-name">{site.company.name}</span>
+          </h1>
+        )
+      }
+      <div class="hud-tools">
+        <ThemeToggle />
+        <LandmarkMenu />
+      </div>
+    </header>
+
+    <main class="hud-main">
+      <div class="story" data-story data-page-route={path}>
+        <div class="story-item" data-story-item data-route="/" data-landmark="overview" data-title={site.seo.title} data-extra={hasPanel ? '' : undefined}>
+          <section class="intro" data-covers-world data-story-card tabindex="-1" aria-label="Introduction">
+            <p class="tagline">{site.company.tagline}</p>
+            {hasPanel ? HomeIntro && <HomeIntro /> : <slot />}
+          </section>
+        </div>
+        {
+          sections.map((landmark) => (
+            <>
+              <div
+                class="story-item"
+                data-story-item
+                data-route={landmark.route}
+                data-landmark={landmark.id}
+                data-title={landmark === ownSection ? (title ?? pageTitle(landmark.id)) : pageTitle(landmark.id)}
+                data-extra={landmark === ownSection ? undefined : ''}>
+                {landmark === ownSection ? (
+                  <slot name="panel" />
+                ) : (
+                  <SectionPanel title={pages.find((p) => p.data.landmark === landmark.id)?.data.title ?? landmark.label} id={landmark.id} level={2}>
+                    <SectionContent landmark={landmark} />
+                  </SectionPanel>
+                )}
+              </div>
+              {landmark.id === parentSection && (
+                <div class="story-item" data-story-item data-route={path} data-landmark={landmark.id} data-title={title ?? site.seo.title}>
+                  <slot name="panel" />
+                </div>
+              )}
+            </>
+          ))
+        }
+      </div>
+      <!--
+        The World still: what the default Seed's World looks like, by Day and
+        by Night, shown in the World's place when the browser cannot draw it
+        (no JS, no WebGPU or WebGL 2). Captured at build time (the
+        worldStills integration); a build that cannot capture it leaves it out.
+      -->
+      <figure class="world-still" data-world-still>
+        {
+          (['day', 'night'] as const).map((theme) => (
+            <img
+              class={`world-still-${theme}`}
+              src={stillPath(theme, STILL_SIZE.width)}
+              srcset={stillSrcset(theme)}
+              sizes="(max-width: 64rem) 100vw, 62rem"
+              width={STILL_SIZE.width}
+              height={STILL_SIZE.height}
+              alt={stillAlt}
+              loading="lazy"
+              decoding="async"
+            />
+          ))
+        }
+        <figcaption>The World of Seed {site.defaultSeed}. The menu above leads to every Landmark.</figcaption>
+      </figure>
+      <div class="world" id="world-frame" transition:persist="world">
+        <canvas
+          id="world-canvas"
+          aria-label={`A generated World for ${site.company.name}. Drag to pan, scroll or pinch to zoom.`}
+          data-default-seed={site.defaultSeed}
+          data-counts={JSON.stringify(counts)}></canvas>
+        <ul class="data-cards" aria-label={`${site.company.name} in figures`}>
+          {
+            dataCards.map(({ id, metric }) => (
+              <li class="data-card" data-card={id} hidden>
+                <span class="data-card-value">{metric.value}</span> <span class="data-card-label">{metric.label}</span>
+              </li>
+            ))
+          }
+        </ul>
+        <button
+          type="button"
+          class="guide-button"
+          id="guide"
+          data-guide
+          aria-label={`Talk to ${guideName}, the Guide`}
+          draggable="false"
+          hidden></button>
+        {
+          hotspots.map((landmark) => (
+            <>
+              <a class="hotspot" href={landmark.route} data-hotspot={landmark.id} data-seed-link draggable="false" hidden>
+                <span class="hotspot-label">{landmark.label}</span>
+              </a>
+              {landmark.id === 'house' && (
+                <a
+                  class="hotspot developer"
+                  href={team.route}
+                  data-hotspot="house-interior"
+                  data-developer
+                  data-seed-link
+                  draggable="false"
+                  hidden>
+                  <span class="hotspot-label">Meet the {team.label}</span>
+                </a>
+              )}
+              {landmark.id === 'garden' &&
+                plantLinks.map(({ project }) => (
+                  <a
+                    class="hotspot plant"
+                    href={`${landmark.route}/${project.id}`}
+                    data-hotspot="garden"
+                    data-project={project.id}
+                    data-pinned={project.data.pinned ? '' : undefined}
+                    data-seed-link
+                    draggable="false"
+                    hidden>
+                    <span class="hotspot-label">{project.data.title}</span>
+                  </a>
+                ))}
+            </>
+          ))
+        }
+        <p class="guide-bubble" id="guide-bubble" role="status" aria-live="polite" aria-atomic="true">
+          <span class="guide-name">{guideName}</span>
+          <span class="guide-say" data-guide-say></span>
+        </p>
+        <script type="application/json" id="guide-lines" set:html={JSON.stringify({ name: guideName, lines: guideLines })} />
+      </div>
+      <div class="world-controls" data-covers-world transition:persist="world-controls">
+        <button type="button" class="dice" id="roll-seed" title="Roll a new World">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+            <rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2"></rect>
+            <circle cx="8" cy="8" r="1.6" fill="currentColor"></circle>
+            <circle cx="16" cy="8" r="1.6" fill="currentColor"></circle>
+            <circle cx="12" cy="12" r="1.6" fill="currentColor"></circle>
+            <circle cx="8" cy="16" r="1.6" fill="currentColor"></circle>
+            <circle cx="16" cy="16" r="1.6" fill="currentColor"></circle>
+          </svg>
+          <span class="control-label">Roll a new World</span>
+        </button>
+        <button type="button" class="tour-start" id="tour-start" aria-controls="tour" title="Take the Tour">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+            <path d="M4 20 9 4l6 12 3-6 2 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+          <span class="control-label">Take the Tour</span>
+        </button>
+        <p class="world-status" id="world-status" aria-live="polite"></p>
+      </div>
+      <section
+        class="tour"
+        id="tour"
+        data-covers-world
+        aria-labelledby="tour-title"
+        hidden
+        transition:persist="tour">
+        <p class="tour-count" data-tour-count></p>
+        <h2 class="tour-title" id="tour-title" tabindex="-1" data-tour-title></h2>
+        <a class="tour-open" href="/" data-tour-open></a>
+        <div class="tour-controls">
+          <button type="button" class="tour-step" data-tour="previous">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+            Previous
+          </button>
+          <button type="button" class="tour-step tour-next" data-tour="next">
+            <span data-tour-next-label>Next</span>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </button>
+          <button type="button" class="tour-exit" data-tour="exit" aria-label="Exit the Tour" title="Exit the Tour">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+            </svg>
+          </button>
+        </div>
+        <p class="tour-keys">Arrow keys step through; Esc exits.</p>
+        <script type="application/json" id="tour-steps" set:html={JSON.stringify(tour)} />
+      </section>
+    </main>
+  </div>
+</Base>
+
+<script>
+  import { navigate } from 'astro:transitions/client';
+  import { mountWorld, type ScreenOffset, type WorldView } from '@/render/mountWorld';
+  import { freeCentre as freeCentreOf } from '@/render/freeArea';
+  import { createWorldSource } from '@/render/worldSource';
+  import type { CameraState } from '@/render/cameraMath';
+  import { rollSeed, seedFromUrl, withSeed, SEED_PARAM } from '@/lib/seedUrl';
+  import { landmarkForPath, routeView, sameRoute } from '@/lib/landmarkRoutes';
+  import { STATS_PARAM, statsAvailable, withStats } from '@/lib/renderStats';
+  import type { StatsOverlay } from '@/render/statsOverlay';
+  import type { ContentCounts, LandmarkId } from '@/world';
+  import type { Theme } from '@/lib/theme';
+  import { fillLine, pickLine, type GuideLine } from '@/lib/guideLines';
+  import type { GuideLines } from '@/lib/contentSchemas';
+  import { tourAfter, tourStage, type TourAction, type TourState, type TourStep } from '@/lib/tour';
+  import { createStoryScroll } from '@/client/storyScroll';
+
+  /** How long a camera flight to a Landmark takes; a cut under reduced motion. */
+  const FLIGHT_MS = 900;
+  /** How long the Guide takes to fly to the next Landmark on the Tour: less than the camera, so it gets there first. */
+  const GUIDE_FLIGHT_MS = 750;
+  /** On the Tour the camera comes no closer than this times the close-up of the Landmark the Guide floats beside. */
+  const TOUR_ZOOM = 1.3;
+  /** What steps through a Tour already begun: next, previous or exit. */
+  type TourStepAction = Exclude<TourAction, 'start'>;
+  /** The keys that step through the Tour. */
+  const TOUR_KEYS: Partial<Record<string, TourStepAction>> = { ArrowRight: 'next', ArrowLeft: 'previous', Escape: 'exit' };
+  /** How long the House's lid takes to lift or come down; a cut under reduced motion. */
+  const ROOF_MS = 800;
+
+  // The frame and controls are persisted, so these elements live for the whole visit.
+  const canvas = document.querySelector<HTMLCanvasElement>('#world-canvas');
+  const frame = document.querySelector<HTMLElement>('#world-frame');
+  const dice = document.querySelector<HTMLButtonElement>('#roll-seed');
+  const status = document.querySelector<HTMLElement>('#world-status');
+  /** Remembered once the Guide has greeted this visitor, so a later visit gets a shorter hello. */
+  const GREETED_KEY = 'guide-greeted';
+  // No GPU (see `Base.astro`): no World to mount; the page stays the normal page that scrolls.
+  if (canvas && frame && document.documentElement.dataset.world) {
+    const hotspots = [...frame.querySelectorAll<HTMLElement>('[data-hotspot]')];
+    const cards = [...frame.querySelectorAll<HTMLElement>('[data-card]')];
+    const guideButton = frame.querySelector<HTMLElement>('#guide');
+    const guideBubble = frame.querySelector<HTMLElement>('#guide-bubble');
+    const guide = JSON.parse(frame.querySelector('#guide-lines')?.textContent ?? '{}') as { name: string; lines: GuideLines };
+    /** The Guide's last idle line, so it never says the same one twice running. */
+    let lastIdle: GuideLine | undefined;
+    // The Tour's card and button are persisted too.
+    const tourCard = document.querySelector<HTMLElement>('#tour');
+    const tourButton = document.querySelector<HTMLButtonElement>('#tour-start');
+    const steps = JSON.parse(document.querySelector('#tour-steps')?.textContent ?? '[]') as TourStep[];
+    /** Where the Tour is (`null`: not running). */
+    let tour: TourState = null;
+    /** Bumped by every Tour step and ending, so a step that is overtaken says nothing. */
+    let tourToken = 0;
+    /** The camera before the Tour began: exiting returns there. */
+    let beforeTour: CameraState | null = null;
+    const defaultSeed = canvas.dataset.defaultSeed ?? '';
+    const counts = JSON.parse(canvas.dataset.counts ?? '{}') as ContentCounts;
+    const source = createWorldSource();
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    /** The World view, mounted once with the first World; later Worlds are swapped in. */
+    let mounting: Promise<WorldView> | null = null;
+    /** Whether the World has mounted (so the full-screen layout is earned). */
+    let mounted = false;
+    /** The World view once mounted, for what must reach it at once (the Story Scroll). */
+    let liveView: WorldView | null = null;
+    /** Only the latest request may show its World; older ones are dropped. */
+    let latest = 0;
+    /** The Seed of the World on show (or loading), as asked for in the URL. */
+    let shownSeed: string | null = null;
+    /** The Landmark of the route the camera last went to. */
+    let shownLandmark: LandmarkId = 'overview';
+    /** Where the camera was on the World before a section opened; closing returns there. */
+    let worldState: CameraState | null = null;
+    /** The visitor zoomed or panned out of the House and its section is closing: the camera stays where they took it. */
+    let leavingHouse = false;
+    /** The Seed asked for, then the World's Seed as generated (an over-long Seed falls back to the default). */
+    let linkSeed = defaultSeed;
+    /** Render stats: only in dev or with `?stats`, decided once per visit (links keep `?stats`). */
+    const stats = statsAvailable(import.meta.env.DEV, new URL(location.href));
+    let overlay: StatsOverlay | null = null;
+    /** The World on show, for the stats overlay when it loads. */
+    let shown: Parameters<StatsOverlay['show']> | null = null;
+
+    const currentTheme = (): Theme => (document.documentElement.dataset.theme === 'night' ? 'night' : 'day');
+    const currentSeed = () => seedFromUrl(new URL(location.href)) ?? defaultSeed;
+    const routeLandmark = () => landmarkForPath(location.pathname) ?? 'overview';
+    /** The page's own panel (not another section standing in the Story Scroll). */
+    const ownPanel = () => document.querySelector<HTMLElement>('[data-story-item]:not([data-extra]) [data-panel]');
+    const flightMs = () => (reducedMotion.matches ? 0 : FLIGHT_MS);
+    /** The lid's lift and the Guide's flight alongside a camera move of `ms`: cuts when the move is one. */
+    const roofMs = (ms: number) => (ms > 0 ? ROOF_MS : 0);
+    const guideFlightMs = (ms: number) => (ms > 0 ? GUIDE_FLIGHT_MS : 0);
+    /** The cards floating over the World: the Guide's bubble keeps clear of them. */
+    const covers = () => [...document.querySelectorAll<HTMLElement>('[data-covers-world]')].map((c) => c.getBoundingClientRect());
+    /** The Landmarks' hotspots on screen (not the plants within the Garden's): the Guide's bubble keeps off them when it can. */
+    const landmarks = () =>
+      hotspots.filter((h) => !h.hidden && !h.dataset.project).map((h) => h.getBoundingClientRect());
+    /** A Guide line with the Seed on show and the Guide's name filled in. */
+    const fill = (line: GuideLine): GuideLine => ({ ...line, say: fillLine(line.say, { seed: linkSeed, name: guide.name }) });
+    const greeted = () => {
+      try {
+        return localStorage.getItem(GREETED_KEY) !== null;
+      } catch {
+        return false;
+      }
+    };
+    /** Once the Guide has assembled: the full greeting on a first visit, one welcome-back line after. */
+    const greet = (view: WorldView) =>
+      view.guide.formed.then(() => {
+        // The Tour may have begun first: the Guide is busy.
+        if (tour) return;
+        const { greeting, welcomeBack } = guide.lines;
+        const back = greeted() ? pickLine(welcomeBack, undefined, Math.random()) : undefined;
+        view.guide.say((back ? [back] : greeting).map(fill));
+        try {
+          localStorage.setItem(GREETED_KEY, '1');
+        } catch {
+          // No storage (a private window): every visit is a first one.
+        }
+      });
+
+    /** A route with the Seed on show (e.g. `/garden?seed=1234`), and `?stats` when stats are on. */
+    const linkTo = (route: string) => {
+      const href = withSeed(route, linkSeed, defaultSeed, location.href);
+      return stats && new URL(location.href).searchParams.has(STATS_PARAM) ? withStats(href, location.href) : href;
+    };
+    /** Keep the Seed on links to other routes, and `?stats` when stats are on. */
+    const keepSeedOnLinks = () => {
+      for (const link of document.querySelectorAll<HTMLAnchorElement>('a[data-seed-link]')) {
+        link.setAttribute('href', linkTo(link.getAttribute('href') ?? '/'));
+      }
+    };
+
+    /**
+     * Mark the World link of the page now open, if any: a Project's plant, or
+     * the developer on Team (the links are persisted, so the page cannot).
+     */
+    const markCurrentLink = () => {
+      for (const link of frame.querySelectorAll<HTMLAnchorElement>('a[data-project], a[data-developer]')) {
+        const current = sameRoute(new URL(link.href).pathname, location.pathname);
+        if (current) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+      }
+    };
+
+    /**
+     * Phones: the Story Scroll (`client/storyScroll.ts`) moves the camera
+     * with the page; the routes, the Tour and free exploration stand aside.
+     */
+    const story = createStoryScroll({
+      view: () => liveView,
+      frame,
+      reducedMotion,
+      onSection: markCurrentLink,
+      onToggle: (on) => {
+        if (on) return endTour('explore');
+        // Wide again: the page must be the route's own (the scroll may have moved the URL on), and the camera its route's.
+        const route = document.querySelector<HTMLElement>('[data-story]')?.dataset.pageRoute ?? '/';
+        if (!sameRoute(route, location.pathname)) return void navigate(location.href, { history: 'replace' });
+        if (!liveView) return;
+        worldState = null;
+        shownLandmark = 'overview';
+        followRoute(liveView, 0, true);
+      },
+    });
+
+    /**
+     * Where a Landmark should sit on the full-screen World so the floating
+     * cards do not cover it: the middle of the part they leave free (beside
+     * a side panel, above a bottom sheet, below the top bar).
+     */
+    const freeCentre = (): ScreenOffset => {
+      const covers = [...document.querySelectorAll<HTMLElement>('[data-covers-world]')];
+      return freeCentreOf(
+        frame.getBoundingClientRect(),
+        covers.map((cover) => cover.getBoundingClientRect()),
+      );
+    };
+
+    /**
+     * Move the camera for the route now showing: to its Landmark, or back to
+     * where the World was left. `fresh`: a new World is in, so frame it.
+     */
+    const followRoute = (view: WorldView, ms: number, fresh = false) => {
+      const id = routeLandmark();
+      const { focus, interior } = routeView(id);
+      const at = freeCentre();
+      // Where the visitor looks: the Data Card shown is the one nearest it, and the pan bounds hold it.
+      view.setViewCentre(at);
+      // About and Team open the House: its lid lifts as the camera dives in; anywhere else it comes down.
+      view.setInterior(interior, roofMs(ms));
+      if (id === 'overview') {
+        // Back to where the World was left. Left by zooming or panning out of the House, the camera stays where the visitor took it.
+        if (!leavingHouse) {
+          // A section opened directly has no earlier view of the World: go to the Overview.
+          if (worldState) void view.camera.flyTo(worldState, ms);
+          else if (fresh || shownLandmark !== 'overview') void view.focus('overview', { at, ms });
+        }
+        worldState = null;
+      } else {
+        // Kept if a Tour left one (where the camera was before it): closing returns there.
+        if (shownLandmark === 'overview') worldState ??= view.camera.state;
+        void view.focus(focus, { at, ms });
+      }
+      shownLandmark = id;
+      leavingHouse = false;
+    };
+
+    /**
+     * The visitor zoomed back out of the open House, or panned it off screen
+     * (`render/houseLeave.ts`): About or Team closes as its close button
+     * closes it (to the World, a history entry Back returns through), the lid
+     * coming down at once rather than when the page is in, and the camera
+     * staying where the visitor took it. Not on the Tour (the pan or zoom
+     * ends it, and the House follows the route again: the next one closes
+     * it) nor on the Story Scroll (the scroll moves the lid).
+     */
+    const leaveHouse = () => {
+      if (leavingHouse || tour || story.on || !liveView || !routeView(routeLandmark()).interior) return;
+      const close = ownPanel()?.querySelector<HTMLAnchorElement>('[data-panel-close]');
+      if (!close) return;
+      leavingHouse = true;
+      liveView.setInterior(false, roofMs(flightMs()));
+      close.click();
+    };
+
+    /**
+     * Show the Tour's step: the card says where we are, the Guide flies
+     * ahead to the Landmark as the camera follows (the House opens for its
+     * Interior), and once there it says the step's lines, the last staying
+     * up until the visitor moves on.
+     */
+    const playStep = async (view: WorldView) => {
+      if (!tour || !tourCard) return;
+      const token = ++tourToken;
+      const step = steps[tour.step]!;
+      const last = tour.step === steps.length - 1;
+      tourCard.querySelector('[data-tour-count]')!.textContent = `Stop ${tour.step + 1} of ${steps.length}`;
+      tourCard.querySelector('[data-tour-title]')!.textContent = step.label;
+      const open = tourCard.querySelector<HTMLAnchorElement>('[data-tour-open]')!;
+      open.hidden = step.route === '/';
+      open.textContent = `Open ${step.label}`;
+      open.href = linkTo(step.route);
+      tourCard.querySelector('[data-tour="previous"]')!.setAttribute('aria-disabled', String(tour.step === 0));
+      tourCard.querySelector('[data-tour-next-label]')!.textContent = last ? 'Finish' : 'Next';
+      const stage = tourStage(step.landmark);
+      const ms = flightMs();
+      const at = freeCentre();
+      view.setViewCentre(at);
+      view.setInterior(stage.interior, roofMs(ms));
+      view.guide.hush();
+      const guideThere = view.guide.flyTo(view.guideSpot(stage.guideAt), guideFlightMs(ms));
+      // No closer than the Guide's Landmark's own close-up, so the Guide beside it stays in view (inside the House, too).
+      const shot = view.focusState(stage.focus, at);
+      void view.camera.flyTo({ ...shot, zoom: Math.min(shot.zoom, view.focusState(stage.guideAt, at).zoom * TOUR_ZOOM) }, ms);
+      await guideThere;
+      if (token === tourToken) view.guide.say(step.lines.map(fill), { hold: true });
+    };
+
+    /** Start the Tour at its first step: the intro or panel makes way for the Tour's card. */
+    const startTour = async () => {
+      // No Tour on the Story Scroll: the page itself goes from Landmark to Landmark.
+      if (!mounting || !tourCard || steps.length === 0 || story.on) return;
+      const view = await mounting;
+      if (!tour) beforeTour = view.camera.state;
+      tour = tourAfter(tour, 'start', steps.length);
+      document.documentElement.dataset.touring = '';
+      tourCard.hidden = false;
+      tourButton?.setAttribute('aria-expanded', 'true');
+      tourCard.querySelector<HTMLElement>('[data-tour-title]')?.focus({ preventScroll: true });
+      await playStep(view);
+    };
+
+    /**
+     * End the Tour. `exit` (or `finish`, after the last step): the camera
+     * returns to where it was and the Guide flies back to the Station and
+     * says an idle line. `explore` (the visitor pans or zooms) leaves the
+     * camera to them; `navigate` (a link, Back or Forward, a new Seed)
+     * leaves it to the route. Either way the House follows the route again
+     * and the intro or panel comes back.
+     */
+    const endTour = (how: 'exit' | 'finish' | 'explore' | 'navigate') => {
+      if (!tour || !tourCard) return;
+      tour = null;
+      const token = ++tourToken;
+      const hadFocus = tourCard.contains(document.activeElement);
+      tourCard.hidden = true;
+      delete document.documentElement.dataset.touring;
+      tourButton?.setAttribute('aria-expanded', 'false');
+      void mounting?.then((view) => {
+        const ms = flightMs();
+        view.guide.hush();
+        const home = view.guide.flyTo(view.guideSpot('station'), guideFlightMs(ms));
+        if (how === 'navigate') {
+          // The route moves the camera; a section opened from the Overview closes back to where the Tour began.
+          if (shownLandmark === 'overview') worldState = beforeTour;
+          return;
+        }
+        view.setViewCentre(freeCentre());
+        view.setInterior(routeView(routeLandmark()).interior, roofMs(ms));
+        if (how === 'explore') return;
+        if (beforeTour) void view.camera.flyTo(beforeTour, ms);
+        void home.then(() => {
+          lastIdle = pickLine(guide.lines.idle, lastIdle, Math.random());
+          if (token === tourToken && lastIdle) view.guide.say([fill(lastIdle)]);
+        });
+      });
+      if (hadFocus && how !== 'navigate') tourButton?.focus({ preventScroll: true });
+    };
+
+    /** Next, previous or exit, from the card's buttons or the keyboard. */
+    const stepTour = (action: TourStepAction) => {
+      if (!tour) return;
+      const after = tourAfter(tour, action, steps.length);
+      if (!after) return endTour(action === 'next' ? 'finish' : 'exit');
+      if (after.step === tour.step) return;
+      tour = after;
+      void mounting?.then(playStep);
+    };
+
+    const showSeed = async (seed: string) => {
+      const request = ++latest;
+      shownSeed = seed;
+      // Links carry the Seed asked for at once, so they still match the URL if the load fails.
+      linkSeed = seed;
+      keepSeedOnLinks();
+      frame.setAttribute('aria-busy', 'true');
+      try {
+        const { world, meshed, ms, generateMs } = await source.load(seed, counts);
+        if (request !== latest) return;
+        let view: WorldView;
+        if (!mounting) {
+          mounting = mountWorld(canvas, world, meshed, {
+            frame,
+            hotspots,
+            cards,
+            theme: currentTheme(),
+            guide: { button: guideButton, bubble: guideBubble, covers, landmarks },
+            // Free exploration stops the Tour.
+            onExplore: () => endTour('explore'),
+            onLeaveHouse: leaveHouse,
+            // `?tier=full|reduced` picks a render tier whatever the device, for measuring.
+            tierOverride: new URL(location.href).searchParams.get('tier'),
+            // `?life=full|reduced|still` pins an Ambient Life tier, for measuring.
+            lifeOverride: new URL(location.href).searchParams.get('life'),
+          });
+          view = await mounting;
+          mounted = true;
+          liveView = view;
+          void greet(view);
+          // The theme may have changed while the World mounted.
+          view.setTheme(currentTheme());
+        } else {
+          view = await mounting;
+          if (request !== latest) return;
+          view.show(world, meshed);
+          // The Guide re-forms with the new World; then it remarks on it (unless another World is already on its way).
+          void view.guide.formed.then(() => {
+            const line = request === latest && !tour && pickLine(guide.lines.reform, undefined, Math.random());
+            if (line) view.guide.say([fill(line)]);
+          });
+        }
+        // A new World starts at its Overview: cut to the open section's Landmark, if any.
+        worldState = null;
+        shownLandmark = 'overview';
+        if (story.on) story.worldShown();
+        else followRoute(view, 0, true);
+        canvas.dataset.generateMs = ms.toFixed(1);
+        linkSeed = world.seed;
+        keepSeedOnLinks();
+        if (status) status.textContent = `Seed ${world.seed}`;
+        shown = [{ world, generateMs, cached: ms === 0 }, view];
+        overlay?.show(...shown);
+      } catch (error: unknown) {
+        console.error('World render failed', error);
+        // No World to show: fall back to the normal page that scrolls.
+        if (!mounted) delete document.documentElement.dataset.world;
+      } finally {
+        if (request === latest) frame.removeAttribute('aria-busy');
+      }
+    };
+
+    /** A new page is in: show its Seed's World, or move the camera for its route. */
+    const onRoute = async () => {
+      keepSeedOnLinks();
+      markCurrentLink();
+      // The Story Scroll keeps the page where it was and glides on to the route's section.
+      story.afterSwap();
+      if (currentSeed() !== shownSeed) return showSeed(currentSeed());
+      if (!mounting || story.on) return;
+      followRoute(await mounting, flightMs());
+      // The panel is new content: move focus to it, as a page load would.
+      ownPanel()?.focus({ preventScroll: true });
+    };
+
+    dice?.addEventListener('click', () => {
+      const url = new URL(location.href);
+      url.searchParams.set(SEED_PARAM, rollSeed(currentSeed()));
+      // A navigation, so each roll is a history entry: Back returns to the previous World.
+      void navigate(url.href);
+    });
+
+    // The Tour button, and clicking the idle Guide, start the Tour; on the Tour, clicking the Guide says the step again.
+    tourButton?.addEventListener('click', () => void startTour());
+    guideButton?.addEventListener('click', () => {
+      // On the Story Scroll there is no Tour: the Guide just says something.
+      if (story.on) {
+        lastIdle = pickLine(guide.lines.idle, lastIdle, Math.random());
+        const line = lastIdle;
+        if (line) void mounting?.then((view) => view.guide.say([fill(line)]));
+        return;
+      }
+      if (!tour) return void startTour();
+      const lines = steps[tour.step]!.lines.map(fill);
+      void mounting?.then((view) => view.guide.say(lines, { hold: true }));
+    });
+    tourCard?.addEventListener('click', (event) => {
+      const control = (event.target as Element).closest<HTMLElement>('[data-tour], [data-tour-open]');
+      if (!control) return;
+      // Opening the step's section ends the Tour; the route takes the camera there.
+      if (control.matches('[data-tour-open]')) return endTour('navigate');
+      if (control.getAttribute('aria-disabled') === 'true') return;
+      stepTour(control.dataset.tour as TourStepAction);
+    });
+    // Any navigation (a link, Back or Forward, a new Seed) ends the Tour.
+    document.addEventListener('astro:before-preparation', () => endTour('navigate'));
+
+    document.addEventListener('keydown', (event) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      // On the Tour: the arrow keys step through it and Escape exits (unless a menu popover is open or a field has focus).
+      if (tour) {
+        if (document.querySelector(':popover-open') || (event.target as Element).closest('input, textarea, select, [contenteditable]')) return;
+        const action = TOUR_KEYS[event.key];
+        if (action) {
+          event.preventDefault();
+          stepTour(action);
+        }
+        return;
+      }
+      // Escape closes an open section, like its close button; an open menu popover takes it first.
+      if (event.key !== 'Escape' || story.on) return;
+      if (document.querySelector(':popover-open')) return;
+      ownPanel()?.querySelector<HTMLAnchorElement>('[data-panel-close]')?.click();
+    });
+
+    // The router swaps the <html> attributes: keep the full-screen layout on.
+    document.addEventListener('astro:before-swap', (event) => {
+      const { world } = document.documentElement.dataset;
+      if (world) event.newDocument.documentElement.dataset.world = world;
+    });
+    document.addEventListener('astro:after-swap', () => void onRoute());
+    // A resize can move the cards (a side panel becomes a bottom sheet): re-aim the Data Card.
+    window.addEventListener('resize', () => {
+      if (mounted && !story.on) void mounting?.then((view) => view.setViewCentre(freeCentre()));
+    });
+    // Day and Night: the World follows <html data-theme> (set by the theme toggle and the system preference).
+    new MutationObserver(() => {
+      if (mounted) void mounting?.then((view) => view.setTheme(currentTheme()));
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    markCurrentLink();
+    void showSeed(currentSeed());
+    if (stats && dice) {
+      void import('@/render/statsOverlay').then(({ createStatsOverlay }) => {
+        overlay = createStatsOverlay({ dice, frame });
+        if (shown) overlay.show(...shown);
+      });
+    }
+  }
+</script>
+
+<style>
+  /*
+   * Without the full-screen layout (no JS, no WebGPU or WebGL): a normal
+   * page that scrolls, the cards stacked in a column. The World and its
+   * controls need JS and a GPU, so they are hidden.
+   */
+  .hud {
+    max-width: 64rem;
+    margin: 0 auto;
+    padding: var(--gutter);
+  }
+  .hud-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    justify-content: space-between;
+    gap: 0.5rem var(--gutter);
+  }
+  .hud-tools {
+    display: flex;
+    align-items: start;
+    gap: 0.5rem;
+  }
+  .hud-main {
+    display: grid;
+    gap: var(--gutter);
+    margin-top: var(--gutter);
+  }
+  /*
+   * The Story Scroll's sections: off the phone Story Scroll, only the page's
+   * own (its panel, or the intro on the home page) shows, laid out as if the
+   * wrappers were not there.
+   */
+  .story,
+  .story-item {
+    display: contents;
+  }
+  .story-item[data-extra] {
+    display: none;
+  }
+  .world,
+  .world-controls {
+    display: none;
+  }
+  /*
+   * The World still stands in for them: the Day picture, or the Night one
+   * on <html data-theme="night"> (and, before any script or without JS,
+   * when the system prefers dark), as the theme tokens do.
+   */
+  .world-still {
+    margin: 0;
+  }
+  .world-still img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--card-radius);
+    background: var(--surface);
+    box-shadow: var(--card-shadow);
+  }
+  .world-still .world-still-night,
+  :global(:root[data-theme='night']) .world-still .world-still-day {
+    display: none;
+  }
+  :global(:root[data-theme='night']) .world-still .world-still-night {
+    display: block;
+  }
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme])) .world-still .world-still-day {
+      display: none;
+    }
+    :global(:root:not([data-theme])) .world-still .world-still-night {
+      display: block;
+    }
+  }
+  .world-still figcaption {
+    margin-top: 0.4rem;
+    font-size: 1rem;
+  }
+  :global(:root[data-world]) .world-still {
+    display: none;
+  }
+
+  /* The floating card look shared by the company name, the intro and the controls. */
+  .brand,
+  .intro,
+  .world-controls {
+    border-radius: var(--card-radius);
+    background: var(--card);
+    box-shadow: var(--card-shadow);
+    color: var(--ink);
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.35rem 0.75rem 0.35rem 0.5rem;
+    font: 1.875rem / 1.1 var(--font-heading);
+    text-decoration: none;
+  }
+  a.brand:hover .brand-name,
+  a.brand:focus-visible .brand-name {
+    color: var(--brand-ink);
+  }
+  a.brand:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+  .intro {
+    box-sizing: border-box;
+    max-width: 26rem;
+    padding: 0.9rem 1.1rem 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .tagline {
+    margin: 0 0 0.6rem;
+    color: var(--brand-ink);
+    font: 1.875rem / 1.05 var(--font-heading);
+  }
+  .intro :global(p:last-child) {
+    margin-bottom: 0;
+  }
+  .intro:focus {
+    outline: none;
+  }
+  .world-controls {
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0.9rem 0.4rem 0.4rem;
+  }
+  .dice {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.75rem 0.4rem;
+    border: 0;
+    border-radius: 4px;
+    background: var(--brand-ink);
+    color: var(--on-brand);
+    cursor: pointer;
+  }
+  .dice:hover {
+    background: var(--brand-ink-hover);
+  }
+  .dice:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+  /* On a touch screen the dice and the Tour button are at least 44px tall to tap. */
+  @media (pointer: coarse) {
+    .dice,
+    .tour-start {
+      min-height: 2.75rem;
+    }
+  }
+  .world-status {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .tour-start,
+  .tour-step,
+  .tour-exit {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem 0.4rem;
+    border: 2px solid var(--brand-ink);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--brand-ink);
+    cursor: pointer;
+  }
+  .tour-start:hover,
+  .tour-step:hover,
+  .tour-exit:hover {
+    background: color-mix(in oklab, var(--brand) 14%, transparent);
+  }
+  .tour-start:focus-visible,
+  .tour-step:focus-visible,
+  .tour-exit:focus-visible,
+  .tour-open:focus-visible,
+  .tour-title:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+  /* The Tour's card: where it is, what to open, and next, previous and exit. */
+  .tour {
+    box-sizing: border-box;
+    width: min(100%, 22rem);
+    padding: 0.7rem 0.9rem 0.8rem;
+    border-radius: var(--card-radius);
+    background: var(--card);
+    box-shadow: var(--card-shadow);
+    color: var(--ink);
+  }
+  .tour[hidden] {
+    display: none;
+  }
+  .tour-count {
+    margin: 0;
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .tour-title {
+    margin: 0 0 0.2rem;
+    color: var(--brand-ink);
+    font: 1.875rem / 1.1 var(--font-heading);
+  }
+  .tour-open {
+    color: var(--brand-ink);
+  }
+  .tour-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+  }
+  .tour-next {
+    border-color: transparent;
+    background: var(--brand-ink);
+    color: var(--on-brand);
+  }
+  .tour-next:hover {
+    background: var(--brand-ink-hover);
+  }
+  .tour-step[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .tour-step[aria-disabled='true']:hover {
+    background: transparent;
+  }
+  .tour-exit {
+    margin-left: auto;
+    padding-inline: 0.5rem;
+  }
+  .tour-keys {
+    margin: 0.5rem 0 0;
+    font-size: 1rem;
+  }
+
+  /*
+   * The full-screen World: the canvas fills the viewport, edge to edge, and
+   * the page does not scroll. The HUD lies over it, letting the pointer
+   * through everywhere but its cards.
+   */
+  :global(:root[data-world]),
+  :global(:root[data-world] body) {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  :global(:root[data-world]) .hud {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gutter);
+    max-width: none;
+    height: 100dvh;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  :global(:root[data-world]) .hud-bar {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+  /* :global(*): the menu and the panel are other components, outside this scope. */
+  :global(:root[data-world]) .hud-bar > :global(*),
+  :global(:root[data-world]) .hud-main > :global(*) {
+    pointer-events: auto;
+  }
+  :global(:root[data-world]) .hud-main {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    /* Desktop: intro (or nothing) at the left, a panel at the right, the controls at the bottom left. */
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  :global(:root[data-world]) .intro {
+    grid-area: 1 / 1;
+    align-self: start;
+    justify-self: start;
+    max-height: 100%;
+  }
+  :global(:root[data-world]) .hud-main :global([data-panel]) {
+    grid-area: 1 / 2 / -1 / 3;
+    align-self: start;
+    justify-self: end;
+    max-height: 100%;
+  }
+  :global(:root[data-world]) .world-controls {
+    display: flex;
+    grid-area: 2 / 1;
+    align-self: end;
+    justify-self: start;
+  }
+  /* On the Tour, its card takes the place of the intro or the panel (desktop: bottom right). */
+  :global(:root[data-world]) .tour {
+    grid-area: 2 / 2;
+    align-self: end;
+    justify-self: end;
+  }
+  :global(:root[data-world][data-touring]) .intro,
+  :global(:root[data-world][data-touring]) .hud-main :global([data-panel]) {
+    display: none;
+  }
+  :global(:root) {
+    /* The Story Scroll's window of World above each card (phones). */
+    --story-window: 58svh;
+  }
+  :global(:root[data-world]) .world {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    display: block;
+    height: 100dvh;
+    /* clip, not hidden: a focused hotspot must not scroll the frame. */
+    overflow: clip;
+    /* The World takes every touch gesture: one finger pans, two pinch. */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: grab;
+    background: var(--surface);
+  }
+  /*
+   * Phones: the Story Scroll (`client/storyScroll.ts`). The World stays fixed
+   * full screen behind the page, and the page scrolls: the intro and every
+   * section in Story Order, each a window of World (where its Landmark is
+   * framed) and then its card. The top bar stays at the top, the controls
+   * at the bottom left; the World takes no pan or zoom, so a swipe on it
+   * scrolls the page.
+   */
+  @media (max-width: 47.99rem) {
+    .brand,
+    .tagline {
+      font-size: 1.40625rem;
+    }
+    /* At least 44px tall to tap (the company name links home on a section page). */
+    .brand {
+      box-sizing: border-box;
+      min-height: 2.75rem;
+    }
+    :global(:root[data-world]),
+    :global(:root[data-world] body) {
+      height: auto;
+      overflow: visible;
+      overscroll-behavior: auto;
+    }
+    :global(:root[data-world] body) {
+      overflow-x: clip;
+    }
+    /* Still a stacking context over the body, so the World (z-index -1 within it) takes the pointer between the cards. */
+    :global(:root[data-world]) .hud {
+      position: relative;
+      display: block;
+      height: auto;
+      padding: 0 var(--gutter);
+    }
+    :global(:root[data-world]) .hud-bar {
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 2;
+      padding: var(--gutter);
+      pointer-events: none;
+    }
+    :global(:root[data-world]) .hud-main {
+      display: block;
+    }
+    :global(:root[data-world]) .story {
+      display: block;
+      /* Room after the last card, so Contact's window of World can still fill the screen. */
+      padding-bottom: var(--gutter);
+      pointer-events: none;
+    }
+    :global(:root[data-world]) .story-item,
+    :global(:root[data-world]) .story-item[data-extra] {
+      display: block;
+      /* The window of World: the section's Landmark is framed in it, below the top bar. */
+      padding-top: var(--story-window);
+    }
+    :global(:root[data-world]) .story-item:last-child {
+      box-sizing: border-box;
+      min-height: 100svh;
+    }
+    :global(:root[data-world]) .story-item > :global([data-story-card]) {
+      pointer-events: auto;
+    }
+    :global(:root[data-world]) .intro,
+    :global(:root[data-world]) .story :global([data-panel]) {
+      width: auto;
+      max-width: none;
+      max-height: none;
+      overflow: visible;
+      animation: none;
+    }
+    /* The Story Scroll has no close: the page scrolls on to the next section. */
+    :global(:root[data-world]) .story :global([data-panel-close]) {
+      display: none;
+    }
+    :global(:root[data-world]) .world-controls {
+      position: fixed;
+      bottom: var(--gutter);
+      left: var(--gutter);
+      z-index: 2;
+    }
+    /* No Tour on the Story Scroll: scrolling the page goes from Landmark to Landmark. */
+    :global(:root[data-world]) .tour-start,
+    :global(:root[data-world]) .tour {
+      display: none;
+    }
+    :global(:root[data-world]) .world {
+      touch-action: auto;
+      cursor: default;
+    }
+    /* Phones have no arrow keys to speak of. */
+    .tour-keys {
+      display: none;
+    }
+    /*
+     * The dice and the Tour button are icons only, so the row (with the
+     * stats toggle and the Seed) stays on one line; their labels stay for
+     * screen readers, and as tooltips.
+     */
+    .control-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    /* At least 44px square to tap: the dice has no border, so 2px more padding than the Tour button. */
+    .dice {
+      justify-content: center;
+      min-width: 2.75rem;
+      min-height: 2.75rem;
+      padding: calc(0.35rem + 2px);
+    }
+    .tour-start {
+      justify-content: center;
+      min-width: 2.75rem;
+      min-height: 2.75rem;
+      padding: 0.35rem;
+    }
+    .world-controls {
+      gap: 0.5rem;
+      white-space: nowrap;
+    }
+  }
+  .world[data-dragging] {
+    cursor: grabbing;
+  }
+  .world canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  /* Data Cards: laid on the isometric plane by a matrix3d from the camera; never take the pointer. */
+  .data-cards {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    pointer-events: none;
+  }
+  .data-card {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    max-width: 11rem;
+    padding: 0.35rem 0.6rem 0.4rem;
+    border-left: 3px solid var(--brand);
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--paper) 92%, transparent);
+    box-shadow: 0 4px 14px var(--shadow);
+    color: var(--ink);
+    line-height: 1.2;
+    transform-origin: 0 0;
+    opacity: 0;
+    transition: opacity 200ms;
+  }
+  .data-card[data-near] {
+    opacity: 1;
+  }
+  /* On the Story Scroll, a card that would show under a section's card waits until it is clear. */
+  .data-card[data-near][data-covered] {
+    opacity: 0;
+  }
+  .data-card-value {
+    color: var(--brand-ink);
+    font-family: var(--font-heading);
+    font-size: 1.40625rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .data-card-label {
+    font-size: 1rem;
+  }
+  @media (max-width: 47.99rem) {
+    .data-card {
+      max-width: 8.5rem;
+      padding: 0.25rem 0.45rem 0.3rem;
+    }
+    .data-card-value {
+      font-size: 1.171875rem;
+    }
+    .data-card-label {
+      font-size: 1rem;
+    }
+  }
+  .hotspot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: 4px;
+    color: var(--ink);
+    text-decoration: none;
+    cursor: pointer;
+    -webkit-user-drag: none;
+  }
+  .world[data-dragging] .hotspot {
+    cursor: grabbing;
+  }
+  .hotspot-label {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    translate: -50% 0;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    background: var(--brand-ink);
+    color: var(--on-brand);
+    font-size: 1rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms;
+  }
+  /* The box stays invisible: the World outlines the model itself (`render/outline.ts`), and the label shows. */
+  .hotspot:focus-visible {
+    outline: none;
+  }
+  /* Forced colours (High Contrast) may not show the World's outline as a focus cue: keep a system ring there. */
+  @media (forced-colors: active) {
+    .hotspot:focus-visible,
+    .guide-button:focus-visible {
+      outline: 2px solid CanvasText;
+    }
+  }
+  .hotspot:hover .hotspot-label,
+  .hotspot:focus-visible .hotspot-label {
+    opacity: 1;
+  }
+  /* A plant too small on screen to aim at: the pointer goes to the Garden's link under it. */
+  .hotspot.plant[data-small] {
+    pointer-events: none;
+  }
+  /* The developer in the open House: above the House's own link, which covers the room. */
+  .hotspot.developer {
+    z-index: 1;
+  }
+  /* The plant of the Project page that is open, and the developer on Team, are outlined in the World too (`aria-current`). */
+  /* The Guide's button: over the Guide, under the hotspots (earlier in the frame), so it never takes a Landmark's click. */
+  .guide-button {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    -webkit-user-drag: none;
+  }
+  .world[data-dragging] .guide-button {
+    cursor: grabbing;
+  }
+  /* Like a hotspot's, its box stays invisible: the World outlines the Guide. */
+  .guide-button:focus-visible {
+    outline: none;
+  }
+  /* The Guide's speech bubble: beside the Guide, never under a card, never in the pointer's way. */
+  .guide-bubble {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: 17rem;
+    margin: 0;
+    padding: 0.45rem 0.75rem 0.55rem;
+    border-radius: 6px;
+    background: var(--paper);
+    box-shadow: 0 4px 14px var(--shadow);
+    color: var(--ink);
+    font-size: 1.125rem;
+    line-height: 1.2;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms;
+  }
+  .guide-bubble[data-shown]:not([data-offscreen], [data-covered]) {
+    opacity: 1;
+  }
+  .guide-name {
+    display: block;
+    color: var(--brand-ink);
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    line-height: 1;
+  }
+  /* The tail: a small square turned 45°, pointing at the Guide from the side it is on. */
+  .guide-bubble::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: var(--paper);
+    rotate: 45deg;
+  }
+  .guide-bubble[data-side='above']::after {
+    top: calc(100% - 6px);
+    left: calc(var(--tail, 50%) - 6px);
+  }
+  .guide-bubble[data-side='below']::after {
+    bottom: calc(100% - 6px);
+    left: calc(var(--tail, 50%) - 6px);
+  }
+  .guide-bubble[data-side='right']::after {
+    right: calc(100% - 6px);
+    top: calc(var(--tail, 50%) - 6px);
+  }
+  .guide-bubble[data-side='left']::after {
+    left: calc(100% - 6px);
+    top: calc(var(--tail, 50%) - 6px);
+  }
+  @media (max-width: 47.99rem) {
+    .guide-bubble {
+      max-width: 13.5rem;
+      font-size: 1rem;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hotspot-label,
+    .data-card,
+    .guide-bubble {
+      transition: none;
+    }
+  }
+</style>

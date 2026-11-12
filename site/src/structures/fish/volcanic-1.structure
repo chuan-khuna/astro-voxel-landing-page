@@ -1,0 +1,20 @@
+# Fish, volcanic: a black fish of the hot springs, glowing ember spots.
+# Seen from above: one voxel tall, so it swims under the water (sea level 0.15). The head points +z (the bottom row), the tail -z.
+kind: fish
+biome: volcanic
+variant: 1
+footprint: 1x1
+door: none
+anchor: 0 0 0
+key:
+  k fishDark
+  e fishEmber
+layer 0
+........
+........
+...k.k..
+...kek..
+...kkk..
+....e...
+........
+........

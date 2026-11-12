@@ -1,0 +1,124 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import '@fontsource/jersey-20';
+import '@fontsource/jersey-15';
+import { site } from '@/data/site';
+import { themeCss } from '@/data/theme';
+import { themeBootScript } from '@/lib/theme';
+import { pageMeta, type PageImage } from '@/lib/seo';
+import { OG_IMAGE } from '@/lib/worldStill';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** The picture the page's link preview shows; the World still (the OG image) by default. */
+  image?: PageImage;
+}
+const { title = site.seo.title, description = site.seo.description, image } = Astro.props;
+// Canonical URL, Open Graph and Twitter tags, from site data and the page's own title, description and image.
+const meta = pageMeta({
+  siteUrl: site.url,
+  siteName: site.company.name,
+  locale: site.seo.locale,
+  path: Astro.url.pathname,
+  title,
+  description,
+  image: image ?? { ...OG_IMAGE, alt: site.seo.imageAlt },
+});
+// The OG still's tags are marked, so a build that could not capture it takes them out (stripOgStill).
+const ogStill = !image;
+const { colour, fonts } = site.brand;
+---
+
+<!doctype html>
+<!-- No page cross-fade: the World stays put and only the panel changes. -->
+<html lang={site.seo.locale.split(/[-_]/)[0]} transition:animate="none">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={meta.canonical} />
+    {
+      meta.tags.map((tag) =>
+        tag.attr === 'property' ? (
+          <meta property={tag.key} content={tag.content} data-og-still={(ogStill && tag.image) || undefined} />
+        ) : (
+          <meta name={tag.key} content={tag.content} data-og-still={(ogStill && tag.image) || undefined} />
+        ),
+      )
+    }
+    <link rel="sitemap" href="/sitemap.xml" />
+    <link rel="icon" href="data:," />
+    <!--
+      Day or Night, before first paint: the visitor's choice (Auto, Day or
+      Night, from localStorage) and the system preference set
+      <html data-theme>, so no page flashes the wrong theme.
+    -->
+    <script is:inline set:html={themeBootScript} />
+    <!-- The theme tokens (data/theme.ts), shared with the World's three.js materials. -->
+    <style is:inline set:html={themeCss()} />
+    <!--
+      The full-screen World layout is only for a browser that can draw the
+      World: with JS and WebGPU or WebGL 2. Set before first paint, so the
+      page does not jump; the World's script keeps it across routes and drops
+      it if the World fails to mount. Without it the page is a normal page
+      that scrolls.
+    -->
+    <script is:inline>
+      (() => {
+        let live = 'gpu' in navigator;
+        if (!live) {
+          const gl = document.createElement('canvas').getContext('webgl2');
+          live = !!gl;
+          gl?.getExtension('WEBGL_lose_context')?.loseContext();
+        }
+        if (live) document.documentElement.dataset.world = 'live';
+      })();
+    </script>
+    <!-- The client router keeps the World canvas (transition:persist) across routes. -->
+    <ClientRouter />
+  </head>
+  <body style={`--brand: ${colour}; --font-body: ${fonts.body}; --font-heading: ${fonts.heading};`}>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  /* The colour tokens (--ink, --paper, --surface, --brand-ink, --on-brand, --shadow) come from data/theme.ts, inlined in <head>. */
+  :root {
+    /* Floating cards over the World. */
+    --card: color-mix(in oklab, var(--paper) 95%, transparent);
+    --card-radius: 6px;
+    --card-shadow: 0 6px 24px var(--shadow);
+    /* Space between the cards and the edge of the screen. */
+    --gutter: 1rem;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--ink) 35%, transparent) transparent;
+  }
+  body {
+    margin: 0;
+    /* Jersey 20 is drawn on a 20px grid: 20px keeps its pixels whole. */
+    font: 1.25rem / 1.3 var(--font-body);
+    /* Jersey has one weight: never fake a bold or an italic. */
+    font-synthesis: none;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  h1,
+  h2,
+  h3,
+  dt {
+    font-family: var(--font-heading);
+    font-weight: 400;
+    line-height: 1.1;
+  }
+  button {
+    font: inherit;
+  }
+  @media (max-width: 47.99rem) {
+    :root {
+      --gutter: 0.5rem;
+    }
+  }
+</style>

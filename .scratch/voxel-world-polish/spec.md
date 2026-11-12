@@ -1,0 +1,280 @@
+# Spec: Voxel World polish
+
+Status: ready-for-agent
+
+Starts after every ticket in `.scratch/voxel-world-landing/` is resolved. It builds on that feature's World generator, renderer and routes.
+
+Sources:
+- Discussion records: `docs/records/2026-11-11-voxel-world-polish.md`, `docs/records/2026-11-11-voxel-world-ambient-life.md`
+- Glossary: `GLOSSARY.md` (Pinned Project, Landmark Variant, Decoration, Ambient Life, and the updated Biome, Client and Partner)
+- ADRs: `docs/adr/0004-ascii-voxel-structures.md`, `docs/adr/0005-continuous-render-for-ambient-life.md`, `docs/adr/0006-voxel-resolution-tiers.md`, plus 0001–0003
+- Sizes and scale: `.scratch/voxel-world-polish/README.md`, record `docs/records/2026-11-11-voxel-scale-and-footprints.md`
+- Base spec: `.scratch/voxel-world-landing/spec.md`
+
+## Problem Statement
+
+The first version of the World works, but it looks like a placeholder:
+- Every Landmark is a single code-built shape.
+- The Garden's trees merge into one hedge.
+- The Isles are small and bare.
+- The sea is two flat planes.
+
+Rolling a new Seed changes the terrain and the colours, but not the character of the place. The World should feel like a crafted miniature, and each Biome should feel like its own place.
+
+## Solution
+
+**Structures are predefined.** Every Landmark, tree, flower, boat, ship and piece of Decoration is a hand-drawn voxel structure, kept in the repo as an ASCII file at ⅛-unit scale (ADR 0004, ADR 0006). An agent draws them, and the user reviews them in a dev-only Model Gallery.
+
+**Landmark Variants.**
+- Each Biome has its own building style for every Landmark. For example, the House is a stilt house in the tropical Biome, a timber cabin in northern, a brick cottage in autumn and a stone house in volcanic.
+- Each style has 2–3 Variants that differ in shape, such as the roof, an extra wing or a porch.
+- The Seed picks the Variant.
+
+**Garden.**
+- A **Pinned Project** grows as one large flower filling a cell, in the front row of the Garden as the camera sees it.
+- Every other Project grows as a tree.
+- Trees and flowers leave a one-voxel gap so each reads as its own plant.
+- The Garden holds grass and paths but no decorative flowers.
+
+**Boats and ships.**
+- Clients and Partners come in several kinds of boat and ship.
+- Each Client and Partner keeps its kind in every World. The kind is derived from its id, and its style follows the Biome.
+
+**Bigger Isles and Decoration.**
+- Isles are about 1.5× wider.
+- Each Biome scatters its own **Decoration**: small trees, grass, flower clumps and minor buildings.
+
+**Water.** The sea becomes a translucent voxel layer. It shades from shallow to deep and bobs gently.
+
+**House Interior.** Each Biome has its own furnished room. Every House Variant in that Biome has a liftable roof and fits that room.
+
+**Ambient Life.** The World moves on its own while it is visible:
+- wind sways the plants and blows leaves
+- each Biome has its own animals and particles (butterflies, fireflies, snow, ash), and Day or Night decides which are out
+- clouds drift over the sea and their shadows cross the Isles
+- fish swim in the shallows and waves break on the shore
+
+**Phones: the Story Scroll (ticket 18, the user's decision of 2026-11-12).** On a phone the site reads top to bottom: the intro and every section stack as one scrolling page over the fixed World, and the camera glides from one Landmark's close-up to the next with the scroll. It never moves by itself and never pulls out to the whole Isle. Desktop and tablet (48rem and up) keep one panel over the World. Every route also gets a responsive pass at every width.
+
+**Night light.** Torches and lanterns in each Biome's style stand round the Landmarks and along the paths. At Night they flicker and throw warm block light on the voxels round them, and every light source glows softly.
+
+None of it can be clicked, none of it hides a Landmark for long, and all of it stands still under reduced motion (ADR 0005).
+
+## User Stories
+
+1. As a visitor, I want each Biome's buildings to have their own style, so that rolling a new Seed feels like visiting a new place.
+2. As a visitor, I want the same Landmark to come in a few shapes, so that two Worlds of the same Biome still differ.
+3. As a visitor, I want buildings to have doors, windows, roofs and chimneys drawn properly, so that the World feels like a premium miniature.
+4. As a visitor, I want the company's highlighted work shown as flowers at the front of the Garden, so that I notice it first.
+5. As a visitor, I want each tree in the Garden to read as a separate tree, so that I can tell Projects apart and click the right one.
+6. As a visitor, I want Clients' boats and Partners' ships to come in several kinds, so that the Dock looks lively.
+7. As a returning visitor, I want each Client to keep its boat across Worlds, so that I can recognise it.
+8. As a visitor, I want bigger Isles dressed with trees, grass, flowers and small buildings, so that the World feels lived in.
+9. As a visitor, I want scenery never to hide or be confused with a Landmark, so that I always find the sections.
+10. As a visitor, I want voxel water that moves gently, so that the sea matches the rest of the World.
+11. As a visitor who prefers reduced motion, I want the water to stay still, so that the World does not move without me.
+12. As a visitor, I want the House Interior to match the House's Biome, so that inside and outside belong together.
+13. As a site owner, I want to pin Projects in content, so that I choose what the Garden highlights.
+14. As a site owner, I want to review every model in one gallery before it ships, so that the look stays under my control.
+15. As a mobile visitor, I want fewer Decoration pieces, so that the World stays smooth, but never missing Landmarks.
+16. As a visitor, I want animals, birds, fish and insects moving about, so that the World feels alive.
+17. As a visitor, I want wind in the trees, falling leaves, drifting clouds and waves on the shore, so that the miniature never looks frozen.
+18. As a visitor at Night, I want fireflies, bats and faintly glowing surf, so that Night has its own life.
+19. As a visitor, I want moving things never to block a click or hide a Landmark, so that finding sections stays easy.
+20. As a visitor who prefers reduced motion, I want all Ambient Life to stand still, so that the World does not move without me.
+21. As a visitor on a slow device, I want the motion to scale itself down, so that panning and camera flights stay smooth.
+22. As a visitor at Night, I want torches that flicker and light up the ground round them, so that I can find the Landmarks by their light.
+
+## Implementation Decisions
+
+**Structure files (ADR 0004)**
+- Each structure is an ASCII file: one block per ⅛-unit layer (1/16-unit for the House Interior), bottom to top, with one character per voxel.
+- A key maps each character to a colour role, such as wall, roof, window, door, trim or foliage.
+- Roles resolve to the Biome's palette or to the fixed House and brand colours. Structures never hold raw colours, so the same OKLCH, jitter and seam shading applies everywhere.
+- Files are parsed at build time into typed voxel arrays. The browser never parses ASCII.
+- Each structure declares its footprint in 1-unit cells, the face its door is on (if it has one) and its anchor point.
+- The format, colour roles, build-time plugin and Model Gallery are documented in `docs/documents/voxel-structures.md` (ticket 01).
+
+**Rendering**
+- Each placed Landmark is meshed once by the existing greedy mesher.
+- Repeated structures (trees, flowers, Decoration, boats, ships) are drawn with one `InstancedMesh` per structure.
+
+**Scale (ADR 0006).**
+
+| Tier | Voxel | Used for |
+|---|---|---|
+| Terrain | 1 unit | ground, sea, clouds |
+| Ground detail | ¼ unit | bridges, stairs, the Dock's deck and jetty |
+| Structure | ⅛ unit | Landmarks, Service structures, plants, fences, boats, ships, Decoration, creatures |
+| Particle | ⅛ unit | leaves, butterflies, fireflies, snow, ash, foam |
+| Interior | 1/16 unit | the House Interior's room and developer, drawn in the World while the House is open |
+
+Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person 12.
+
+| Footprint | Cells | Voxels (⅛) |
+|---|---|---|
+| House plot: House 3×3 plus front yard with the Mailbox | 4×4 | 32×32 |
+| Station group: the lighthouse 2×2 in the middle, a 2×2 structure per Service round it (sides, then corners) | 6×6 | 48×48 |
+| Garden: 3×3 bed inside a one-cell fence | 5×5 | 40×40 |
+| Dock | 2×1 plus jetty | 16×8 |
+| Tree or flower | 1×1 | 8×8 |
+
+**Landmark Variants**
+- Each Landmark (House, Station, Mailbox, Dock) and each Service structure has one style per Biome and 2–3 Variants per style, about 8–12 per Landmark. Built in ticket 03: the House 3, the Station 2, the Mailbox 3 and the Dock 2 per Biome (`LANDMARK_VARIANTS`). Ticket 15 replaced the Station's two with one lighthouse per Biome, and gave each Service kind one structure per Biome (its kind, not the Seed, decides which).
+- The Seed picks a Variant per Landmark, so the same Seed gives the same Variants. The pick uses a sequence of its own, so it never moves the layout, and content counts never change it.
+- A Variant fills its Landmark's footprint (ticket 18 of the base feature).
+- Doors face the path where there is one.
+
+**Garden**
+- Projects gain an optional `pinned` flag.
+- The Garden is a fixed 3×3 bed inside a fence one cell wide (5×5 in all), with a gate on the path side.
+- Pinned Projects bloom as flowers in the front two rows (3×2 as the camera sees it), up to 6, chosen as the first six by id.
+- Other Projects, and Pinned Projects beyond six, grow as trees in the back row (3×1), up to 3.
+- One plant per cell, so the Garden shows at most 9 Projects. Pinned Projects take places first.
+- Projects beyond that are not in the World but stay on `/garden`, where Pinned Projects are listed first.
+- Other Projects never take an empty flower cell: with fewer than six Pinned Projects, those cells stay grass. (This was open; ticket 05 assumed it while the user was away, and it is logged in `docs/todo.md` to confirm.)
+- Trees use the Biome's tree species with a 6×6 canopy in an 8×8 cell, so each plant reads separately.
+- No Decoration inside the Garden: an empty Garden is a grass patch.
+- Built in ticket 05: the gate faces the House, south or east (the sides the camera sees); there is no path to it. The fence is the Garden's Landmark Variant (`garden/<biome>-1.structure`); each Biome has a tree and two flowers (`tree/`, `flower/`), the flowers taken in turn. Placement treats the Garden as three height bands (`GARDEN_HEIGHT`: fence 1, flowers 1.75, trees 3.5 units).
+
+**Boats and ships**
+- Client boats and Partner ships each have several kinds, styled per Biome.
+- The kind comes from a stable hash of the Client's or Partner's id, not from the Seed.
+- Partner ships are always clearly larger than Client boats.
+- Built in ticket 06: three boat kinds (a rowing boat, a sailing dinghy, a fishing boat; 1×1) and three ship kinds (a schooner, a steamer, a cargo trader; 1×3), each drawn per Biome (`boat/<biome>-<kind>`, `ship/<biome>-<kind>`), bow towards +z, standing on the sea floor. The site passes the Clients' and Partners' ids (`clientIds`, `partnerIds`) to `generateWorld`, which gives each boat and ship its `kind` (`vesselKind`: a salted FNV-1a hash of the id). Boats and ships are one `InstancedMesh` per structure; ships turn by any angle as they sail.
+
+**Isles**
+- Radii grow about 1.5×:
+
+  | Isles | Radius |
+  |---|---|
+  | 1 | 14–18 |
+  | 2–3 | 10–14 |
+  | 4 | 9–12 |
+
+- Camera bounds follow.
+- Mobile uses the same Isles with less Decoration.
+- No Landmark hides another from the camera. Placement treats each Landmark's model as a column as tall as `LANDMARK_HEIGHT` allows (Station 6, House 4, Garden 3.5, Dock 1, Mailbox 2 units; since ticket 15 the Station's 6 covers only its lighthouse, the rest of its group 2.5), and no model may be taller.
+- Measured sizes, retry rates and generation times (before and after) are in `README.md` and `docs/documents/world-generator.md`.
+
+**Decoration**
+- Each Biome has its own Decoration set: small trees (a different, smaller species from Project trees), grass, flower clumps, and minor buildings such as sheds, fences, lamps, rock piles and windmills.
+- Placement is deterministic from the Seed.
+- Decoration never sits on a footprint, a path, a bridge end or inside the Garden.
+- It is never taller than the nearest Landmark.
+- It never stands between the camera and any Landmark. This uses the same occlusion check as terrain placement.
+- A reduced tier applies on small devices.
+- Built in ticket 08: nine kinds, one piece each per Biome (`grass`, `clump`, `rocks`, `bush`, `sapling`, `fence`, `lamp`, `shed`, `windmill`; all 1×1), placed from a sequence of the Seed's own (`<seed>/decoration`) after the layout, so no layout moves. A piece keeps off and one cell clear of every footprint and jetty (so out of the Garden and the House's yard), off paths and bridge ends; "taller than the nearest Landmark" compares its kind's height cap (`DECORATION_HEIGHT`) with the nearest Landmark's lowest Variant (`LANDMARK_MIN_HEIGHT`: the Garden counts as its 1-unit fence, the Dock as 0.875); the occlusion check is the Landmarks' own sight line (`world/sightline.ts`). Minor buildings face south or east, keep 3 cells apart and are capped per World. The reduced tier draws every other piece. Lamps are Light Sources since ticket 16: they glow at Night and light the cells round them, and the reduced tier keeps every one.
+
+**Water**
+- The sea is a 1-unit voxel layer with the soft-voxel seam and bevel look.
+- It is slightly translucent over shallow ground.
+- Its colour runs from the Biome's shallow to deep water by distance from the coast.
+- A gentle per-voxel bob is computed in the shader. It stops under reduced motion.
+- At Night the water darkens, as the base spec already says.
+- Built in ticket 07: every sea cell of the grid and of a ring 8 cells round it is one water voxel, its top at the sea level (0.15); flat still water beyond the ring reaches 6× the grid. Only tops and short skirts on the camera-facing sides are drawn. Colour runs from `waterShallow` beside the coast to `waterDeep` at 6 cells; opacity runs from 0.7 beside the coast to opaque at 3 cells, over a seabed tile (darker sand) on the sea floor (y = 0). Each voxel bobs 0.04 units every 4.5 s, out of step with its neighbours and with a slow swell across the sea; the bob fades out over the ring's outer cells and holds still under reduced motion or while the House Interior shows. Boats and ships ride the same swell since ticket 10. The sea costs about 20,000–47,000 triangles (`seaModel.ts`, `seaMaterial.ts`).
+
+**Station and Services**
+- The Station is a group: its own 2×2 building at the centre, and a 2×2 structure for each Service round it.
+- Each Service structure says what the Service does, for example pipes and tanks for data engineering, silos for data platforms, an observatory with a chart board for analytics, and a lab for machine learning.
+- Decided 2026-11-12 (ticket 15, built): a 6×6 ring. The lighthouse's 2×2 is in the middle; the first four Services in content order take the sides, Services 5–8 the corners; more show only on `/services`; empty places stay open ground. Services are not clickable: the whole group is the Station, with one hotspot and Data Card.
+- Built in ticket 15: the lighthouse replaces ticket 03's Station Variants (one per Biome: a white-and-red tower in the tropics, pale granite in the north, brick in autumn, basalt banded ember-red on volcanic Isles, 47 layers). Four Service kinds (`SERVICE_KINDS`: pipeline, warehouse, observatory, lab), one structure per kind per Biome (`service/<biome>-<kind>`), 12–20 layers; the kind comes from words in the Service's id, else a hash of it (`serviceKind`). Placement treats the group as columns: 6 units over the lighthouse, `SERVICE_HEIGHT` (2.5) over every other place.
+
+**House plot and Mailbox**
+- The House stands on a 4×4 plot: the House itself is 3×3, and the other seven cells are its front yard, an L along its south and east sides (the two the camera sees); the door opens onto one of them.
+- The Mailbox stands in that yard. It is still the Contact Landmark with its own hotspot, but it has no footprint of its own.
+
+**House Interior**
+- The Interior is drawn in the World at 1/16 unit (ADR 0006, amended by ticket 17). The roof lifts, the camera dives in, and the room shows from the moment the lid starts to lift until it comes down, at the same detail all the way.
+- There is one furnished room per Biome, four in all.
+- Every House Variant in a Biome has a roof that lifts off and the same interior space, so that Biome's room fits it.
+- Every room has the developer at a computer, and clicking the developer opens Team.
+- Built in ticket 04: the rooms are `room/<biome>-1.structure` and the seated developer `developer/any-1.structure`, both at 1/16 unit. While the lid lifts, the World shows the room coarsened to ⅛ unit; once the lid is up and the camera at rest close on the House, the Interior scene (the House's shell and ground, the room at 1/16) takes over through the same camera. Shutting the House, zooming out or panning the room off screen hands back to the World, and the lid comes down.
+- Built in ticket 17 (replacing ticket 04's hand-over): there is no Interior scene. The World draws the room and the developer at 1/16 unit (`render/house.ts`), shown only while the lid is lifted or lifting; the ⅛-unit coarse room, `showsInterior` and `data-scene` are gone. The developer types and the screen scrolls on the shared clock; at Night the room's lamp or fire lights it warmly (since ticket 16 a Light Source, its block light baked with the World's). An open House draws about 2,100–2,800 more triangles; a shut one none.
+
+**Model Gallery**
+- A dev-only page at `/dev/models`. It is not part of the production build.
+- It shows every structure in a grid of Biome × Variant, with the real renderer and shading.
+- Models can be rotated, and the page can switch between Day and Night.
+- Agents attach gallery screenshots whenever they add or change models.
+
+**Ambient Life (ADR 0005)**
+- *Render loop.* While the World is visible (tab shown, canvas on screen), it renders continuously. Phones cap at 30 fps. It goes back to render on demand under reduced motion, when hidden or off screen, and at the still tier.
+- *Tiers.* There are three tiers: full, reduced and still. Desktop starts at full and phones at reduced. Frames slower than the target for several seconds drop one tier, which never climbs back during that visit. Camera flights and drags never stutter because of Ambient Life. Built in ticket 09 (`lib/lifeTier.ts`): the watch averages frame times over 3 s windows and drops a tier when a window averages under 40 fps at full or under 20 fps at reduced; the reduced tier caps ambient frames at 30 fps; `?life=full|reduced|still` pins a tier for measuring.
+- *One clock and one wind.* Every motion reads a shared time uniform and a shared wind uniform. The wind has one direction for the whole World, decided by the Seed, and blows in gusts that roll across the Isles. Freezing the clock freezes everything, for reduced motion, the still tier, the Model Gallery and build-time stills. Built in ticket 09: `render/ambientClock.ts` (`time` and `wind` uniforms, `windAt` with gusts rolling down the wind) and `World.wind.direction`, drawn from the Seed's own sequence. The sea's bob and the ships run on it.
+- *Not clickable.* Ambient Life is never a hotspot or a raycast target. Pointers reach Landmarks and Garden plants through it.
+- *Scale.* Shaped creatures (deer, squirrels, birds, bats, fish) are ⅛-unit ASCII structures drawn with `InstancedMesh`. Particles (butterflies, fireflies, leaves, snow, ash, foam) are single-colour ⅛-unit cubes moved in the shader, with no structure file. (Built in ticket 13: the foam is ⅛-unit squares of the water voxels' tops, coloured in the sea's shader, not cubes; see *Sea*.)
+- *Sets.* Each Biome has its own creatures, and Day or Night decides which are out:
+
+  | Biome | Day | Night |
+  |---|---|---|
+  | tropical | bright butterflies, seabirds, junglefowl | fireflies |
+  | northern | deer, gulls, drifting snow | fireflies, drifting snow |
+  | autumn | red falling leaves, squirrels | fireflies, bats |
+  | volcanic | mountain goats, drifting ash | bats, drifting ash |
+
+  Wind, shore waves, clouds and fish appear in every Biome. Since ticket 10, leaves fall from the trees in every Biome by Day and at Night, coloured from each Biome's foliage; autumn's are the red and gold ones, and more of them. Fish species follow the Biome. Agents may adjust the sets in review, but every Biome keeps something for Day and for Night.
+- *Wind sway.* Only instanced plants sway: Garden trees and flowers, and Decoration's small trees, grass and flower clumps. Only the canopy moves, by at most ½ voxel, so tree hotspots still line up. Landmarks stay still. Boats and ships rock on the swell.
+  Built in ticket 10: plants (Garden trees and flowers; Decoration's grass, clumps, bushes and small trees) sway in the vertex shader (`render/windSway.ts`); the lower 35% (trunk or stem) stays still and the top moves at most 1/16 unit: a lean with the gusts plus a flutter. Leaves (`render/fallingLeaves.ts`, `render/leaves.ts`) fall from every tree in every Biome, by Day and at Night: 2 per tree (autumn 3), at most 72 a World, from a sequence of the Seed's own (`<seed>/leaves`); each starts on a foliage voxel and takes its colour, lands down the wind on level land off the Landmarks, tumbles whole turns, lies 1.5 s fading and waits 2–9 s; the life tier's share shows. Boats and ships heave 0.04 with the water voxel of their cell (its own hashed phase worked out on the CPU) and roll and pitch a few degrees (`render/swell.ts`).
+  Built in ticket 11: snow and ash are weather, so they keep falling at Night (added to the table). Particles live in spawn areas from `generateWorld` (`World.particles`, `world/particles.ts`, from `<seed>/particles`): boxes of air over land no higher than their ground, off every footprint, the jetty and bridges, over no Decoration taller than their floor (0.55 units) and under every Landmark's sight line (`sightClearance`, shared with Decoration). Butterflies (3 an area, at most 6 areas) loop round a flower clump 0.55–1.4 units up, flapping; fireflies (5 an area, at most 8) wander 0.55–1.1 units over grass and blink, unlit; snow (8 an area, at most 14) and ash (7, at most 12, one in four an ember) fall from 3.5 units down the wind, swaying and pushed by its gusts. One `InstancedMesh` per kind, all motion in the shader on the shared clock (`render/swarms.ts`, pure; `render/particles.ts`); the theme shows the kinds out, the life tier's share how many; never raycast.
+- *Clouds.* Clouds are slightly translucent 1-unit voxel masses drifting high with the wind, only over the sea round the Isles. Soft cloud shadows cross the whole World. Clouds fade out as the camera zooms in on a Landmark. At Night they darken and cast no shadow.
+  Built in ticket 12: up to 8 clouds a World from `generateWorld` (`World.clouds`, `world/clouds.ts`, from `<seed>/clouds`), each a shape of 1-unit voxels generated from the Seed (3–8 long down the wind, 2–5 wide, 2–3 high), floating 2–4 units above the tallest Landmark and drifting 6–14 units down the wind at 0.2–0.4 units a second, fading in and out at the ends of each drift. No column of a cloud is ever over land, straight down or down the camera's view ray, with a cell to spare, so a cloud is never seen over an Isle. One merged translucent mesh (80% opaque), moved in the shader on the shared clock (`render/clouds.ts`); white by Day, dark grey-blue at Night; whole at the Overview and gone well before any Landmark's close-up (`render/cloudMath.ts`); the life tier's share; never raycast. The shadows are a drifting noise mask in the voxel and sea materials (`render/cloudShadow.ts`), darkening by up to 20% by Day and not at all at Night, frozen with the clock.
+- *Sea.* Shore foam (⅛-unit) runs in towards the coast, breaks along the edge and draws back. It is computed in the shader from the same distance-from-coast data as the water colour. Schools of 3–5 fish swim in the shallows, seen through the translucent water. Now and then one leaps and splashes. At Night the foam dims, and a faint bioluminescent glow shows where waves break.
+  Built in ticket 13: the foam is scattered ⅛-unit squares of the water voxels' tops, worked out in the sea's fragment shader (`render/seaMaterial.ts`, `render/surf.ts`) from each voxel's corner distances from the coastline (`seaModel`'s `coast`): a wave every 7 s, a crest running in from 2 units out, breaking thick along the edge and washing back out to 0.85 units as it thins, a thin rim always lapping; waves arrive a little out of step along the coast. No surf on the jetty's cells or a moored boat's (fading over the next cell). Up to 6 schools a World from `generateWorld` (`World.fish`, `world/fish.ts`, from `<seed>/fish`): 2×2-cell squares of sea within 2 cells of land, clear of the jetty, boats, bridges, buoys and ships' loops. Fish are one ⅛-unit voxel tall (the shallows are 0.15 units deep), 4 long, one species per Biome (`structures/fish/`), one `InstancedMesh`, swimming round a loop under the water in three lanes; each school leaps once every 7–14 s, a fish at a time, 0.45 units up, with 3 drops of ⅛-unit spray as it leaves the water and 3 as it falls back (`render/schools.ts`, pure; `render/fish.ts`). The life tier shows its share of whole schools. At Night the foam dims (`WorldTokens.foam`) and a faint cyan glow (`surfGlow`) shows where waves break.
+- *Land animals.* `generateWorld` gives each land animal a rest point and a short route from the Seed. Routes never cross a footprint, a bridge or the Garden, and never stand between the camera and a Landmark, using the Decoration occlusion check. At runtime an animal walks its route, then rests, grazes or turns its head. Each Isle has at most 2–3 animals.
+  Built in ticket 14: one animal a Biome (`ANIMAL_SPECIES`): a junglefowl, a deer, a squirrel and a mountain goat (the junglefowl and goat added to the table, so every Biome has one), out by Day only; at Night they rest out of sight. `World.animals` (`world/animals.ts`, from `<seed>/animals`): 2 or 3 an Isle where there is room (at most 3), round-robin by Isle; a route takes 2–5 steps to 4-neighbours on level land of one Isle, off paths, bridges and their ends, a cell clear of footprints and the jetty, with only grass or clumps underfoot and beside it, every neighbour land no higher (level along the axes for the deer, whose body overhangs its cell), and out of every Landmark's sight line (`sightClearance`) over the route and its neighbours. A round (`render/creatures.ts`, pure): rest (lying down, glancing about), look round, walk out (turning in place at corners), graze, walk back, turn. Two `InstancedMesh`es a species, body and `head` (which turns and dips about the neck), placed on the CPU each frame from the shared clock's seconds (`render/creatureMeshes.ts`), not in the shader.
+- *Birds* circle above the Isles, higher than every Landmark, and never fly through the camera's view of a Landmark.
+  Built in ticket 14: one kind a World, from `CREATURE_SETS`: tropicbirds (tropical) and gulls (northern, added) by Day, bats (autumn, volcanic) at Night. `World.birds` (`world/birds.ts`, from `<seed>/birds`): up to 5, 2 an Isle, each a circle 1.5–3 units round a land cell, between 0.6 units over the tallest Landmark's top and 0.7 under the clouds' lowest (the wingtips stay between), its body never on any Landmark's sight line all the way round. Birds beat their wings in bursts and glide; bats beat all the time and flutter. Body and two wing parts (`wingLeft`, `wingRight`), placed on the CPU like the animals. The life tier shows its share of each; never raycast.
+
+**Story Scroll (ticket 18)**
+- Built in ticket 18. Below 48rem (with the World live) every page renders the intro and every section in Story Order (`WorldPage.astro`, `SectionContent.astro`); the page's own panel takes its section's place, and a Project's page follows the Garden's. Each section is a window of World (58svh) and then its card.
+- The camera holds at a section while its card is read and glides to the next section's framing as the next window scrolls in, eased and part-way with the finger, chased with a 320 ms damping (`render/storyMath.ts`, `dampState`; controller `client/storyScroll.ts`). The intro frames the Station at 0.8 of its close-up's zoom; the Garden as close as the camera may come. The House's lid follows the same scroll. Reduced motion cuts.
+- The URL follows the section in view (`replaceState`); in-page links scroll and push an entry; Back and Forward scroll back; a deep link opens scrolled to its section with the camera there. The World takes no pan or zoom on a phone, so swipes scroll the page. No Tour on phones. Data Cards show only for the section's Landmark, once the camera holds, never under a card.
+- Responsive pass: no horizontal scroll and no text under 16px at 320–1440px, portrait and landscape; controls at least 44px to tap on phones and touch screens.
+
+**Night light (ticket 16)**
+- A Light Source is a ⅛-unit structure with a `flame` or `glow` role and a declared light: colour (a theme token per Biome), reach of about 3–5 cells and strength.
+- Each Biome has its own torch style with 2 Variants. `generateWorld` places one or two at each Landmark and a few along paths and at bridge ends, under the Decoration rules.
+- Block light is baked: a flood fill in the World Web Worker, one level less per cell, stopped by solid voxels, passed to the mesher as a per-vertex attribute. No real-time lights.
+- A `nightStrength` uniform turns it on at Night; switching theme never remeshes.
+- Flames flicker from the shared clock. Emissive parts bloom at the full tier, use a halo sprite at the reduced tier, and keep only block light at the still tier.
+- The House's lit windows and the buoys' lamps also throw block light; fireflies only glow.
+- Built in ticket 16 (ADR 0007): roles `flame` (flickers) and `glow` (steady), a `light: <reach> <strength>` header; `structures/torch/<biome>-1` (tall, 1.5 units) and `-2` (short, 0.75, so one fits by the Dock and the Garden); `World.torches` from `world/torches.ts` (`<seed>/torches`, after the Decoration; one or two by every Landmark over 400 Seeds, about 11 a World). Light Sources: torches, the Decoration's lamps (kept on the reduced tier), the lighthouse's lantern, a Dock's lanterns, the House room's lamp or fire (replacing its own light, as decided), the House's front windows and the buoys. The bake is a flood fill over 1-unit cells (terrain solid, structures not), its result a 3D texture (colour × brightness, flicker phase) every voxel material samples half a cell out from the surface, not a per-vertex attribute: that would have split the mesher's merged quads and could not reach instanced structures. The sea takes it only on a soft rim along the shore. `BLOCK_LIGHT.night` is the uniform. The tiers are the life tier's: bloom (an MRT emissive target through `BloomNode`, in the outline's `RenderPipeline`) at full, a halo per source in one mesh at reduced, neither at still. Moonlight dimmed: sun 1.2 → 0.9, sky 0.95 → 0.75. Ember particles: not built (left for review).
+
+## Testing Decisions
+
+- World behaviour is still tested through `generateWorld` only.
+- **Determinism:** the same Seed gives the same Variants and Decoration.
+- **Rules over hundreds of Seeds:**
+  - Variants come from the Biome's set.
+  - Decoration never overlaps a footprint, path, bridge end or the Garden, and never occludes a Landmark.
+  - Isle radii fall in the new ranges.
+  - Pinned flowers number min(pinned, 6), trees at most 3, and flowers plus trees at most min(Projects, 9).
+- **Structure files** are tested as data:
+  - each parses
+  - each uses only known roles
+  - each fills its declared footprint
+  - each House Variant has a liftable roof and the Biome's interior space
+- **Boat kinds:** the same id gives the same kind in every World.
+- **Ambient Life:**
+  - Spawn points, routes and wind direction are deterministic from the Seed.
+  - Animal routes never cross a footprint, bridge or the Garden, and never occlude a Landmark, over hundreds of Seeds.
+  - At most 3 animals per Isle.
+  - Creature sets come from the World's Biome.
+  - The tier controller is tested as pure logic: slow frames drop a tier, it never climbs back, and reduced motion means still.
+- **No snapshots:** voxel grids are not snapshot-tested.
+- **Real page:** every ticket is checked in a browser on several Seeds at desktop and phone sizes, with no console errors.
+
+## Out of Scope
+
+- Finer than ¼-unit detail, except ⅛-unit Ambient Life particles (ADR 0005).
+- Clickable or interactive Ambient Life.
+- Weather or a Seed- or clock-driven time of day (as in the base spec).
+- MagicaVoxel `.vox` files (ADR 0004).
+- Interior rooms per House Variant; there is one per Biome.
+- New Biomes.
+- User-editable or uploaded models.
+
+## Further Notes
+
+The first ticket stops for the user to approve the House models in the Model Gallery before any other model is drawn, as the look prototype did in the base feature.

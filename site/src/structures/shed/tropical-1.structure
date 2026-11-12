@@ -1,0 +1,78 @@
+# Shed, tropical: a bamboo hut under thatch.
+# Decoration: a minor building, 6×6 walls, 11–12 voxels tall, its door on +z.
+kind: shed
+biome: tropical
+variant: 1
+footprint: 1x1
+door: +z
+anchor: 0 0 0
+key:
+  c bambooDark
+  g window
+  o doorWood
+  q thatchDark
+  r thatch
+  w bamboo
+layers 0-2
+........
+.cwwwwc.
+.wwwwww.
+.wwwwww.
+.wwwwww.
+.wwwwww.
+.cwoowc.
+........
+layers 3-4
+........
+.cwwwwc.
+.wwwwww.
+.wwwwwg.
+.wwwwwg.
+.wwwwww.
+.cwoowc.
+........
+layers 5-6
+........
+.cwwwwc.
+.wwwwww.
+.wwwwww.
+.wwwwww.
+.wwwwww.
+.cwwwwc.
+........
+layer 7
+r......r
+rwwwwwwr
+rwwwwwwr
+rwwwwwwr
+rwwwwwwr
+rwwwwwwr
+rwwwwwwr
+r......r
+layer 8
+.r....r.
+.rwwwwr.
+.rwwwwr.
+.rwwwwr.
+.rwwwwr.
+.rwwwwr.
+.rwwwwr.
+.r....r.
+layer 9
+..r..r..
+..rwwr..
+..rwwr..
+..rwwr..
+..rwwr..
+..rwwr..
+..rwwr..
+..r..r..
+layer 10
+...qq...
+...qq...
+...qq...
+...qq...
+...qq...
+...qq...
+...qq...
+...qq...

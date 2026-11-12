@@ -14,6 +14,45 @@ Default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `read
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+## Tools
+
+### Python
+
+Use `uv` for everything Python: `uv run <script>`, `uv add <pkg>`, `uv sync`. Don't call `python`, `pip`, or `venv` directly.
+
+### Node
+
+Use `bun` as the package manager (`bun install`, `bun add`, `bun run`). `npm` is available but use it only when bun can't do the job.
+
+Whenever you set up a Node project or add a package manager config, set a minimum release age of 7 days for both tools, so freshly published (possibly compromised) versions are never installed:
+
+- `bunfig.toml`:
+  ```toml
+  [install]
+  minimumReleaseAge = 604800 # 7 days, in seconds
+  ```
+- `.npmrc` (needs npm >= 11.10):
+  ```ini
+  min-release-age=7
+  ```
+
+## Code conventions
+
+### Imports
+
+In `site/`, import from another folder through the `@/` alias, which points at `site/src/` (e.g. `import { generateWorld } from '@/world'`), not a relative path climbing out of the current folder (`../../world`). A `./` import of a file in the same folder is fine. The alias is set in `site/tsconfig.json` (`paths`) and `site/vitest.config.ts` (`resolve.alias`); keep the two in step. Convert existing `../` imports when you touch a file; don't do sweeping import-only rewrites.
+
+### Browser tests
+
+Use Playwright for browser checks in `site/`, and keep its files where they belong:
+
+- **Lasting browser tests:** `site/e2e/*.spec.ts`, configured in `site/playwright.config.ts` and run with `bun run e2e`. If a check would be worth running again, write it here rather than as a one-off script.
+- **Throwaway scripts** (a one-off probe or a screenshot run): `site/.tmp/`, which is gitignored. Never leave them in `site/` itself or commit them.
+- **Screenshots for review:** `.scratch/<feature-slug>/screenshots/`, gitignored. Never commit screenshots or recordings.
+- **Playwright output** (`test-results/`, `playwright-report/`): left where Playwright writes it, gitignored.
+
+Astro allows only one dev server per project. The e2e config serves its own build with `astro preview`; don't start a second `astro dev`.
+
 ## Project docs
 
 ### Documents

@@ -1,0 +1,121 @@
+---
+/**
+ * The Landmark menu: a floating rounded bar at the top right of the World,
+ * one link per Landmark in Story Order, the current section marked
+ * (`aria-current`). On narrow screens it collapses into a menu button that
+ * opens the list as a popover, which needs no JS (the Popover API).
+ */
+import { landmarksInStoryOrder } from '@/data/site';
+import { landmarkForPath } from '@/lib/landmarkRoutes';
+
+// The section this page belongs to is marked as the current page.
+const current = landmarkForPath(Astro.url.pathname);
+---
+
+<nav class="landmark-menu" aria-label="Landmarks">
+  <button type="button" class="menu-button" popovertarget="landmark-list" aria-label="Menu" title="Menu">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+      <path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"></path>
+    </svg>
+  </button>
+  <ol id="landmark-list" popover>
+    {
+      landmarksInStoryOrder.map((landmark) => (
+        <li>
+          <a
+            href={landmark.route}
+            data-landmark={landmark.id}
+            data-seed-link
+            aria-current={landmark.id === current ? 'page' : undefined}>
+            {landmark.label}
+          </a>
+        </li>
+      ))
+    }
+  </ol>
+</nav>
+
+<style>
+  ol {
+    list-style: none;
+    margin: 0;
+    padding: 0.3rem;
+    border-radius: var(--card-radius);
+    background: var(--card);
+    box-shadow: var(--card-shadow);
+    color: var(--ink);
+  }
+  a {
+    display: block;
+    padding: 0.2rem 0.7rem 0.3rem;
+    border-radius: 4px;
+    color: var(--ink);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  a[aria-current='page'] {
+    background: color-mix(in oklab, var(--brand) 16%, transparent);
+    box-shadow: inset 0 -3px 0 var(--brand);
+  }
+  a:hover,
+  a:focus-visible {
+    background: var(--brand-ink);
+    color: var(--on-brand);
+    outline: none;
+  }
+  .menu-button {
+    display: none;
+    /* 44px square with its 22px icon: a comfortable tap. */
+    padding: 0.6875rem;
+    border: 0;
+    border-radius: var(--card-radius);
+    background: var(--card);
+    box-shadow: var(--card-shadow);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .menu-button:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+
+  /* Wide screens: the list is the bar itself, always shown (not a popover). */
+  @media (min-width: 64rem) {
+    ol[popover] {
+      position: static;
+      inset: auto;
+      display: flex;
+      gap: 0.15rem;
+      width: auto;
+      height: auto;
+      margin: 0;
+      border: 0;
+      overflow: visible;
+    }
+  }
+
+  /* A touch screen wide enough for the bar: each link at least 44px tall to tap. */
+  @media (min-width: 64rem) and (pointer: coarse) {
+    a {
+      padding-block: 0.55rem 0.65rem;
+    }
+  }
+
+  /* Narrow screens: a menu button; the list opens below it as a popover. */
+  @media (max-width: 63.99rem) {
+    .menu-button {
+      display: inline-flex;
+    }
+    ol[popover] {
+      position: fixed;
+      inset: auto var(--gutter) auto auto;
+      top: calc(var(--gutter) + 3.5rem);
+      min-width: 12rem;
+      margin: 0;
+      border: 0;
+    }
+    ol[popover] a {
+      padding: 0.6rem 0.75rem;
+    }
+  }
+</style>

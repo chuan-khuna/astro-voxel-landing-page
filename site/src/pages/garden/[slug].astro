@@ -1,0 +1,97 @@
+---
+/**
+ * One page per Project, `/garden/<id>`: its full case study in a panel over
+ * the World, the camera at the Garden. Clicking the Project's plant (a flower or a tree) opens it.
+ * Its summary is the meta description, and its cover (if any) the link
+ * preview's picture in place of the World still.
+ */
+import type { GetStaticPaths } from 'astro';
+import { getCollection, render } from 'astro:content';
+import WorldPage from '@/layouts/WorldPage.astro';
+import SectionPanel from '@/components/SectionPanel.astro';
+import { site } from '@/data/site';
+
+export const getStaticPaths = (async () => {
+  const projects = await getCollection('projects');
+  return projects.map((project) => ({ params: { slug: project.id }, props: { project } }));
+}) satisfies GetStaticPaths;
+
+const { project } = Astro.props;
+const { Content } = await render(project);
+const garden = site.landmarks.find((l) => l.id === 'garden')!;
+const { title, summary, client, year, tags, cover } = project.data;
+---
+
+<WorldPage title={`${title} · ${site.company.name}`} description={summary} image={cover}>
+  <SectionPanel slot="panel" title={title} id={`project-${project.id}`}>
+    <p class="back">
+      <a href={garden.route} data-seed-link>← All {garden.label}</a>
+    </p>
+    <dl class="facts">
+      <dt>Client</dt>
+      <dd>{client}</dd>
+      <dt>Year</dt>
+      <dd>{year}</dd>
+    </dl>
+    {
+      tags.length > 0 && (
+        <ul class="tags" aria-label="Tags">
+          {tags.map((tag) => (
+            <li>{tag}</li>
+          ))}
+        </ul>
+      )
+    }
+    {cover && <img class="cover" src={cover.src} alt={cover.alt} loading="lazy" />}
+    <p class="summary">{summary}</p>
+    <div class="case-study"><Content /></div>
+  </SectionPanel>
+</WorldPage>
+
+<style>
+  .back {
+    margin: 0 0 0.75rem;
+  }
+  .back a {
+    color: var(--brand-ink);
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.25rem 1rem;
+    margin: 0 0 0.75rem;
+  }
+  .facts dt {
+    font-weight: 600;
+  }
+  .facts dd {
+    margin: 0;
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0 0 0.75rem;
+    padding: 0;
+    list-style: none;
+  }
+  .tags li {
+    padding: 0.1rem 0.5rem;
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--brand) 14%, transparent);
+    font-size: 1rem;
+  }
+  .cover {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+  }
+  .summary {
+    font-weight: 600;
+  }
+  .case-study :global(h2) {
+    font-size: 1.40625rem;
+    margin: 1.25rem 0 0.4rem;
+  }
+</style>
