@@ -51,6 +51,10 @@ export interface HouseParts {
   roomTriangles: number;
   /** The box round the developer, in world units, for their link to Team; null for a World with no House. */
   developer: THREE.Box3 | null;
+  /** The lid's mesh (it lifts), for its outline (`outlineModels.ts`); null for a World with no House. */
+  lid: THREE.Mesh | null;
+  /** The developer's moving parts (head, hands), for their outline; their body is in the room's mesh. */
+  developerParts: THREE.Mesh[];
   /** Lift the lid: 0 shut, 1 fully open. The room shows whenever it is above 0. */
   setOpening(opening: number): void;
   /** Light the windows and the room's lamp, or not, as the theme says. */
@@ -82,7 +86,7 @@ export function buildHouse(world: World, clock: AmbientClock = createAmbientCloc
   const group = new THREE.Group();
   group.name = 'house';
   const house = world.landmarks.find((l) => l.id === 'house');
-  if (!house) return { group, triangles: 0, roomTriangles: 0, developer: null, setOpening: () => {}, setLights: () => {}, work: () => {}, dispose: () => {} };
+  if (!house) return { group, triangles: 0, roomTriangles: 0, developer: null, lid: null, developerParts: [], setOpening: () => {}, setLights: () => {}, work: () => {}, dispose: () => {} };
 
   const colours = worldColours(world);
   const lidMaterial = voxelMaterial(1 / STRUCTURE, 'local');
@@ -189,6 +193,8 @@ export function buildHouse(world: World, clock: AmbientClock = createAmbientCloc
     triangles,
     roomTriangles,
     developer,
+    lid,
+    developerParts: [...parts.values()],
     setLights: ({ lightsOn, windowLight }) => {
       const [r, g, b] = oklchToLinear(windowLight);
       lightMaterial.color.setRGB(r, g, b, THREE.LinearSRGBColorSpace);

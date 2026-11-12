@@ -299,3 +299,15 @@ These need your call:
   - Every `PlacedLandmark` carries `services`, empty except on the Station, as with `flowers`, `trees` and `jetty`.
   - `drawServices` is called for every Landmark.
 
+
+## Outline the selected voxel model instead of the link's box
+
+Done: hovered, keyboard-focused and open (`aria-current`) links outline their model in the World, a pixelated yellow ring with a dark edge (see "The outline" in `rendering-and-shading.md`). The link boxes are invisible. The Guide's button works the same way.
+
+These need your call:
+- [ ] **The colour is not the brand blue.** You asked for a colour that stands out, and the brand blue disappeared on the sea. It is now a warm yellow with a dark edge (`WorldTokens.outline` / `.outlineEdge` in `src/data/theme.ts`), and the block size is `BLOCK` (3 CSS px) in `src/render/outline.ts`.
+- [ ] **The first outline of a visit compiles its pipeline.** A short one-off hitch may show on the first hover. It could be precompiled when the World mounts (`renderer.compileAsync`), but the pipeline is only built on demand.
+- [ ] **Very thin parts drop out of the mask at the Overview.** The mask is one texel per 3 px block, so a stem narrower than a block may have no outline of its own. The bulk of the model is always outlined.
+- [ ] **The outline draws over whatever stands in front of the model.** It has no depth test, so terrain never hides it. Something in front, such as the developer's chair, is drawn over too.
+- [ ] **Test seams were not agreed up front.** The TDD seams are `outlineKey` and `outlinedKeys` (`outlineTargets.test.ts`), plus `e2e/outline.spec.ts` through `canvas.dataset.outline`.
+- [ ] **Headless Chromium quirk.** Headless Chromium on macOS without `--use-angle=metal` logs WebGPU "Invalid Texture" errors and draws a blank World on screenshots. It does this even with nothing outlined, so it is not caused by this change. The e2e runs use WebGL 2 (SwiftShader) and are unaffected.

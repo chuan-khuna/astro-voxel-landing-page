@@ -72,6 +72,14 @@ errors).
   and Forward scroll back; a sideways swipe on the World never pans it and
   an upward one scrolls the page; under reduced motion the camera cuts. On
   desktop only the page's own panel shows and the page does not scroll.
+- `ambient-life.spec.ts`: Ambient Life runs with no errors by Day and at
+  Night; under reduced motion nothing moves; the clouds fade in a close-up;
+  the fish, land animals and birds show as many as the life tier allows.
+- `outline.spec.ts`: hovering the Station's link outlines its model
+  (`canvas.dataset.outline` is `landmark:station`) while the link's box
+  shows no outline or tint, moving away clears it, and a hotspot focused
+  with Tab is outlined (desktop); the open Project's plant and the
+  developer on Team are outlined (both projects).
 
 Throwaway scripts go in `site/.tmp/` (gitignored), as do Playwright's
 `test-results/`, `playwright-report/` and `blob-report/`. Screenshots for
@@ -82,7 +90,7 @@ review go in `.scratch/<feature>/screenshots/`.
 | Path | What it holds |
 |---|---|
 | `src/data/site.ts` | The site data module: company identity, brand colour and fonts (`brand.fonts.body` Jersey 20, `brand.fonts.heading` Jersey 15, each with a fallback stack), the published origin (`url`), SEO and OG defaults (`seo`: title, description, locale, the World still's alt text), default Seed, brand Biome (the Biome the default Seed always gets), the Guide's name (`guide.name`, Lumen), the Landmark list (id, route, label, Story Order) and the Data Card metrics (`dataCards`, keyed to a placed Landmark id). `landmarksInStoryOrder` is the sorted list. See `content-model.md`. |
-| `src/data/theme.ts` | The Day and Night theme tokens (`THEME_TOKENS`): one set of OKLCH values for the page (`ui`: ink, paper, surface, brand ink and its hover, text on brand, shadow) and for the World (`world`: sky, sun or moon light, sky and ground light, water darkening, the House's window light and the buoys' lamp light, and `lightsOn`). `themeCss()` writes the `ui` tokens as CSS custom properties; `seaColour` is a Biome's water in a theme; `contrastRatio` is the WCAG ratio. Tested in `theme.test.ts` (every text pair AA in both themes). |
+| `src/data/theme.ts` | The Day and Night theme tokens (`THEME_TOKENS`): one set of OKLCH values for the page (`ui`: ink, paper, surface, brand ink and its hover, text on brand, shadow) and for the World (`world`: sky, sun or moon light, sky and ground light, water darkening, the House's window light and the buoys' lamp light, `lightsOn`, and the outline's colour and dark edge). `themeCss()` writes the `ui` tokens as CSS custom properties; `seaColour` is a Biome's water in a theme; `contrastRatio` is the WCAG ratio. Tested in `theme.test.ts` (every text pair AA in both themes). |
 | `src/content.config.ts` | Content collections (glob loaders): `pages` (MDX: `title`, an optional `landmark` id, an optional meta `description`, the optional Guide lines `guide`, schema `guideSchema`, and the optional Tour lines `tour`, schema `tourLinesSchema`) `projects` (MDX, schema `projectSchema`), `services` (MDX, schema `serviceSchema`), `clients` (YAML, schema `clientSchema`), `partners` (YAML, schema `partnerSchema`) and `team` (MDX, schema `teamMemberSchema`). |
 | `src/lib/contentSchemas.ts` | Collection schemas kept apart from `content.config.ts` so Vitest can load them: `projectSchema`, `serviceSchema`, `clientSchema`, `partnerSchema`, `teamMemberSchema`, `guideSchema` and `tourLinesSchema` (see `content-model.md`, and "The Guide" and "The Tour" below). Tested in `contentSchemas.test.ts`. |
 | `src/content/projects/` | One MDX file per Project; the file name is its id and URL slug, the body its case study. Six mock Projects. |
@@ -477,15 +485,18 @@ route on every `astro:after-swap`:
   zoom input stops a flight, and ends the Tour (see "The Tour").
 - Each page renders one hotspot link per placed Landmark inside the frame
   (`a.hotspot[data-hotspot]`, with `data-seed-link`), hidden until the World
-  is shown. The World keeps each over its Landmark's model. Hover or keyboard
-  focus shows an outline and the Landmark's label. In the Tab order they
+  is shown. The World keeps each over its Landmark's model. The link's box
+  is invisible: hover or keyboard focus outlines the Landmark's model in
+  the World (a chunky, pixelated yellow ring with a dark edge; see "The
+  outline" in `rendering-and-shading.md`) and shows the Landmark's label. In the Tab order they
   come after the name, the menu and the panel, and before the dice button. A drag that starts
   on a hotspot pans and does not follow the link. The open panel covers any
   hotspot under it.
 - **Plants:** each Garden flower and tree has its own link
   (`a.hotspot.plant[data-project]`) to its Project's page, labelled with
-  the Project's title, over the middle of the plant. Hover or focus shows
-  its outline and title; clicking it opens the Project's page and the
+  the Project's title, over the middle of the plant. Hover or focus
+  outlines the plant and shows its title (the open Project's plant stays
+  outlined); clicking it opens the Project's page and the
   camera goes to the Garden. When the camera is far out a plant is too
   small to aim at, and a click there opens the Garden instead. Plant links
   come right after the Garden's hotspot in the Tab order, the flowers
@@ -653,8 +664,9 @@ Guide holds the last one up until the visitor moves on.
 **On the page** (`WorldPage.astro`), inside the World's frame, so the
 Guide is absent without JS or a GPU:
 
-- `button#guide`, "Talk to Lumen, the Guide", laid over the Guide while it
-  is formed. It comes before the Landmark hotspots in the frame, so where
+- `button#guide` (`data-guide`), "Talk to Lumen, the Guide", laid over the Guide while it
+  is formed. Like a hotspot's, its box is invisible: hover or keyboard
+  focus outlines the Guide's model in the World. It comes before the Landmark hotspots in the frame, so where
   they overlap the hotspot is on top: the Guide never takes a Landmark's
   click. A click starts the Tour; on the Tour it says the step's lines again.
 - `p#guide-bubble`, the speech bubble: the Guide's name and the line, a

@@ -60,6 +60,10 @@ export interface WorldTokens {
   /** The faint bioluminescent glow where waves break, and how strong it is (0 by Day). */
   surfGlow: Oklch;
   surfGlowStrength: number;
+  /** The pixelated outline round the model a link stands for (hovered, focused or open, `render/outline.ts`): a bright ring that stands out on every Biome and on the sea. */
+  outline: Oklch;
+  /** The dark edge just outside the outline's bright ring, so it reads on light ground too. */
+  outlineEdge: Oklch;
 }
 
 export interface ThemeTokens {
@@ -97,6 +101,8 @@ export const THEME_TOKENS: Record<Theme, ThemeTokens> = {
       foam: oklch(0.97, 0.01, 220),
       surfGlow: oklch(0.8, 0.13, 190),
       surfGlowStrength: 0,
+      outline: oklch(0.9, 0.17, 100),
+      outlineEdge: oklch(0.25, 0.03, 250),
     },
   },
   night: {
@@ -128,6 +134,8 @@ export const THEME_TOKENS: Record<Theme, ThemeTokens> = {
       foam: oklch(0.72, 0.03, 240),
       surfGlow: oklch(0.8, 0.13, 190),
       surfGlowStrength: 0.8,
+      outline: oklch(0.88, 0.16, 95),
+      outlineEdge: oklch(0.15, 0.02, 260),
     },
   },
 };

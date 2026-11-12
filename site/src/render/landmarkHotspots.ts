@@ -3,7 +3,8 @@
  * Landmark, sized to the screen rectangle of the Landmark's model (its
  * measured extent, which covers its whole footprint). They give each Landmark a hover
  * affordance, a pointer cursor and keyboard focus without any GPU picking;
- * the links themselves are rendered by the page.
+ * the links themselves are invisible boxes: what a visitor sees is the
+ * model's outline (`outline.ts`) and the link's label.
  *
  * The developer inside the House has a link too (`data-hotspot="house-interior"`,
  * to Team), shown only while the House is open (`setInterior`), over the
@@ -14,7 +15,7 @@
  */
 import * as THREE from 'three/webgpu';
 import type { GroundPoint } from './cameraMath';
-import type { PlacedLandmarkId, World } from '@/world';
+import type { Cell, PlacedLandmarkId, World } from '@/world';
 import { landmarkExtent } from './landmarkModels';
 import { gardenPlants, type PlantKind } from '@/lib/gardenPlants';
 import { gardenPlantsOf, plantExtent } from './gardenPlants';
@@ -32,6 +33,8 @@ export interface LandmarkHotspots {
   setInterior(open: boolean): void;
   /** Move every hotspot onto its Landmark as `camera` sees it. */
   place(camera: THREE.Camera): void;
+  /** The cell of a planted Project's plant in the World on show (its link's), or null: for its outline. */
+  plantCell(project: string): Cell | null;
   dispose(): void;
 }
 
@@ -40,6 +43,8 @@ interface Placed {
   box: THREE.Box3;
   /** A Garden plant's link (one per planted Project): its kind; null for a whole Landmark's. */
   plant: PlantKind | null;
+  /** A plant's cell; null for a whole Landmark's. */
+  cell: Cell | null;
   /** The developer's link, inside the House: shown only while it is open. */
   interior: boolean;
 }
@@ -85,7 +90,7 @@ export function createLandmarkHotspots(
       for (const link of links) {
         if (link.dataset.hotspot === 'house-interior') {
           if (!developer) continue;
-          placed.push({ link, box: developer.clone(), plant: null, interior: true });
+          placed.push({ link, box: developer.clone(), plant: null, cell: null, interior: true });
           link.hidden = !open;
           continue;
         }
@@ -108,6 +113,7 @@ export function createLandmarkHotspots(
             new THREE.Vector3(max.x, max.y, max.z).add(origin),
           ),
           plant: plant?.kind ?? null,
+          cell: plant?.cell ?? null,
           interior: false,
         });
         link.hidden = false;
@@ -151,6 +157,9 @@ export function createLandmarkHotspots(
         link.style.height = `${h}px`;
         link.style.transform = `translate(${cx - w / 2}px, ${cy - h / 2}px)`;
       }
+    },
+    plantCell(project) {
+      return placed.find((p) => p.link.dataset.project === project)?.cell ?? null;
     },
     dispose() {
       for (const link of links) link.removeEventListener('focus', onFocus);

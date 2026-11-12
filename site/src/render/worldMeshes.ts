@@ -40,7 +40,7 @@ import { voxelMaterial } from './voxelMaterial';
 import { meshWorld, type MeshedWorld } from './worldVoxels';
 import { buildFleet, type Fleet } from './ships';
 import { buildHouse, type HouseParts } from './house';
-import { buildGardenPlants } from './garden';
+import { buildGardenPlants, type GardenPlantMeshes } from './garden';
 import { buildBoats } from './boats';
 import { buildDecoration } from './decoration';
 import type { RenderTierName } from '@/lib/renderTier';
@@ -71,6 +71,8 @@ export interface WorldObjects {
   ships: Fleet;
   /** The House's lid, its lights and its room: `house.setOpening` lifts the lid and shows the room. */
   house: HouseParts;
+  /** The Garden's plants, each a copy in an `InstancedMesh` (for outlining one, `outlineModels.ts`). */
+  plants: GardenPlantMeshes;
   /** Put everything that moves on the CPU (the ships and boats on the swell, the developer, the land animals and birds) where it is at the shared clock's `seconds`. */
   step: (seconds: number) => void;
   /** Show as much Ambient Life as the life tier allows (the falling leaves, the Biome's particles, the clouds, the fish and their spray, the land animals and the birds or bats); returns how many fish, animals and birds (or bats) show. */
@@ -145,6 +147,7 @@ export function buildWorldObjects(
     triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + particles.triangles + clouds.triangles + fish.triangles + creatures.triangles + sea.triangles,
     ships,
     house,
+    plants,
     step: (seconds) => {
       ships.sail(seconds);
       boats.rock(seconds);

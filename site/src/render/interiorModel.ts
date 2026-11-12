@@ -38,7 +38,7 @@ export { DEVELOPER_PARTS, type DeveloperPart } from '@/structures/roles';
 const cache = new Map<BiomeId, Structure>();
 
 /** The developer, seated: one figure for every room. */
-function developer(): Structure {
+export function developerFigure(): Structure {
   const s = STRUCTURES.find((s) => s.kind === 'developer');
   if (!s) throw new Error('No developer structure');
   return s;
@@ -50,7 +50,7 @@ export function furnishedRoom(biome: BiomeId): Structure {
   if (hit) return hit;
   const room = variantsOf('room', biome)[0];
   if (!room || !room.developer) throw new Error(`No room with a developer anchor for the ${biome} Biome`);
-  const figure = developer();
+  const figure = developerFigure();
   const palette: StructureVoxel[] = [...room.palette];
   const idOf = (entry: StructureVoxel) => {
     const i = palette.findIndex((p) => p.role === entry.role && p.part === entry.part);
@@ -76,7 +76,7 @@ export function furnishedRoom(biome: BiomeId): Structure {
 /** The box round every voxel of the developer in a furnished room (its voxels the plain room lacks). */
 export function developerBox(room: Structure): VoxelBox {
   const at = room.developer!;
-  const figure = developer();
+  const figure = developerFigure();
   const min = { x: Infinity, y: Infinity, z: Infinity };
   const max = { x: -Infinity, y: -Infinity, z: -Infinity };
   for (const v of structureVoxels(figure)) {

@@ -76,12 +76,17 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it (`onInput` hears that input). | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
-| `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, the Garden's plant links over their flowers and trees and, while the House is open, the developer's link over the developer. | yes |
+| `landmarkHotspots.ts` | `createLandmarkHotspots`: positions the page's Landmark hotspot links over their models, the Garden's plant links over their flowers and trees and, while the House is open, the developer's link over the developer; `plantCell` says which cell a Project's plant stands in. | yes |
+| `outlineTargets.ts` | `outlineKey` (the model a link stands for: `landmark:<id>`, `plant:<project>`, `developer`, `guide`) and `outlinedKeys` (which models to outline: every shown link hovered, focused from the keyboard or `aria-current`). Pure, tested in `outlineTargets.test.ts`. | no |
+| `outlineModels.ts` | `createOutlineModels`: each model's mask proxies for the outline, built on first use per World (a Landmark's own voxels meshed alone, mirrors of the House's lid, the developer's moving parts, the Guide and the Garden's plant copies). | yes |
+| `outline.ts` | `createOutline`: the pixelated outline round the outlined models (a block mask, a `RenderPipeline` only while something is outlined); `watchOutlineLinks`: follows the links' hover, focus and `aria-current`. | yes |
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
 meshing run in the Web Worker. Only geometry upload, materials, the sea,
 the instanced boats, ships, plants and Decoration, the House's lid and room and the Guide
-(small grids) are built on the main thread.
+(small grids) are built on the main thread, and so are the outline's mask
+proxies (`outlineModels.ts`: a Landmark's voxels meshed alone, the first
+time it is outlined).
 
 ## Voxel grids
 
@@ -1075,9 +1080,10 @@ on the isometric axis above the target.
   every frame each link is sized to the screen rectangle of its Landmark's
   box (`landmarkExtent`: the model's voxels, and never less than the whole
   footprint and the Dock's jetty, so the hotspot covers the whole footprint;
-  at least 28 px a side). The Garden's hotspot covers its fence and plants. Hover and keyboard focus
-  show an outline and the Landmark's label: the hover affordance and the
-  keyboard focus. If a hotspot takes focus while off screen, the camera
+  at least 28 px a side). The Garden's hotspot covers its fence and plants. The link's box
+  is invisible: hover and keyboard focus outline the Landmark's model in the
+  World (see "The outline") and show its label: the hover affordance and
+  the keyboard focus. If a hotspot takes focus while off screen, the camera
   cuts to centre on it. The frame uses `overflow: clip`, so focusing a
   hotspot never scrolls the frame. This is not GPU picking.
 - **The developer's link** (ticket 11): right after the House's hotspot, the
@@ -1086,7 +1092,7 @@ on the isometric axis above the target.
   developer's box in the House Interior (`developerBounds`, in world units). It
   is hidden while the House is shut and shown while it is open
   (`setInterior`), above the House's hotspot, which covers the room. On `/about/team` the page marks it with
-  `aria-current="page"` (an outline).
+  `aria-current="page"`, and the developer is outlined.
 - **Plant links** (ticket 08, polish ticket 05): right after the Garden's
   hotspot, the page renders one link per planted Project
   (`a.hotspot.plant[data-project]`, `data-pinned` on a Pinned Project's, also
@@ -1110,7 +1116,45 @@ on the isometric axis above the target.
   and about 32 × 37 px and 32 × 92 px on a 390 × 844 phone, where the Story
   Scroll frames the Garden as close as the camera may come (flowers stay
   under 44 px: that would need a closer zoom than the World allows). The page marks the
-  open Project's plant link with `aria-current="page"` (an outline).
+  open Project's plant link with `aria-current="page"`, and that plant is
+  outlined.
+- **The outline** (`outline.ts`, `outlineModels.ts`, `outlineTargets.ts`):
+  the model of every link over the canvas (the hotspots, the plant links,
+  the developer's and the Guide's button, all invisible boxes) that is
+  under a mouse or pen, focused from the keyboard (`:focus-visible`) or
+  `aria-current="page"` gets an outline round its own silhouette;
+  `canvas.dataset.outline` lists the models outlined (their keys:
+  `landmark:<id>`, `plant:<project>`, `developer`, `guide`). A Landmark is
+  its whole model (the Station its 6×6 group, the House its base and lid,
+  the Garden its fence and every plant, the Dock its deck and jetty, not
+  the posts under the sea); a plant just its copy, swaying with it; the
+  developer their body, head and hands; the Guide its body and screen.
+  - It is pixelated, to fit the voxels: the screen is cut into blocks
+    `BLOCK` (3) CSS px a side, rounded to whole device px. Blocks touching
+    the silhouette are the bright ring (`WorldTokens.outline`: a warm
+    yellow, `oklch(0.9 0.17 100)` by Day, `oklch(0.88 0.16 95)` at Night)
+    and the ring of blocks outside that its dark edge (`outlineEdge`), so
+    it reads on sand, snow, grass, ash and the sea alike. Hard edges, no
+    blur. Tweak the colours in `data/theme.ts` and the block in
+    `outline.ts`.
+  - How: the models' mask proxies (`outlineModels.ts`: Landmarks are
+    greedy-meshed with the World, so each has its own voxels meshed alone,
+    built on first use; what moves is mirrored every frame from its mesh:
+    the lid, the developer's head and hands, the Guide, a plant's copy of
+    its `InstancedMesh`, other copies folded to a point) render flat into a
+    mask one texel a block, with no depth from the rest of the World, so
+    nothing in front ever hides the outline (like the Landmarks, which
+    terrain never hides). The World then renders through a
+    `RenderPipeline` (the scene pass, tone-mapped, then 25 nearest taps of
+    the mask a pixel), built on the first outline. While nothing is
+    outlined the World renders straight to the canvas as before: no extra
+    pass. Measured uncapped on a desktop GPU at 1440 × 900 with the Station
+    outlined: about 0.2 ms a frame more (2.4 → 2.6 ms), 6 k more triangles
+    (the Station's proxy) and a draw call. On the phone tier (390 × 844 at
+    DPR 2, headless, `/garden/archive-search` with its plant outlined, then
+    its `aria-current` removed) the frame rate was the same with and
+    without (about 24 fps both, the emulated phone's limit). Under forced
+    colours the links keep a system focus ring.
 
 ### Data Cards
 

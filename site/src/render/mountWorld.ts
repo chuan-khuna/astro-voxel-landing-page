@@ -25,10 +25,13 @@
  *   `canvas.dataset.clouds` (how much of the clouds shows at that zoom,
  *   0–1: they fade out in a Landmark's close-up), for checks;
  *   `canvas.dataset.fish`, `.animals` and `.birds` say how many fish, land
- *   animals and birds (or bats) the life tier (and theme) shows.
+ *   animals and birds (or bats) the life tier (and theme) shows;
+ *   `canvas.dataset.outline` lists the models outlined (`outline.ts`).
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
  *   Landmark hotspots (`landmarkHotspots.ts`) and Data Cards (`dataCards.ts`)
- *   follow the camera.
+ *   follow the camera. The model of a hotspot (or of the Guide's button)
+ *   that is hovered, focused from the keyboard or the page open is
+ *   outlined (`outline.ts`, `outlineModels.ts`): the links are invisible.
  * - `setViewCentre(at)` says where the visitor looks (the middle of the part
  *   the floating cards leave free), for choosing the Data Card; the pan
  *   bounds hold the ground seen there (`CameraLimits.at`).
@@ -85,6 +88,8 @@ import { guideSpot } from './guideMotion';
 import { ambientFrameDue, pixelRatio, renderTier, type Device, type RenderTierName } from '@/lib/renderTier';
 import type { LifeTierName } from '@/lib/lifeTier';
 import { createAmbientLife } from './ambientLife';
+import { createOutline, watchOutlineLinks } from './outline';
+import { createOutlineModels, type OutlineModels } from './outlineModels';
 
 export type { ScreenOffset, GuideView };
 
@@ -317,7 +322,7 @@ export async function mountWorld(
       hotspots.place(camera);
       cards.place(camera, rig.state, viewCentre, cardFocus, cardTop);
       guide.place(camera);
-      renderer.render(scene, camera);
+      outline.render();
       idleRenderer();
       if (frameListeners.size > 0) {
         // `render()` restarts three's animation loop, which resets the counts first: they are this frame's.
@@ -337,6 +342,18 @@ export async function mountWorld(
     ui.onExplore?.();
   });
   const cards = createDataCards(ui.frame, ui.cards ?? []);
+  // The model of a hovered, focused or open link is outlined (`outline.ts`); its box stays invisible.
+  const outline = createOutline(renderer, scene, camera);
+  outline.setTheme(theme);
+  let outlineModels: OutlineModels | null = null;
+  let outlineKeys: string[] = [];
+  /** Outline the models these keys name in the World on show; `canvas.dataset.outline` lists the ones it has, for checks. */
+  const showOutline = () => {
+    const shown = outlineKeys.filter((key) => (outlineModels?.proxies(key).length ?? 0) > 0);
+    outline.set(shown.flatMap((key) => outlineModels?.proxies(key) ?? []));
+    canvas.dataset.outline = shown.join(' ');
+    requestRender();
+  };
   // The Guide lives for the whole visit; each World only moves it (`show`).
   const guide = createGuide({ frame: ui.frame, ...ui.guide, onChange: requestRender });
   scene.add(guide.object);
@@ -394,6 +411,8 @@ export async function mountWorld(
     // Free the old World's GPU buffers and materials before building the new one.
     if (objects) {
       scene.remove(objects.group);
+      outline.set([]);
+      outlineModels?.dispose();
       objects.dispose();
     }
     clock.setWind(next.wind);
@@ -415,6 +434,8 @@ export async function mountWorld(
     lookAtViewCentre();
     hotspots.setWorld(next, objects.house.developer);
     hotspots.setInterior(openTarget > 0.5);
+    outlineModels = createOutlineModels({ world: next, objects, guide: guide.object, plantCell: hotspots.plantCell });
+    showOutline();
     cards.setWorld(next);
     // The Guide (dis)assembles in flight only where it can be seen; otherwise it is simply there.
     guide.formAt(guideSpot(next, 'station'), life.seen());
@@ -439,6 +460,10 @@ export async function mountWorld(
 
   show(world, meshed);
   canvas.dataset.interior = 'shut';
+  const stopOutlineLinks = watchOutlineLinks([...ui.hotspots, ...(ui.guide?.button ? [ui.guide.button] : [])], (keys) => {
+    outlineKeys = keys;
+    showOutline();
+  });
   const observer = new ResizeObserver(resize);
   observer.observe(canvas);
   resize();
@@ -482,6 +507,7 @@ export async function mountWorld(
       theme = next;
       lightFor(theme);
       objects?.setTheme(theme);
+      outline.setTheme(theme);
       requestRender();
     },
     onFrame: (listener) => {
@@ -504,6 +530,9 @@ export async function mountWorld(
       life.dispose();
       rig.dispose();
       hotspots.dispose();
+      stopOutlineLinks();
+      outlineModels?.dispose();
+      outline.dispose();
       guide.dispose();
       observer.disconnect();
       objects?.dispose();

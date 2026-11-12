@@ -229,6 +229,7 @@ const stillAlt = site.seo.imageAlt;
           type="button"
           class="guide-button"
           id="guide"
+          data-guide
           aria-label={`Talk to ${guideName}, the Guide`}
           draggable="false"
           hidden></button>
@@ -1321,11 +1322,16 @@ const stillAlt = site.seo.imageAlt;
     pointer-events: none;
     transition: opacity 120ms;
   }
-  .hotspot:hover,
+  /* The box stays invisible: the World outlines the model itself (`render/outline.ts`), and the label shows. */
   .hotspot:focus-visible {
-    outline: 2px solid var(--brand);
-    outline-offset: 2px;
-    background: color-mix(in oklab, var(--brand) 18%, transparent);
+    outline: none;
+  }
+  /* Forced colours (High Contrast) may not show the World's outline as a focus cue: keep a system ring there. */
+  @media (forced-colors: active) {
+    .hotspot:focus-visible,
+    .guide-button:focus-visible {
+      outline: 2px solid CanvasText;
+    }
   }
   .hotspot:hover .hotspot-label,
   .hotspot:focus-visible .hotspot-label {
@@ -1339,12 +1345,7 @@ const stillAlt = site.seo.imageAlt;
   .hotspot.developer {
     z-index: 1;
   }
-  /* The plant of the Project page that is open, and the developer on Team. */
-  .hotspot.plant[aria-current='page'],
-  .hotspot.developer[aria-current='page'] {
-    outline: 2px solid var(--brand);
-    outline-offset: 1px;
-  }
+  /* The plant of the Project page that is open, and the developer on Team, are outlined in the World too (`aria-current`). */
   /* The Guide's button: over the Guide, under the hotspots (earlier in the frame), so it never takes a Landmark's click. */
   .guide-button {
     position: absolute;
@@ -1360,10 +1361,9 @@ const stillAlt = site.seo.imageAlt;
   .world[data-dragging] .guide-button {
     cursor: grabbing;
   }
-  .guide-button:hover,
+  /* Like a hotspot's, its box stays invisible: the World outlines the Guide. */
   .guide-button:focus-visible {
-    outline: 2px solid var(--brand);
-    outline-offset: 2px;
+    outline: none;
   }
   /* The Guide's speech bubble: beside the Guide, never under a card, never in the pointer's way. */
   .guide-bubble {
