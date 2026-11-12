@@ -7,7 +7,8 @@ or repeated with instancing, and how to review structures in the Model
 Gallery.
 
 - Files: `site/src/structures/<kind>/<biome>-<variant>.structure` (`house`,
-  `station`, `mailbox`, `dock`, `garden`; `tree` and `flower`; `boat` and
+  `station`, `mailbox`, `dock`, `garden`; `service` for the Station's
+  Services (`<biome>-<kind>`); `tree` and `flower`; `boat` and
   `ship`; `room` and `developer` for the House Interior; the Decoration kinds `grass`, `clump`, `rocks`, `bush`, `sapling`, `fence`, `lamp`, `shed`, `windmill`)
 - Code: `site/src/structures/` (parser, roles, registry, Vite plugin),
   `site/src/render/structureModels.ts` (placing), `structureMeshes.ts`
@@ -142,12 +143,18 @@ biome)` lists one kind's Variants for a Biome.
   the Mailbox faces the same way, onto the yard; a Dock whose footprint
   runs north to south (1×2) is laid along it with the `east` mirror; the
   Garden's fence turns its gate the Garden's way (`door`, south or east;
-  the fence is the same on every side but the gate); the Station faces
-  south.
+  the fence is the same on every side but the gate); the Station's
+  lighthouse stands in the middle of its 6×6 group (its footprint's origin
+  plus `LIGHTHOUSE_CELL`), facing south.
+- `serviceStructure(biome, kind)` and `servicePlacement(station,
+  service)`: a Service's structure (`service/<biome>-<kind>`) and its 2×2
+  place in the Station's group, on the group's ground, facing south;
+  `drawServices` paints every Service of a placed Station.
 - `drawHousePart(world, colours, part, paint)` and `houseStructure(world)`:
   one part of the World's House Variant, and that Variant.
 - `drawStructures(world, …)`: the World's structure grid: the House's base,
-  the Station, the Mailbox, the Dock's things and the Garden's fence. The House Interior's room
+  the Station's lighthouse and its Services' structures, the Mailbox, the
+  Dock's things and the Garden's fence. The House Interior's room
   is not in the grid: the World draws it at its own 1/16 unit, as meshes of
   its own (below).
 - `houseWindowFaces(world)`: the open +x and +z faces of window glass, lit
@@ -178,8 +185,9 @@ uses it for every model, and the World for the Garden's plants
 ## The Landmark Variants
 
 Each Landmark has one style per Biome and a few Variants in it (polish
-ticket 03): the House 3, the Station 2, the Mailbox 3 and the Dock 2 per
-Biome, 40 files; and the Garden 1, its fence (polish ticket 05), 44 in all. The
+ticket 03): the House 3, the Mailbox 3 and the Dock 2 per Biome; the
+Station 1, its lighthouse (polish ticket 15, which replaced ticket 03's two
+Station Variants); and the Garden 1, its fence (polish ticket 05), 40 in all. The
 counts are `LANDMARK_VARIANTS` in `world/landmarks.ts`, which the
 generator picks from; a data test holds the files to it. The Garden's
 flowers and trees are structures of their own ("The Garden" below).
@@ -212,25 +220,44 @@ front sides above the floor, glass in the walls, and everything above the
 walls in the lid. So every House Variant in a Biome has a liftable roof and
 the same interior space (the Biome's room fits them all; see below).
 
-### Station
+### Station: the lighthouse
 
-16×16 on its 2×2, 40–48 layers (5–6 units), door 4×10 on +z, tall parts at
-the back so nothing hides the door:
+The Station is a group (polish ticket 15; `world-generator.md`, "The
+Station's group"): a lighthouse on the 2×2 in the middle of a 6×6
+footprint, and a Service's structure on each 2×2 round it (below). The
+lighthouse is 16×16, 47 layers (just under 6 units, the tallest thing in
+the World, well over the House's 4), its door 4×10 on +z: a round tower
+tapering from radius 5.2 to 4.4 voxels on a paved square and a plinth ring,
+windows up the front and the east side, a gallery with a railing at layer
+34, a lantern of `lamp` glass between four posts (layers 35–40), a conical
+cap and a finial:
 
-- **1, a hut and mast:** a 10×10 hut one storey tall in the Biome's walls,
-  its door and a window on the front, a window on the east side; the Biome's
-  roof over it (tropical: thatched hip; northern: steep shingled gable under
-  snow; autumn: tiled gable; volcanic: flat slate with a parapet); a dish on
-  the roof's front corner; a lattice mast at the back corner with the accent
-  light on top (47 layers); two server cabinets with accent status lights
-  and a water tank in the yard, and a planter in the tropical and autumn
-  ones.
-- **2, a round tower:** a round tower three storeys tall in the Biome's
-  walls, its door on the front, a band of windows near the top and a gallery
-  ring; a conical cap (thatch in the tropics, tile in autumn) or a dome (a
-  white observatory dome with a slit in the north, slate with an ember-red
-  slit in the volcanic Biome); an antenna and its light on top; a dish on
-  the ground and a cabinet in the yard.
+| Biome | Style |
+|---|---|
+| tropical | a white tower with red bands on a plank deck, a red cap, palms by the door |
+| northern | a pale granite tower in courses with a dark band, a timber gallery under snow, a slate cap ringed with snow |
+| autumn | a brick tower with pale string courses, a tiled cap, golden shrubs at its foot |
+| volcanic | a dark basalt tower banded with ember red, an iron gallery and cap, rocks at its foot |
+
+### The Services' structures
+
+`service/<biome>-<kind>.structure`: one per Service kind (`SERVICE_KINDS`,
+numbered from 1) in each Biome's style, 16 files. Each is 16×16 on a 2×2,
+12–20 layers (1.5–2.5 units, so the lighthouse stands well over them), on
+a paved square in the Biome's paving (plank deck, stone, pale stone, dark
+rock), walls and roofs in the Biome's materials (bamboo and thatch, timber
+and slate under snow, brick and tile, stone and iron), `door: none`:
+
+| Kind | Service | Structure |
+|---|---|---|
+| 1 `pipeline` | data engineering | two banded tanks with domes, joined by a pipe; a ladder, valve wheels, a pump house with a gable roof, a pipe along the front |
+| 2 `warehouse` | data platforms | a long warehouse with a roller door and a gable roof, two silos with cone tops and a catwalk, crates |
+| 3 `observatory` | analytics | a round drum under a metal dome, its slit and telescope towards the camera; a chart board on posts with rising coloured bars |
+| 4 `lab` | machine learning | a flat-roofed lab with a band of windows on the front and east, vents and a dish on its roof, a glass flask on a stand beside it |
+
+The lighthouses and the Service structures were written by a throwaway
+generator (box, disc, cone and dome helpers) and committed as plain ASCII;
+edit the files directly. Every place faces south; nothing turns.
 
 ### Mailbox
 
@@ -261,11 +288,17 @@ door faces):
 
 `structures.test.ts` checks every Landmark Variant: as many per Biome as
 `LANDMARK_VARIANTS`, numbered from 1; never taller above the ground than
-`LANDMARK_HEIGHT`; the Station 2×2, 40–48 layers, its door 4 wide and 10
-tall on the front; the Mailbox 1×1, 8–10 layers, its box at most 6 across;
+`LANDMARK_HEIGHT`; the Station a lighthouse: 2×2, 44–48 layers, taller
+than every House, `lamp` glass in its top part, its door 4 wide and 10 tall
+on the front; every Service kind in every Biome, each 2×2, 12–20 layers
+(at most `SERVICE_HEIGHT`) and lower than the lighthouse, no two kinds of a
+Biome the same shape; the Mailbox 1×1, 8–10 layers, its box at most 6 across;
 the Dock 2×1 on its deck, at most 1 unit up. `structureModels.test.ts`
 checks them in the World: each Landmark draws its own Variant from the
-World's Biome, fills its footprint on its ground, the Mailbox faces the
+World's Biome, fills its footprint on its ground (the Station: its
+lighthouse in the middle and each Service's structure of its kind on its
+place, empty places left open), the Model Gallery's Station group holds the
+lighthouse and one of each Service kind, the Mailbox faces the
 House's door, and the Dock's things stand on its deck.
 
 ### The Garden
@@ -526,7 +559,10 @@ turn; **Lift lids** lifts the House lids to show the interior; a House
 Interior room (kind `room`) shows furnished, the developer at the
 computer, at its own 1/16 unit; a Garden fence (kind `garden`) shows
 planted full, six flowers and three trees, as a World lays them out
-(`plantedGarden`); boats and ships float on a patch of their Biome's
+(`plantedGarden`); the Station (kind `station`) shows its whole group, the
+lighthouse with one Service of each kind on its sides (`stationGroup`),
+and each Service structure (kind `service`) is labelled with its kind
+(`pipeline`, `warehouse`, `observatory`, `lab`); boats and ships float on a patch of their Biome's
 shallow sea (darker at Night), its top at sea level as in the World, the
 boats packed closer so each shows larger; the fish lie on such a patch,
 its top at their underside, framed close; the land animals stand on

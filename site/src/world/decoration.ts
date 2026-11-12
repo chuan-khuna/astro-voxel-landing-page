@@ -6,13 +6,16 @@
  * Rules, every one held by `generateWorld`'s tests:
  * - one piece a land cell, never on or beside (8-neighbour) a footprint or
  *   the Dock's jetty, so the Garden stays clear; never on a path or a bridge end;
- * - never taller than the nearest Landmark (`LANDMARK_MIN_HEIGHT`);
+ * - never taller than the nearest Landmark (`LANDMARK_MIN_HEIGHT`; by the
+ *   Station, its Services' `SERVICE_MIN_HEIGHT`, as the lighthouse stands
+ *   in the middle of its group, never nearest);
  * - never between the camera and a Landmark: the same sight line as
  *   Landmark placement (`sightline.ts`);
  * - minor buildings face the camera (south or east) and keep apart.
  */
 import { LANDMARK_MIN_HEIGHT } from './landmarks';
 import { createRng } from './prng';
+import { SERVICE_MIN_HEIGHT } from './station';
 import { sightClearance } from './sightline';
 import type { BiomeId, Bridge, Cell, Decoration, DecorationKind, Facing, Path, PlacedLandmark, Terrain } from './types';
 
@@ -93,7 +96,7 @@ export function placeDecoration(
     let cap = Infinity;
     for (const { landmark, cells } of covered) {
       const distance = Math.min(...cells.map((c) => Math.hypot(c.x - cell.x, c.z - cell.z)));
-      const height = LANDMARK_MIN_HEIGHT[landmark.id];
+      const height = landmark.id === 'station' ? SERVICE_MIN_HEIGHT : LANDMARK_MIN_HEIGHT[landmark.id];
       if (distance < nearest) {
         nearest = distance;
         cap = height;

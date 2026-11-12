@@ -15,7 +15,7 @@ import { HOUSE_CELLS, type Cell, type PlacedLandmark, type PlacedLandmarkId, typ
 import type { VoxelGrid } from './mesher';
 import type { WorldColours } from './worldVoxels';
 import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
-import { drawStructure, landmarkPlacement, landmarkStructure } from './structureModels';
+import { drawServices, drawStructure, landmarkPlacement, landmarkStructure } from './structureModels';
 import { gardenPlantsOf, plantExtent } from './gardenPlants';
 
 interface Origin {
@@ -101,7 +101,9 @@ export function buildLandmark(landmark: PlacedLandmark, grid: VoxelGrid, colours
  * The box a Landmark covers, in world units relative to its model's origin
  * (the min corner of its footprint, on the ground): everything its ¼-unit
  * model and its Variant's structure draw (the House with its lid on, the
- * Garden with its plants), and at least the whole footprint and jetty; for the House, the
+ * Garden with its plants, the Station's lighthouse with every Service's
+ * structure round it), and at least the whole footprint and jetty (so the
+ * Station's covers its whole 6×6 group); for the House, the
  * House itself (its 3×3 and its roof), not its yard, where the Mailbox
  * stands. Used to size the Landmark's hotspot over the canvas (so it covers
  * the whole footprint), the Guide's spot beside it and its Data Card.
@@ -136,12 +138,12 @@ export function landmarkExtent(world: Pick<World, 'biome' | 'landmarks'>, landma
   const anyColour = () => 0;
   const colours = { biome: anyColour, fixed: anyColour } as Omit<WorldColours, 'table'> as WorldColours;
   MODELS[landmark.id](draw, colours, shape);
-  // The Landmark's Variant (the whole House, its lid on), at ⅛ unit.
+  // The Landmark's Variant (the whole House, its lid on), and the Station's Services round its lighthouse, at ⅛ unit.
   const { origin } = landmark.footprint;
   const at = { x: origin.x * STRUCTURE, y: landmark.y * STRUCTURE, z: origin.z * STRUCTURE };
-  drawStructure(landmarkStructure(world, landmark), landmarkPlacement(world, landmark), colours, (x, y, z) =>
-    cover(STRUCTURE, x - at.x, y - at.y, z - at.z, x - at.x + 1, y - at.y + 1, z - at.z + 1),
-  );
+  const paint = (x: number, y: number, z: number) => cover(STRUCTURE, x - at.x, y - at.y, z - at.z, x - at.x + 1, y - at.y + 1, z - at.z + 1);
+  drawStructure(landmarkStructure(world, landmark), landmarkPlacement(world, landmark), colours, paint);
+  drawServices(world, landmark, colours, paint);
   // The Garden's plants.
   if (landmark.id === 'garden') {
     for (const plant of gardenPlantsOf(world)) {

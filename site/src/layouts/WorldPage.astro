@@ -44,6 +44,7 @@ import { site, landmarksInStoryOrder, type DataCardMetric } from '@/data/site';
 import { PLACED_LANDMARK_IDS } from '@/world';
 import type { ContentCounts, LandmarkId } from '@/world';
 import { gardenCountsOf, plantedProjects, projectOrder } from '@/lib/gardenPlants';
+import { serviceOrder } from '@/lib/services';
 import type { GuideLines } from '@/lib/contentSchemas';
 import { tourSteps } from '@/lib/tour';
 import { STILL_SIZE, stillPath, stillSrcset } from '@/lib/worldStill';
@@ -80,7 +81,8 @@ const parentSection = hasPanel && !ownSection ? landmarkForPath(path) : null;
 
 const projects = projectOrder(await getCollection('projects'));
 // The generator gets counts and ids only: Projects and Pinned Projects for the Garden's plants, a boat per Client and a
-// ship per Partner, each in id order; a boat's or ship's kind comes from its owner's id.
+// ship per Partner, each in id order; a boat's or ship's kind comes from its owner's id. The Services' ids, in content
+// order, stand round the Station's lighthouse, each as the structure its id names.
 const idsOf = (entries: Array<{ id: string }>) => entries.map((e) => e.id).toSorted();
 const clientIds = idsOf(await getCollection('clients'));
 const partnerIds = idsOf(await getCollection('partners'));
@@ -90,6 +92,7 @@ const counts: ContentCounts = {
   partners: partnerIds.length,
   clientIds,
   partnerIds,
+  serviceIds: serviceOrder(await getCollection('services')).map((s) => s.id),
 };
 
 // One hotspot link per placed Landmark; the World positions them over its model.

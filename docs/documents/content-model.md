@@ -110,7 +110,9 @@ to the Station's list on `/services`. The schema (`serviceSchema`):
 | `icon` | `pipeline`, `model`, `chart` or `platform`: a line icon drawn by `ServiceList.astro` |
 | `order` | whole number from 1: the place in the list (ties go by id) |
 
-Services do not change the World and have no pages of their own.
+Services have no pages of their own. In the World, each of the first
+eight (in this order) stands round the Station's lighthouse as a structure
+its id names (polish ticket 15; see "What reaches the World").
 
 ## Clients and Partners
 
@@ -156,10 +158,16 @@ developer.
 
 The World generator gets only counts and stable ids from content, never the
 copy (`ContentCounts`: `projects`, `pinned`, `clients`, `partners`, and
-`clientIds` and `partnerIds`, each in id order; see `world-generator.md`).
+`clientIds` and `partnerIds`, each in id order, and `serviceIds` in the
+Services' list order, `serviceOrder` in `lib/services.ts`; see `world-generator.md`).
 `WorldPage.astro` counts the collections and lists the ids at build time. A
 boat's kind comes from its Client's id and a ship's from its Partner's, so
-renaming an id may change its kind; editing the copy never does. Services and Team Members do not change the World. Projects are
+renaming an id may change its kind; editing the copy never does. A
+Service's structure comes from words in its id (`data-engineering` pipes
+and tanks, `data-platforms` a warehouse, `analytics` an observatory,
+`machine-learning` a lab; `serviceKind` in `world/station.ts`), and its
+place round the lighthouse from its `order`; Services never move the
+layout. Team Members do not change the World. Projects are
 taken in Garden order (`projectOrder`, above) and Clients by id, so adding
 one whose id sorts last adds a plant (while the Garden has room) or a boat
 without moving the others' items.

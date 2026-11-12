@@ -1,6 +1,7 @@
 import type { Rng } from './prng';
 import { forEachRayColumn, SAMPLES_PER_CELL } from './sightline';
 import { surfaceOf } from './terrain';
+import { LIGHTHOUSE_CELL, MAX_SERVICES, SERVICE_HEIGHT, SERVICE_PLACES, STATION_PLACE, STATION_SIZE, serviceKind } from './station';
 import type { BiomeId, Boat, Bridge, Cell, Facing, Footprint, Isle, PlacedLandmark, PlacedLandmarkId, Terrain } from './types';
 
 /** A berth: a boat before its Client gives it a kind (`generateWorld`). */
@@ -47,8 +48,10 @@ export const HOUSE_CELLS = 3;
  * How tall, in units above its ground, each Landmark's model may stand. Placement
  * keeps every Landmark in view past the others' models at these heights, so a
  * model must never be taller (the renderer's tests hold it to this). They leave
- * room for the polish models: a Station of 5–6, a House of 3.5–4, Garden trees
- * of 3–3.5. The Dock's covers its jetty too; the Mailbox's is its own cell.
+ * room for the polish models: a lighthouse of 5–6, a House of 3.5–4, Garden trees
+ * of 3–3.5. The Station's is its lighthouse's, in the middle of its group (the
+ * Services round it stand up to `SERVICE_HEIGHT`); the Dock's covers its jetty
+ * too; the Mailbox's is its own cell.
  */
 export const LANDMARK_HEIGHT: Record<PlacedLandmarkId, number> = {
   station: 6,
@@ -83,12 +86,14 @@ export const GARDEN_HEIGHT = { fence: 1, flower: 1.75, tree: LANDMARK_HEIGHT.gar
  * files `structures/<landmark>/<biome>-<n>.structure`, numbered from 1 (a
  * data test holds the files to this table). The Garden's Variant is its
  * fence; its flowers and trees are structures of their own (`render/gardenPlants.ts`).
+ * The Station's is its lighthouse, one per Biome; its Services' structures
+ * are structures of their own (`structures/service/`).
  */
 export const LANDMARK_VARIANTS: Record<BiomeId, Record<PlacedLandmarkId, number>> = {
-  tropical: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
-  northern: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
-  autumn: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
-  volcanic: { house: 3, station: 2, mailbox: 3, dock: 2, garden: 1 },
+  tropical: { house: 3, station: 1, mailbox: 3, dock: 2, garden: 1 },
+  northern: { house: 3, station: 1, mailbox: 3, dock: 2, garden: 1 },
+  autumn: { house: 3, station: 1, mailbox: 3, dock: 2, garden: 1 },
+  volcanic: { house: 3, station: 1, mailbox: 3, dock: 2, garden: 1 },
 };
 
 const SIDES = [
@@ -116,7 +121,9 @@ export interface Placement {
 /**
  * Place the five Landmarks, each on a footprint of whole cells:
  *
- * - the Station (2×2) on its Isle's high ground, levelled up to the top;
+ * - the Station's group (6×6: the lighthouse's 2×2 in the middle, a 2×2 for
+ *   each Service round it, `station.ts`) on its Isle's high ground, levelled
+ *   up to the top;
  * - the Garden (5×5: a 3×3 bed of flowers and trees in a fence), then the House's
  *   plot (4×4: the House 3×3 and its front yard) on the Garden's Isle;
  * - the Dock (2×1) on the shoreline, with a 2–3 cell jetty straight out to sea;
@@ -128,7 +135,8 @@ export interface Placement {
  * `MAX_LEVELLING` voxels. Footprints keep a cell apart and stay off bridges
  * and bridge ends. No footprint (or jetty) may be hidden from the fixed
  * isometric camera by terrain, a bridge, or another Landmark's model (each
- * as tall as `LANDMARK_HEIGHT` allows; the Garden's parts as `GARDEN_HEIGHT`). Each Landmark tries the Isles in a
+ * as tall as `LANDMARK_HEIGHT` allows; the Garden's parts as `GARDEN_HEIGHT`,
+ * the Station's Services as `SERVICE_HEIGHT`). Each Landmark tries the Isles in a
  * Seed-shuffled order. Returns null if some Landmark has no valid footprint.
  */
 export function placeLandmarks(
@@ -136,7 +144,7 @@ export function placeLandmarks(
   source: Terrain,
   isles: Isle[],
   bridges: Bridge[],
-  counts: { projects: number; pinned: number; boats: number },
+  counts: { projects: number; pinned: number; boats: number; serviceIds?: readonly string[] },
 ): Placement | null {
   const boatCount = Math.min(Math.max(0, counts.boats), MAX_BOATS);
   const terrain: Terrain = { ...source, heights: [...source.heights] };
@@ -235,8 +243,10 @@ export function placeLandmarks(
   /**
    * The model a Landmark on `candidate` stands up to, as columns: the top it
    * may reach over each cell (`LANDMARK_HEIGHT`). The House stands on its
-   * plot's 3×3, and the Mailbox in its yard is placed with it; the Dock's
-   * model covers its jetty too.
+   * plot's 3×3, and the Mailbox in its yard is placed with it; the Station's
+   * lighthouse stands in the middle of its group, every other place as tall as
+   * a Service may stand (whether or not one stands there, so the layout never
+   * depends on the Services); the Dock's model covers its jetty too.
    */
   const modelOf = (id: PlacedLandmarkId, candidate: Candidate) => {
     const { footprint, y, jetty } = candidate;
@@ -246,6 +256,11 @@ export function placeLandmarks(
       for (const c of rectangle(origin, HOUSE_CELLS, HOUSE_CELLS).cells) tops.set(index(c.x, c.z), y + LANDMARK_HEIGHT.house);
       const mailbox = mailboxCorner(origin);
       tops.set(index(mailbox.x, mailbox.z), y + LANDMARK_HEIGHT.mailbox);
+    } else if (id === 'station') {
+      const { origin } = footprint;
+      for (const c of footprint.cells) tops.set(index(c.x, c.z), y + SERVICE_HEIGHT);
+      const centre = { x: origin.x + LIGHTHOUSE_CELL.x, z: origin.z + LIGHTHOUSE_CELL.z };
+      for (const c of rectangle(centre, STATION_PLACE, STATION_PLACE).cells) tops.set(index(c.x, c.z), y + LANDMARK_HEIGHT.station);
     } else if (id === 'garden') {
       // The fence round the edge, the flowers' rows and the trees' row, each as tall as it may stand.
       const { origin } = footprint;
@@ -287,7 +302,12 @@ export function placeLandmarks(
   };
 
   const placed: PlacedLandmark[] = [];
-  const settle = (id: PlacedLandmarkId, owner: Isle, candidate: Candidate, plants: { flowers: Cell[]; trees: Cell[] } = { flowers: [], trees: [] }) => {
+  const settle = (
+    id: PlacedLandmarkId,
+    owner: Isle,
+    candidate: Candidate,
+    { flowers = [], trees = [], services = [] }: Partial<Pick<PlacedLandmark, 'flowers' | 'trees' | 'services'>> = {},
+  ) => {
     for (const c of candidate.footprint.cells) heights[index(c.x, c.z)] = candidate.y;
     const model = modelOf(id, candidate);
     for (const [i, t] of model) standing[i] = Math.max(standing[i]!, t);
@@ -300,8 +320,10 @@ export function placeLandmarks(
       y: candidate.y,
       variant: 1,
       door: null,
-      ...plants,
+      flowers,
+      trees,
       jetty: candidate.jetty,
+      services,
     };
     placed.push(landmark);
     return landmark;
@@ -329,17 +351,24 @@ export function placeLandmarks(
   const levelledDown = (owner: Isle, w: number, d: number): Candidate[] =>
     footprintsOn(owner, w, d).map(({ footprint, low }) => ({ footprint, y: low, jetty: [] }));
 
-  // The Station: levelled up to its Isle's top height, so it stands on the high ground.
+  // The Station's group: levelled up to its Isle's top height, so it stands on the high ground.
   const station = firstInView('station', (owner) => {
     const isleTop = Math.max(...heights.filter((_, i) => isle[i] === owner.id));
     return [
-      footprintsOn(owner, 2, 2)
+      footprintsOn(owner, STATION_SIZE, STATION_SIZE)
         .filter(({ high }) => high === isleTop)
         .map(({ footprint, high }) => ({ footprint, y: high, jetty: [] })),
     ];
   });
   if (!station) return null;
-  settle('station', station.owner, station.picked);
+  const at = station.picked.footprint.origin;
+  settle('station', station.owner, station.picked, {
+    services: (counts.serviceIds ?? []).slice(0, MAX_SERVICES).map((id, k) => ({
+      id,
+      cell: { x: at.x + SERVICE_PLACES[k]!.x, z: at.z + SERVICE_PLACES[k]!.z },
+      kind: serviceKind(id),
+    })),
+  });
 
   // The Garden, the largest footprint, goes next; the House joins it on its Isle.
   const garden = firstInView('garden', (owner) => [levelledDown(owner, GARDEN_SIZE, GARDEN_SIZE)]);
@@ -432,6 +461,7 @@ export function placeLandmarks(
     flowers: [],
     trees: [],
     jetty: [],
+    services: [],
   });
 
   // Lowering ground never hides anything, the Station (the only raise) came

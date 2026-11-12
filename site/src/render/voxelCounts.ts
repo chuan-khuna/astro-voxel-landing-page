@@ -28,8 +28,8 @@ export type VoxelKind = (typeof VOXEL_KINDS)[number];
  *   plants, the boats and the ships are ⅛-unit voxels; the House's room
  *   is 1/16-unit voxels; every other kind is ¼-unit voxels.
  * - `landmarks`: the Landmark models and their Variants' structures (the
- *   House's base and lid, the Station, the Mailbox, the Dock's things, the
- *   Garden's fence).
+ *   House's base and lid, the Station's lighthouse and its Services'
+ *   structures, the Mailbox, the Dock's things, the Garden's fence).
  * - `plants`: the Garden's flowers and trees, one per planted Project.
  * - `decoration`: every piece of Decoration (instanced, ⅛ unit), as the
  *   full render tier shows it; the reduced tier shows half.

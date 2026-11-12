@@ -93,7 +93,7 @@ each in its own integer voxel coordinates (voxel `(x, y, z)` spans world
 |---|---|---|
 | terrain | 1 unit (`TERRAIN`) | Every land column from y = 0 to its height. The top voxel takes the surface colour (sand, grass, peak) or the path colour (the path's cells, and the House yard's cell in front of its door); buried voxels take their stratum's colour. |
 | detail | ¼ unit (`GROUND_DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Dock's deck and jetty (`landmarkModels.ts`) and the buoys. |
-| structure | ⅛ unit (`STRUCTURE = 8` per unit) | Placed structures (`structureModels.ts`, `voxel-structures.md`): each Landmark's Variant: the House's base (its lid is a mesh of its own), the Station, the Mailbox, the things on the Dock's deck and the Garden's fence. The Garden's flowers and trees are ⅛-unit structures too, but instanced (`garden.ts`), not in this grid, and so are the boats and ships (`boats.ts`, `ships.ts`). |
+| structure | ⅛ unit (`STRUCTURE = 8` per unit) | Placed structures (`structureModels.ts`, `voxel-structures.md`): each Landmark's Variant: the House's base (its lid is a mesh of its own), the Station's lighthouse and each Service's structure round it, the Mailbox, the things on the Dock's deck and the Garden's fence. The Garden's flowers and trees are ⅛-unit structures too, but instanced (`garden.ts`), not in this grid, and so are the boats and ships (`boats.ts`, `ships.ts`). |
 
 The House Interior's tier (`INTERIOR`, 1/16 unit) is the room's own: it is
 drawn in the World at that detail while the House is open, as meshes of
@@ -118,7 +118,7 @@ structure (`structureModels.ts`, `voxel-structures.md`); only these stay at ¼ u
 
 | Landmark | ¼-unit model |
 |---|---|
-| Station (2×2) | none: the Station is its Variant's structure |
+| Station (6×6 group) | none: the Station is its lighthouse's structure in the middle and a Service's structure on each place round it (polish ticket 15) |
 | House (4×4 plot) | none: the House is a structure and its room the House Interior's (see "The House and its room") |
 | Garden (5×5) | none: its fence is its Variant's structure and its flowers and trees are instanced structures (see "The Garden") |
 | Dock (2×1) | a plank platform on the land cells (ground detail, ADR 0006), which the Variant's things stand on; a plank deck level with the ground over each jetty cell, on posts down to the sea floor |
@@ -126,12 +126,16 @@ structure (`structureModels.ts`, `voxel-structures.md`); only these stay at ¼ u
 
 `landmarkExtent(world, landmark)` is the box of both: the ¼-unit model and
 the Variant's structure as placed (the House whole, lid on, over its own
-3×3, not its yard, where the Mailbox has a box of its own).
+3×3, not its yard, where the Mailbox has a box of its own; the Station's
+lighthouse with every Service's structure, over its whole 6×6 group, so
+its hotspot and Data Card cover the group and a pointer anywhere on it
+reaches the Station: a Service has no hotspot of its own).
 `landmarkModels.test.ts` checks that every Landmark but the Dock draws
 nothing at ¼ unit, that the Dock reaches every footprint (and jetty) cell
 and nothing outside it, that the Garden's box is its 5×5, about 1 unit
 tall with no plants and as tall as its trees with them, and that each
-Landmark's box stays within `LANDMARK_HEIGHT` (the Station 5–6 units, the
+Landmark's box stays within `LANDMARK_HEIGHT` (the Station's group 6×6
+and 5.5–6 units, with or without Services, the
 Mailbox 1–1.25 in its cell, the Dock's things at most 1).
 
 ### The Garden

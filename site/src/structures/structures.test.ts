@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, BIRD_REACH, CREATURE_SETS, BIOME_IDS, BOAT_KINDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, PLACED_LANDMARK_IDS, SHIP_KINDS } from '@/world';
+import { ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, BIRD_REACH, CREATURE_SETS, BIOME_IDS, BOAT_KINDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, PLACED_LANDMARK_IDS, SERVICE_HEIGHT, SERVICE_KINDS, SERVICE_MIN_HEIGHT, SHIP_KINDS } from '@/world';
 import { GROUND_DETAIL, INTERIOR, STRUCTURE } from '@/render/voxelTiers';
 import { STRUCTURES, STRUCTURE_FILES, variantsOf } from './index';
 import { FISH_REACH } from '@/render/schools';
@@ -64,18 +64,21 @@ describe('the Landmark Variants', () => {
     for (const kind of KINDS) for (const s of STRUCTURES.filter((s) => s.kind === kind)) expect(above(s) / STRUCTURE, s.name).toBeLessThanOrEqual(LANDMARK_HEIGHT[kind]);
   });
 
-  it('makes the Station 2×2 and 5–6 units tall, its door 4×10 on +z', () => {
+  it('makes the Station a lighthouse: 2×2, 5.5–6 units tall (taller than every House), its lamp near the top, its door 4×10 on +z', () => {
+    const tallestHouse = Math.max(...STRUCTURES.filter((s) => s.kind === 'house').map(above));
     for (const s of STRUCTURES.filter((s) => s.kind === 'station')) {
       expect(s.footprint, s.name).toEqual({ width: 2, depth: 2 });
-      expect(s.size.y, s.name).toBeGreaterThanOrEqual(40);
+      expect(s.size.y, s.name).toBeGreaterThanOrEqual(44);
       expect(s.size.y, s.name).toBeLessThanOrEqual(48);
+      expect(above(s), s.name).toBeGreaterThan(tallestHouse);
       expect(s.door, s.name).toBe('+z');
       expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
-      // The door: 4 wide and 10 tall, each voxel the frontmost of its column on that row. The autumn door is
-      // the Biome's green accent, which also lights the cabinets in the yard (x 12 and up), so only the
-      // Station's own front (x below 12) counts.
-      const STATION_FRONT = 12;
-      const door = [...structureVoxels(s)].filter((v) => v.role === 'door' || v.role === 'doorWood' || (v.role === 'accent' && v.y >= 1 && v.y <= 10 && v.x < STATION_FRONT));
+      // The lantern: lamp glass in the top quarter.
+      const lamp = [...structureVoxels(s)].filter((v) => v.role === 'lamp');
+      expect(lamp.length, s.name).toBeGreaterThan(0);
+      for (const v of lamp) expect(v.y, s.name).toBeGreaterThanOrEqual(s.size.y * 0.7);
+      // The door: 4 wide and 10 tall, each voxel the frontmost of its column on that row.
+      const door = [...structureVoxels(s)].filter((v) => v.role === 'door' || v.role === 'doorWood');
       const front = door.filter((v) => voxelAt(s, v.x, v.y, v.z + 1) === null);
       expect(new Set(front.map((v) => v.x)).size, s.name).toBe(4);
       expect(new Set(front.map((v) => v.y)).size, s.name).toBe(10);
@@ -104,6 +107,38 @@ describe('the Landmark Variants', () => {
       expect(s.anchor, s.name).toEqual({ x: 0, y: -deck, z: 0 });
       expect(s.door, s.name).toBeNull();
       expect(above(s), s.name).toBeLessThanOrEqual(STRUCTURE);
+    }
+  });
+});
+
+describe('the Service structures', () => {
+  const services = STRUCTURES.filter((s) => s.kind === 'service');
+
+  it('gives every Biome one structure per Service kind, numbered as the kinds are', () => {
+    for (const biome of BIOME_IDS) {
+      const kinds = variantsOf('service', biome);
+      expect(kinds.map((s) => s.variant), biome).toEqual(SERVICE_KINDS.map((_, i) => i + 1));
+      for (const s of kinds) expect(s.biome, s.name).toBe(biome);
+    }
+  });
+
+  it('stands each on a 2×2 (16×16 voxels), 1.5–2.5 units tall: below the lighthouse, never taller than placement keeps clear', () => {
+    const lowestLighthouse = Math.min(...STRUCTURES.filter((s) => s.kind === 'station').map((s) => s.size.y));
+    for (const s of services) {
+      expect(s.footprint, s.name).toEqual({ width: 2, depth: 2 });
+      expect(s.size, s.name).toMatchObject({ x: 16, z: 16 });
+      expect(s.anchor, s.name).toEqual({ x: 0, y: 0, z: 0 });
+      expect(s.size.y, s.name).toBeGreaterThanOrEqual(SERVICE_MIN_HEIGHT * STRUCTURE);
+      expect(s.size.y, s.name).toBeLessThanOrEqual(SERVICE_HEIGHT * STRUCTURE);
+      expect(s.size.y, s.name).toBeLessThan(lowestLighthouse);
+      expect([null, '+z'], s.name).toContain(s.door);
+    }
+  });
+
+  it('draws each kind its own way in every Biome: no two kinds share a shape', () => {
+    for (const biome of BIOME_IDS) {
+      const shapes = variantsOf('service', biome).map((s) => [...structureVoxels(s)].map((v) => `${v.x},${v.y},${v.z}`).join(' '));
+      expect(new Set(shapes).size, biome).toBe(SERVICE_KINDS.length);
     }
   });
 });

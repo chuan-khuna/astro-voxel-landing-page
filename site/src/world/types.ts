@@ -17,6 +17,8 @@ export interface ContentCounts {
   clientIds?: readonly string[];
   /** The Partners' ids, in id order (the Dock's list sorts Partners by tier first; the order only decides which loop each ship sails): each ship's kind comes from its Partner's id. Stand-ins (`partner-<n>`) fill any gap. */
   partnerIds?: readonly string[];
+  /** The Services' ids, in content order (`order`, then id): the first `MAX_SERVICES` stand round the Station, each with the structure its id names (`serviceKind`). None if absent. */
+  serviceIds?: readonly string[];
 }
 
 /** The five Landmarks that are places in the World. */
@@ -200,6 +202,23 @@ export interface PlacedLandmark {
    * from the one beside the footprint outwards. Its deck is at height `y`.
    */
   jetty: Cell[];
+  /**
+   * Station only (empty otherwise): one Service's structure per place round
+   * the lighthouse, in content order, at most `MAX_SERVICES` (`station.ts`).
+   */
+  services: StationService[];
+}
+
+/**
+ * A Service's structure in the Station's group: a 2×2 round the lighthouse.
+ * `cell` is its min (north-west) corner cell; `kind` (1 to
+ * `SERVICE_KINDS.length`) comes from the Service's id (`serviceKind`), so it
+ * is the same in every World.
+ */
+export interface StationService {
+  id: string;
+  cell: Cell;
+  kind: number;
 }
 
 /**

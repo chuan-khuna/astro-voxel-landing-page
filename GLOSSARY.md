@@ -25,7 +25,7 @@ A place in the world that stands for one section of the site. Every Seed contain
 _Avoid_: hotspot, POI, node
 
 **Landmark Variant**:
-One of the designs a Landmark can take. Each Biome has its own style for every Landmark (a stilt house in the tropics, a timber cabin in the north), and within that style a few Variants differ in shape, such as the roof or an extra wing. The Seed picks the Variant.
+One of the designs a Landmark can take. Each Biome has its own style for every Landmark (a stilt house in the tropics, a timber cabin in the north), and within that style a few Variants differ in shape, such as the roof or an extra wing (the Station's lighthouse has one per Biome). The Seed picks the Variant.
 _Avoid_: skin, model type
 
 **Decoration**:
@@ -56,7 +56,7 @@ A technology vendor the company is allied with, such as a cloud or data platform
 _Avoid_: vendor, alliance
 
 **Service**:
-A capability the company sells, such as data engineering or ML. Each Service has a structure of its own in the Station's group.
+A capability the company sells, such as data engineering or ML. Each Service has a structure of its own in the Station's group, chosen by its id so it looks the same in every World (pipes and tanks, a warehouse, an observatory, a lab). Services cannot be clicked on their own: the whole group is the Station. At most eight stand in the World; every Service is listed on the Station's page.
 _Avoid_: product, offering
 
 **Team Member**:

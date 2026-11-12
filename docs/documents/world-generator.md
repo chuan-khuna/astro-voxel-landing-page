@@ -45,7 +45,8 @@ imports, so the generator stays pure.
 | File | What it does |
 |---|---|
 | `generateWorld.ts` | The public function: Seed fallback, Biome choice, the retry loop, the Dock-to-House route, derived views. |
-| `landmarks.ts` | Landmark footprints: placement, levelling, the occlusion check (`sightline.ts`), `LANDMARK_HEIGHT` and `LANDMARK_MIN_HEIGHT`, the Garden's bed (its flowers and trees) and gate, and the Dock's berths (the moored boats). |
+| `landmarks.ts` | Landmark footprints: placement (the Station's group with its Services' places, `station.ts`), levelling, the occlusion check (`sightline.ts`), `LANDMARK_HEIGHT` and `LANDMARK_MIN_HEIGHT`, the Garden's bed (its flowers and trees) and gate, and the Dock's berths (the moored boats). |
+| `station.ts` | The Station's 6×6 group: `STATION_SIZE`, `LIGHTHOUSE_CELL`, `SERVICE_PLACES` (sides, then corners), `MAX_SERVICES`, `SERVICE_HEIGHT`, `SERVICE_KINDS` and `serviceKind(id)` (a Service's structure from words in its id, else a hash). |
 | `ships.ts` | The Partners' sailing routes: loops through open sea. |
 | `buoys.ts` | The buoys: sea marks just off the Isles, nearest the Dock first. |
 | `decoration.ts` | Decoration: `placeDecoration`, `DECORATION_HEIGHT` and `MINOR_BUILDINGS`: pieces of scenery on free land, each below the nearest Landmark and out of every Landmark's sight line. |
@@ -134,7 +135,8 @@ Dock and Mailbox. The other two are views derived from the layout:
    linked, the shortest straight run of sea (at most 12 cells) between two
    land cells of equal height, with open sea on both sides.
 6. **Landmarks.** Each placed Landmark stands on a footprint of whole cells
-   (see "Landmark footprints" below): the Station (2×2) on its Isle's high
+   (see "Landmark footprints" below): the Station's group (6×6: its
+   lighthouse and a 2×2 for each Service round it) on its Isle's high
    ground; the Garden, then the House's 4×4 plot on the Garden's Isle; the Dock
    (2×1 either way) on the shore with a jetty, preferring height 1; the
    Mailbox in the House's front yard. The Dock's jetty must have a berth for
@@ -168,7 +170,7 @@ footprints that keep every rule:
 
 | Landmark | Footprint |
 |---|---|
-| Station | 2 × 2, containing a cell at its Isle's top height |
+| Station | 6 × 6, its group (see "The Station's group" below), containing a cell at its Isle's top height |
 | House | 4 × 4: the House's plot (see "House plot") |
 | Garden | 5 × 5: a 3 × 3 bed inside a fence one cell wide (below) |
 | Dock | 2 × 1 or 1 × 2 on land, plus a jetty of 2–3 sea cells running straight out from one of its cells |
@@ -198,17 +200,38 @@ footprints that keep every rule:
   so they count as part of the Garden.
 - **Never hidden by another Landmark.** Each placed Landmark's model counts
   as a column as tall as `LANDMARK_HEIGHT` allows over the cells it stands
-  on: Station 6 units, House 4 (its plot's 3 × 3 only; the yard is ground),
+  on: Station 6 units over its lighthouse's 2 × 2 and `SERVICE_HEIGHT`
+  (2.5) over the rest of its group, whether or not a Service stands there,
+  so the layout never depends on the Services; House 4 (its plot's 3 × 3 only; the yard is ground),
   Garden 3.5, Dock 1 (over its jetty too), Mailbox 2 (its yard cell, set
   with the House). The Garden is three bands (`GARDEN_HEIGHT`): its fence
   ring 1, the flowers' two rows 1.75 and the trees' row 3.5, whether or
-  not a plant stands there. The heights leave room for the polish models (a Station
-  of 5–6, Garden trees of 3–3.5); `landmarkModels.test.ts` and the
+  not a plant stands there. The heights leave room for the polish models (a lighthouse
+  of 5.5–6, Service structures of 1.5–2.5, Garden trees of 3–3.5); `landmarkModels.test.ts` and the
   structure data tests check that no model is taller. A candidate must be in view past the models already
   placed, and its own model must hide none of them (the same ray march,
   skipped when the model lies wholly west or north of a Landmark, since
   rays run towards +x and +z). The Mailbox, in the House's own yard, is
   not an occluder of its House.
+- **The Station's group** (polish ticket 15, `station.ts`). Always 6 × 6:
+  the lighthouse's 2 × 2 in the middle (local cells 2–3) and eight 2 × 2
+  places round it. The Services, in content order (`order`, then id; the
+  site passes their ids as `serviceIds`), take the places in
+  `SERVICE_PLACES` order: the four sides first (south, east, north, west:
+  the camera looks from the south-east, so the places in front of the
+  lighthouse come first), then the corners (south-east, north-east,
+  south-west, north-west). At most `MAX_SERVICES` (8) show; more appear only
+  on `/services`. An empty place is open ground (the group's footprint still
+  keeps Decoration, particles and animals off it). `PlacedLandmark.services`
+  lists each shown Service: its id, its place's north-west cell and its
+  `kind`, 1–4 in `SERVICE_KINDS` (`pipeline`, `warehouse`, `observatory`,
+  `lab`). `serviceKind(id)` takes the first word of the id (split on `-`
+  and `_`) that names a kind (`engineering`, `etl`... a pipeline;
+  `platform`, `lake`... a warehouse; `analytics`, `bi`, `dashboard`... an
+  observatory; `ml`, `ai`, `machine`, `learning`... a lab), else a stable
+  hash of the id, so a Service has the same structure in every World. The
+  Station's hotspot and Data Card cover the whole group; a Service has no
+  link of its own.
 - **The Garden** (polish ticket 05). Always 5 × 5, whatever the content: a
   3 × 3 bed (local cells 1–3) inside a fence one cell wide. The camera
   looks from the south-east, so the bed's back row is its north row (local
@@ -329,10 +352,13 @@ weights among the kinds that fit there. A piece:
 - is never taller than the nearest Landmark: `DECORATION_HEIGHT[kind]`
   (grass, clump and rocks 0.5 units, bush 0.75, fence 1, sapling, lamp and
   shed 2, windmill 2.5) is at most `LANDMARK_MIN_HEIGHT` of the Landmark
-  nearest the cell (Station 5.5, House 4, Garden 1 (its fence), Dock 0.875,
+  nearest the cell (House 4, Garden 1 (its fence), Dock 0.875,
   Mailbox 1.25: each Landmark's lowest Variant; the lowest of several as
-  near). So only grass, clumps, rocks and bushes stand by the Dock or the
-  Garden;
+  near). By the Station it is `SERVICE_MIN_HEIGHT` (1.5): what stands
+  nearest is a place round the lighthouse, so its lowest Service (polish
+  ticket 15; it was the Station's 5.5). So only grass, clumps, rocks and
+  bushes stand by the Dock or the Garden, and grass, clumps, rocks, bushes
+  and fences by the Station;
 - never stands between the camera and a Landmark: every Landmark's ground
   points (the ¼-cell grid of its footprint and jetty) cast the same sight
   line as Landmark placement (`sightline.ts`, `sightClearance`), and a
@@ -560,6 +586,20 @@ numbers above came from another run, so compare within a row):
 The Garden's size no longer depends on the Projects, so both rows now give
 the same layouts.
 
+Polish ticket 15 grew the Station to its 6 × 6 group (the lighthouse 6
+units tall in the middle, every other place 2.5). Measured over Seeds
+`seed-0` to `seed-399` on one machine (before → after); the second row has
+8 Services (by id), the first the site's 4:
+
+| Content | Retried | Safe layout | Mean | 95th percentile | Worst |
+|---|---|---|---|---|---|
+| 8 Projects, 6 Clients, 4 Partners, 4 Services | 30.5% → 32.8% | 1 → 1 (`seed-30`) | 41 → 45 ms | 78 → 82 ms | 144 → 141 ms |
+| 24 Projects, 12 Clients, 6 Partners, 8 Services | 30.5% → 32.8% | 1 → 1 (`seed-30`) | 42 → 46 ms | 78 → 83 ms | 145 → 142 ms |
+
+(This run's machine was busier than polish 05's, so its absolute times are
+higher; compare within a row.) The Services never change the layout, so
+both rows give the same layouts again.
+
 Larger Isles leave more room, so far fewer layouts fail; most retries now
 come from bridges (no straight, level run of at most 12 cells between two
 Isles) and then from Landmarks with no footprint in view. Each World costs
@@ -579,9 +619,11 @@ the Biome.
 
 Each placed Landmark carries a `variant`: which of its Biome's Variants it
 shows (polish ticket 03). `LANDMARK_VARIANTS` (`landmarks.ts`) says how
-many each Landmark has per Biome: the House 3, the Station 2, the Mailbox 3,
+many each Landmark has per Biome: the House 3, the Station 1 (its
+lighthouse, since polish ticket 15; it had 2 before), the Mailbox 3,
 the Dock 2 and the Garden 1 (its fence; its flowers and trees are
-structures of their own, `voxel-structures.md`). The renderer draws
+structures of their own, `voxel-structures.md`). The Station's Services
+are structures of their own too, picked by id, not by the Seed (above). The renderer draws
 the structure file of that kind, Biome and number
 (`voxel-structures.md`, "The Landmark Variants"); a data test holds the
 files to the table.
@@ -596,7 +638,8 @@ no new placement check.
 
 Tests (`generateWorld.test.ts`): over 200 sampled Seeds each Landmark's
 Variant is a whole number from 1 to its Biome's count, and every Variant of
-every Biome occurs; the House, Station, Mailbox and Dock have 2–3 each; and
+every Biome occurs; the House, Mailbox and Dock have 2–3 each and the
+Station 1; and
 the same 200 Seeds keep their Variants with the largest content counts.
 
 ## Not yet built
@@ -636,6 +679,10 @@ Seeds, never snapshots:
   the Isles it names;
 - House and Garden share an Isle, the Dock's footprint has sea beside it,
   the Station is at its Isle's top height;
+- the Station's group is 6 × 6, its Services on the sides then the corners
+  in content order, at most 8, for 0, 1, 4, 5, 8 and 12 Services; adding
+  Services never moves a Landmark; each Service's kind comes from its id,
+  the same in every World;
 - the House's plot is 4 × 4 with its door south or east (both seen), every
   other Landmark's `door` null; the Mailbox in the plot's south-east
   corner at the House's height;

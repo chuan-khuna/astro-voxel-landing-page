@@ -114,13 +114,13 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 | Footprint | Cells | Voxels (⅛) |
 |---|---|---|
 | House plot: House 3×3 plus front yard with the Mailbox | 4×4 | 32×32 |
-| Station group: Station 2×2 plus one 2×2 structure per Service | about 6×4 (layout open) | – |
+| Station group: the lighthouse 2×2 in the middle, a 2×2 structure per Service round it (sides, then corners) | 6×6 | 48×48 |
 | Garden: 3×3 bed inside a one-cell fence | 5×5 | 40×40 |
 | Dock | 2×1 plus jetty | 16×8 |
 | Tree or flower | 1×1 | 8×8 |
 
 **Landmark Variants**
-- Each Landmark (House, Station, Mailbox, Dock) and each Service structure has one style per Biome and 2–3 Variants per style, about 8–12 per Landmark. Built in ticket 03: the House 3, the Station 2, the Mailbox 3 and the Dock 2 per Biome (`LANDMARK_VARIANTS`).
+- Each Landmark (House, Station, Mailbox, Dock) and each Service structure has one style per Biome and 2–3 Variants per style, about 8–12 per Landmark. Built in ticket 03: the House 3, the Station 2, the Mailbox 3 and the Dock 2 per Biome (`LANDMARK_VARIANTS`). Ticket 15 replaced the Station's two with one lighthouse per Biome, and gave each Service kind one structure per Biome (its kind, not the Seed, decides which).
 - The Seed picks a Variant per Landmark, so the same Seed gives the same Variants. The pick uses a sequence of its own, so it never moves the layout, and content counts never change it.
 - A Variant fills its Landmark's footprint (ticket 18 of the base feature).
 - Doors face the path where there is one.
@@ -154,7 +154,7 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 
 - Camera bounds follow.
 - Mobile uses the same Isles with less Decoration.
-- No Landmark hides another from the camera. Placement treats each Landmark's model as a column as tall as `LANDMARK_HEIGHT` allows (Station 6, House 4, Garden 3.5, Dock 1, Mailbox 2 units), and no model may be taller.
+- No Landmark hides another from the camera. Placement treats each Landmark's model as a column as tall as `LANDMARK_HEIGHT` allows (Station 6, House 4, Garden 3.5, Dock 1, Mailbox 2 units; since ticket 15 the Station's 6 covers only its lighthouse, the rest of its group 2.5), and no model may be taller.
 - Measured sizes, retry rates and generation times (before and after) are in `README.md` and `docs/documents/world-generator.md`.
 
 **Decoration**
@@ -177,7 +177,8 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 **Station and Services**
 - The Station is a group: its own 2×2 building at the centre, and a 2×2 structure for each Service round it.
 - Each Service structure says what the Service does, for example pipes and tanks for data engineering, silos for data platforms, an observatory with a chart board for analytics, and a lab for machine learning.
-- Open: the group's layout (a 6×4 row or a 6×6 ring), how it adapts to the number of Services, and whether each Service structure can be clicked.
+- Decided 2026-11-12 (ticket 15, built): a 6×6 ring. The lighthouse's 2×2 is in the middle; the first four Services in content order take the sides, Services 5–8 the corners; more show only on `/services`; empty places stay open ground. Services are not clickable: the whole group is the Station, with one hotspot and Data Card.
+- Built in ticket 15: the lighthouse replaces ticket 03's Station Variants (one per Biome: a white-and-red tower in the tropics, pale granite in the north, brick in autumn, basalt banded ember-red on volcanic Isles, 47 layers). Four Service kinds (`SERVICE_KINDS`: pipeline, warehouse, observatory, lab), one structure per kind per Biome (`service/<biome>-<kind>`), 12–20 layers; the kind comes from words in the Service's id, else a hash of it (`serviceKind`). Placement treats the group as columns: 6 units over the lighthouse, `SERVICE_HEIGHT` (2.5) over every other place.
 
 **House plot and Mailbox**
 - The House stands on a 4×4 plot: the House itself is 3×3, and the other seven cells are its front yard, an L along its south and east sides (the two the camera sees); the door opens onto one of them.

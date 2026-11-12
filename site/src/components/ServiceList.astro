@@ -5,6 +5,7 @@
  */
 import { getCollection, render } from 'astro:content';
 import type { SERVICE_ICONS } from '../lib/contentSchemas';
+import { serviceOrder } from '../lib/services';
 
 type Icon = (typeof SERVICE_ICONS)[number];
 
@@ -20,7 +21,7 @@ const ICONS: Record<Icon, string> = {
   platform: 'M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4',
 };
 
-const services = (await getCollection('services')).toSorted((a, b) => a.data.order - b.data.order || a.id.localeCompare(b.id));
+const services = serviceOrder(await getCollection('services'));
 const rendered = await Promise.all(services.map(async (service) => ({ service, Content: (await render(service)).Content })));
 ---
 

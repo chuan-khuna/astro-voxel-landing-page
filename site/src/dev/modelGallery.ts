@@ -7,7 +7,10 @@
  * (`structureMeshes.ts`), its lid (if it has one) a second one that lifts.
  * A House Interior room shows furnished, the developer at their computer
  * (`furnishedRoom`), at its own 1/16 unit; a Garden fence shows planted
- * full, six flowers and three trees (`plantedGarden`); boats and ships float on
+ * full, six flowers and three trees (`plantedGarden`); the Station shows its
+ * whole group, the lighthouse with a Service of each kind round it
+ * (`stationGroup`), and each Service structure is labelled with its kind;
+ * boats and ships float on
  * a patch of their Biome's sea, as in the World, and the fish lie on one;
  * birds and bats hang a unit over their grass, wings spread;
  * each kind of Decoration shows
@@ -16,10 +19,11 @@
  */
 import * as THREE from 'three/webgpu';
 import { BIOMES } from '@/world/biomes';
-import { BIOME_IDS, DECORATION_KINDS } from '@/world';
+import { BIOME_IDS, DECORATION_KINDS, SERVICE_KINDS } from '@/world';
 import { STRUCTURES, type Structure } from '@/structures';
 import { furnishedRoom } from '@/render/interiorModel';
 import { plantedGarden } from '@/render/gardenPlants';
+import { stationGroup } from '@/render/structureModels';
 import { seaColour, THEME_TOKENS } from '@/data/theme';
 import type { Theme } from '@/lib/theme';
 import { LOOK, oklchToLinear } from '@/render/palette';
@@ -42,6 +46,8 @@ const DECORATION_SPACING = 3;
 const FISH_SPACING = 3.2;
 /** Cells between the Gardens (5×5 with their ground): wider, so their ground patches never touch. */
 const GARDEN_SPACING = 8;
+/** Cells between the Station groups (6×6 with their ground). */
+const STATION_SPACING = 9;
 /** Rows (in SPACING) between one row and the next: a row step is shallower on screen than a column step, so it needs more room. */
 const ROW_GAP = 1.8;
 /** Biomes side by side on a tall screen. */
@@ -126,7 +132,8 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
     for (const { structure, at } of shown) {
       const p = at.clone().add(new THREE.Vector3(0, -0.2, 0)).project(camera);
       const label = document.createElement('span');
-      label.textContent = `${structure.biome ?? 'any'} · ${structure.variant}`;
+      const name = structure.kind === 'service' ? SERVICE_KINDS[structure.variant - 1] : structure.variant;
+      label.textContent = `${structure.biome ?? 'any'} · ${name}`;
       label.style.left = `${((p.x + 1) / 2) * w}px`;
       label.style.top = `${((1 - p.y) / 2) * h + 24}px`;
       labels.append(label);
@@ -224,8 +231,9 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
       clear();
       kindShown = kind;
       laidOutPortrait = isPortrait();
-      // A room shows furnished: the developer seated at its computer; a Garden planted full.
-      const dressed = (s: Structure) => (!s.biome ? s : s.kind === 'room' ? furnishedRoom(s.biome) : s.kind === 'garden' ? plantedGarden(s.biome) : s);
+      // A room shows furnished: the developer seated at its computer; a Garden planted full; the Station as its whole group.
+      const dressed = (s: Structure) =>
+        !s.biome ? s : s.kind === 'room' ? furnishedRoom(s.biome) : s.kind === 'garden' ? plantedGarden(s.biome) : s.kind === 'station' ? stationGroup(s.biome) : s;
       const list = STRUCTURES.filter((s) => s.kind === kind).map(dressed);
       const columns = BIOME_IDS.map((biome) => list.filter((s) => s.biome === biome));
       columns.push(list.filter((s) => s.biome === null));
@@ -233,8 +241,8 @@ export async function mountGallery(canvas: HTMLCanvasElement, labels: HTMLElemen
       const decoration = (DECORATION_KINDS as readonly string[]).includes(kind);
       // The land animals, birds and bats are small: closer together, framed close.
       const creature = kind === 'animal' || kind === 'bird' || kind === 'bat';
-      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'boat' ? BOAT_SPACING : kind === 'garden' ? GARDEN_SPACING : kind === 'fish' ? FISH_SPACING : decoration || creature ? DECORATION_SPACING : SPACING;
-      const margin = kind === 'fish' || creature ? 1.6 : kind === 'room' || kind === 'boat' || decoration ? 2 : 4;
+      const spacing = kind === 'room' ? ROOM_SPACING : kind === 'boat' ? BOAT_SPACING : kind === 'garden' ? GARDEN_SPACING : kind === 'station' ? STATION_SPACING : kind === 'fish' ? FISH_SPACING : decoration || creature ? DECORATION_SPACING : SPACING;
+      const margin = kind === 'fish' || creature ? 1.6 : kind === 'room' || kind === 'boat' || decoration ? 2 : kind === 'station' ? 6 : 4;
       const rows = Math.max(1, ...used.map((column) => column.length));
       used.forEach((column, c) => {
         column.forEach((s, r) => {

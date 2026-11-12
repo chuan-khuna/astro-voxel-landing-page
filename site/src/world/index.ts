@@ -17,3 +17,5 @@ export { HOUSE_CELLS, HOUSE_PLOT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK
 export { MAX_BUOYS } from './buoys';
 export { BOAT_KINDS, SHIP_KINDS, vesselKind } from './vessels';
 export type * from './types';
+export { LIGHTHOUSE_CELL, MAX_SERVICES, SERVICE_HEIGHT, SERVICE_KINDS, SERVICE_MIN_HEIGHT, SERVICE_PLACES, STATION_PLACE, STATION_SIZE, serviceKind } from './station';
+export type { ServiceKind } from './station';

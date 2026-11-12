@@ -5,7 +5,7 @@ import { buildLandmark, landmarkExtent } from './landmarkModels';
 import { worldColours } from './worldVoxels';
 import { GROUND_DETAIL } from './voxelTiers';
 
-const counts = { projects: 6, pinned: 2, clients: 0, partners: 0 };
+const counts = { projects: 6, pinned: 2, clients: 0, partners: 0, serviceIds: ['data-engineering', 'data-platforms', 'analytics', 'machine-learning'] };
 const worlds = ['lighthouse', '694157692', 'harbour', '7', '42'].map((seed) => generateWorld(seed, counts));
 
 /** Every ¼ voxel a Landmark's model draws, in world grid coordinates. */
@@ -63,12 +63,12 @@ describe('landmarkExtent', () => {
     }
   });
 
-  it('measures the Station\'s Variant: its 2×2, 5–6 units tall', () => {
-    for (const world of worlds) {
+  it('measures the Station\'s whole group: its 6×6, as tall as its lighthouse (5.5–6 units), with or without Services', () => {
+    for (const world of [...worlds, generateWorld('harbour', { ...counts, serviceIds: [] })]) {
       const { min, max } = landmarkExtent(world, world.landmarks.find((l) => l.id === 'station')!);
       expect(min, world.seed).toEqual({ x: 0, y: 0, z: 0 });
-      expect([max.x, max.z], world.seed).toEqual([2, 2]);
-      expect(max.y, world.seed).toBeGreaterThanOrEqual(5);
+      expect([max.x, max.z], world.seed).toEqual([6, 6]);
+      expect(max.y, world.seed).toBeGreaterThanOrEqual(5.5);
       expect(max.y, world.seed).toBeLessThanOrEqual(6);
     }
   });

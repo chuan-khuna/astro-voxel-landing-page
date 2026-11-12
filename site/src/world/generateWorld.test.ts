@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, MAX_SCHOOLS, FISH_AREA, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, CREATURE_SETS, ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, MAX_ANIMALS_PER_ISLE, MAX_BIRDS, BIRD_REACH, BIRD_BELOW, BIRD_ABOVE, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, MAX_SCHOOLS, FISH_AREA, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, CREATURE_SETS, ANIMAL_HEIGHT, ANIMAL_REACH, ANIMAL_SPECIES, MAX_ANIMALS_PER_ISLE, MAX_BIRDS, BIRD_REACH, BIRD_BELOW, BIRD_ABOVE, SERVICE_HEIGHT, SERVICE_KINDS, SERVICE_MIN_HEIGHT, generateWorld, type ContentCounts, type World } from './index';
 
-const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
+const SERVICE_IDS = ['data-engineering', 'data-platforms', 'analytics', 'machine-learning'];
+const counts: ContentCounts = { projects: 6, clients: 5, partners: 3, serviceIds: SERVICE_IDS };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
 const sampledSeeds = Array.from({ length: 200 }, (_, i) => `seed-${i * 7919}`);
 /** One World per sampled Seed, generated once and shared by the rule tests. */
@@ -52,7 +53,7 @@ describe('generateWorld', { timeout: 20_000 }, () => {
   it('gives each placed Landmark a rectangular footprint: origin, width, depth and the cells it covers', () => {
     const sizes: Record<string, Array<[number, number]>> = {
       house: [[4, 4]],
-      station: [[2, 2]],
+      station: [[6, 6]],
       mailbox: [[1, 1]],
       garden: [[5, 5]],
       dock: [[2, 1], [1, 2]],
@@ -182,6 +183,55 @@ describe('generateWorld', { timeout: 20_000 }, () => {
     }
   });
 
+  /** A Service's place in the Station's group: its 2×2's min corner, local to the group's origin. */
+  const localPlaces = (station: World['landmarks'][number]) =>
+    station.services.map((s) => ({ x: s.cell.x - station.footprint.origin.x, z: s.cell.z - station.footprint.origin.z }));
+
+  it('groups the Station on 6×6: the lighthouse in the middle, the first four Services on the sides (front first), the next four on the corners', () => {
+    // The camera looks from the south-east: south and east are in front, north and west behind the lighthouse.
+    const sides = [{ x: 2, z: 4 }, { x: 4, z: 2 }, { x: 2, z: 0 }, { x: 0, z: 2 }];
+    const corners = [{ x: 4, z: 4 }, { x: 4, z: 0 }, { x: 0, z: 4 }, { x: 0, z: 0 }];
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => `service-${i}`);
+    for (const n of [0, 1, 4, 5, 8, 12]) {
+      for (const seed of sampledSeeds.slice(0, 20)) {
+        const station = generateWorld(seed, { ...counts, serviceIds: ids(n) }).landmarks.find((l) => l.id === 'station')!;
+        const label = `${seed} ${n}`;
+        expect([station.footprint.width, station.footprint.depth], label).toEqual([6, 6]);
+        expect(localPlaces(station), label).toEqual([...sides, ...corners].slice(0, Math.min(n, 8)));
+        // In content order: the first Services take the first places; more than 8 show only on /services.
+        expect(station.services.map((s) => s.id), label).toEqual(ids(Math.min(n, 8)));
+      }
+    }
+    // Without Service ids, the group is a lighthouse on open ground.
+    const bare = generateWorld('harbour', { projects: 6, clients: 5, partners: 3 }).landmarks.find((l) => l.id === 'station')!;
+    expect(bare.services).toEqual([]);
+    for (const seed of sampledSeeds) {
+      for (const l of worldFor(seed).landmarks) if (l.id !== 'station') expect(l.services, `${seed} ${l.id}`).toEqual([]);
+    }
+  });
+
+  it('keeps the Station\'s layout whatever the Services: adding one never moves the group', () => {
+    for (const seed of sampledSeeds.slice(0, 40)) {
+      const of = (serviceIds: string[]) => generateWorld(seed, { ...counts, serviceIds }).landmarks.map((l) => [l.id, l.footprint.origin, l.y]);
+      expect(of([]), seed).toEqual(of(SERVICE_IDS));
+      expect(of(Array.from({ length: 8 }, (_, i) => `s-${i}`)), seed).toEqual(of(SERVICE_IDS));
+    }
+  });
+
+  it('gives each Service the structure its id names, the same in every World', () => {
+    // pipes and tanks for data engineering, a warehouse for data platforms, an observatory for analytics, a lab for machine learning.
+    expect(SERVICE_KINDS).toEqual(['pipeline', 'warehouse', 'observatory', 'lab']);
+    const kinds = (world: World) => world.landmarks.find((l) => l.id === 'station')!.services.map((s) => SERVICE_KINDS[s.kind - 1]);
+    for (const seed of sampledSeeds.slice(0, 40)) expect(kinds(worldFor(seed)), seed).toEqual(['pipeline', 'warehouse', 'observatory', 'lab']);
+    // Related ids name the same kind; any other id still gets one, from its id alone, wherever it stands in the list.
+    const other = ['ml-ops', 'bi-dashboards', 'lakehouse-platform', 'etl-pipelines', 'consulting', 'training'];
+    const first = kinds(generateWorld('harbour', { ...counts, serviceIds: other }));
+    expect(first.slice(0, 4)).toEqual(['lab', 'observatory', 'warehouse', 'pipeline']);
+    expect(first.every((k) => SERVICE_KINDS.includes(k!))).toBe(true);
+    const reordered = kinds(generateWorld('seed-1', { ...counts, serviceIds: other.toReversed() }));
+    expect(reordered).toEqual(first.toReversed());
+  });
+
   it('keeps each plant in its place as Projects are added behind it', () => {
     const garden = (projects: number, pinned: number) => generateWorld('harbour', { ...counts, projects, pinned }).landmarks.find((l) => l.id === 'garden')!;
     const before = garden(2, 1);
@@ -252,6 +302,12 @@ describe('generateWorld', { timeout: 20_000 }, () => {
         const cells = l.id === 'house' ? l.footprint.cells.filter((c) => c.x - l.footprint.origin.x < HOUSE_CELLS && c.z - l.footprint.origin.z < HOUSE_CELLS) : coveredCells(l);
         // The Garden: its fence round the edge, flowers in the bed's front two rows and trees in its back row.
         const height = (c: { x: number; z: number }) => {
+          if (l.id === 'station') {
+            // The Station's group: the lighthouse's 2×2 in the middle, a Service's structure (or open ground) round it.
+            const x = c.x - l.footprint.origin.x;
+            const z = c.z - l.footprint.origin.z;
+            return x >= 2 && x <= 3 && z >= 2 && z <= 3 ? LANDMARK_HEIGHT.station : SERVICE_HEIGHT;
+          }
           if (l.id !== 'garden') return LANDMARK_HEIGHT[l.id];
           const x = c.x - l.footprint.origin.x;
           const z = c.z - l.footprint.origin.z;
@@ -504,12 +560,13 @@ describe('generateWorld', { timeout: 20_000 }, () => {
     }
   });
 
-  it('gives 2–3 Variants to the House, Station, Mailbox and Dock in every Biome', () => {
+  it('gives 2–3 Variants to the House, Mailbox and Dock in every Biome, and one lighthouse to the Station', () => {
     for (const biome of BIOME_IDS) {
-      for (const id of ['house', 'station', 'mailbox', 'dock'] as const) {
+      for (const id of ['house', 'mailbox', 'dock'] as const) {
         expect(LANDMARK_VARIANTS[biome][id], `${biome} ${id}`).toBeGreaterThanOrEqual(2);
         expect(LANDMARK_VARIANTS[biome][id], `${biome} ${id}`).toBeLessThanOrEqual(3);
       }
+      expect(LANDMARK_VARIANTS[biome].station, biome).toBe(1);
     }
   });
 
@@ -962,7 +1019,7 @@ describe('generateWorld', { timeout: 20_000 }, () => {
       }
     });
 
-    it('never stands taller than the nearest Landmark', () => {
+    it('never stands taller than the nearest Landmark (by the Station, its nearest Service, not its lighthouse)', () => {
       for (const seed of sampledSeeds) {
         const world = worldFor(seed);
         for (const d of world.decoration) {
@@ -970,8 +1027,10 @@ describe('generateWorld', { timeout: 20_000 }, () => {
           const distance = (l: World['landmarks'][number]) =>
             Math.min(...coveredCells(l).map((c) => Math.hypot(c.x + 0.5 - centre.x, c.z + 0.5 - centre.z)));
           const nearest = Math.min(...world.landmarks.map(distance));
+          // The Station's group: what stands round its lighthouse is a Service's structure (or open ground), at least SERVICE_MIN_HEIGHT.
+          const height = (l: World['landmarks'][number]) => (l.id === 'station' ? SERVICE_MIN_HEIGHT : LANDMARK_MIN_HEIGHT[l.id]);
           // Ties take the lowest of the nearest Landmarks.
-          const cap = Math.min(...world.landmarks.filter((l) => distance(l) === nearest).map((l) => LANDMARK_MIN_HEIGHT[l.id]));
+          const cap = Math.min(...world.landmarks.filter((l) => distance(l) === nearest).map(height));
           expect(DECORATION_HEIGHT[d.kind], `${seed} ${d.kind} ${key(d.cell)}`).toBeLessThanOrEqual(cap);
         }
       }
