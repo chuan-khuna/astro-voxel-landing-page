@@ -2,9 +2,9 @@
 
 **What to build:** Torches and lanterns stand round the Landmarks and along the paths. At Night they flicker and throw warm light on the voxels round them, the way a torch lights the blocks near it in a block-building game, and every light source in the World glows softly.
 
-**Blocked by:** 01, 02, 09 · builds on the Day/Night theme (`.scratch/voxel-world-landing/issues/13-day-night-theme.md`). Ticket 08's lamps use this ticket's light once both are in.
+**Blocked by:** 01, 02, 09, 17 (the House room now lives in the World) · builds on the Day/Night theme (`.scratch/voxel-world-landing/issues/13-day-night-theme.md`). Ticket 08's lamps use this ticket's light once both are in.
 
-**Status:** needs-triage
+**Status:** ready-for-agent
 
 Scale: structures are ⅛ unit (ADR 0006). Sizes: `.scratch/voxel-world-polish/README.md`.
 
@@ -46,7 +46,10 @@ Spec: `.scratch/voxel-world-polish/spec.md` · ADRs: `docs/adr/0004-ascii-voxel-
 - [ ] The real page is checked in a browser at desktop and phone sizes on Seeds covering all four Biomes, by Day and at Night, at the Overview and at every Landmark's close-up, with no console errors.
 - [ ] Spec, `GLOSSARY.md` (Light Source), an ADR for baked block light over real-time lights, and `docs/documents/rendering-and-shading.md` and `world-generator.md` (with INDEX) are updated.
 
-## Open questions
+## Decisions (user, 2026-11-12)
 
-- Should Light Sources also stand in the House Interior (a desk lamp, a candle), lighting the room at Night?
-- Should the moonlight dim further at Night now that torches carry the scene, or stay as the theme ticket set it?
+Record: `docs/records/2026-11-12-station-group-and-night-light.md`
+
+- [ ] **Light in the House room, from what is already there.** Each Biome's room already has a lamp, hearth fire, floor lamp or brazier (ticket 04). Make those Light Sources that throw block light in the room at Night; the room is in the World since ticket 17. Add no new lamps or candles.
+- [ ] **Moonlight dims a little.** Lower the Night moonlight by about 20–30% so torches stand out, while every Landmark still reads across the Isle and Night text and UI keep their WCAG contrast. Note the exact change in the theme tokens.
+- Ember particles stay optional, to decide in review.
