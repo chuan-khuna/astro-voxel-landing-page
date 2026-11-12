@@ -10,8 +10,8 @@
  *   instanced structures (`boats.ts`), not in any grid.
  * - `structure`: ⅛-unit voxels (`STRUCTURE`) for placed structures
  *   (`structureModels.ts`): the House's base, the Station, the Mailbox and
- *   the Dock's things; and the House Interior's room at ⅛ unit
- *   (`interiorModel.ts`), seen while the lid lifts.
+ *   the Dock's things. The House Interior's room is not in it: it is a
+ *   1/16-unit mesh of its own (`house.ts`), shown while the lid is up.
  *
  * The grids index one shared colour list. See `voxelTiers.ts` for the tiers.
  */
@@ -21,7 +21,6 @@ import { drawBuoy } from './buoyModel';
 import { meshVoxels, VoxelGrid, type ChunkMesh } from './mesher';
 import { FIXED_COLOURS, LOOK, oklchToLinear, shiftLightness, type FixedColour, type Rgb } from './palette';
 import { drawStructures } from './structureModels';
-import { drawWorldRoom } from './interiorModel';
 import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 
 /** A colour list that hands out one id per distinct colour. */
@@ -146,7 +145,6 @@ export function worldToVoxels(world: World): WorldVoxels {
 
   const structure = new VoxelGrid(1 / STRUCTURE);
   drawStructures(world, colours, (x, y, z, colour) => structure.set(x, y, z, colour));
-  drawWorldRoom(world, colours, (x, y, z, colour) => structure.set(x, y, z, colour));
 
   return { terrain, detail, structure, colours: colours.table.colours, terrainSolid };
 }

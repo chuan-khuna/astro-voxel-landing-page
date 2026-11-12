@@ -3,8 +3,8 @@
  * three.js): it redraws the World's detail and structure grids the way
  * `worldToVoxels` does and tallies each part as it lands, so a voxel two
  * parts share counts once (for the part drawn first), plus the voxels of the
- * separate meshes (the House's lid; the instanced plants, Decoration, boats and ships). The House
- * Interior is a scene of its own and never counts here.
+ * separate meshes (the House's lid and room; the instanced plants,
+ * Decoration, boats and ships).
  *
  * Run once per World shown, never per frame.
  */
@@ -12,7 +12,7 @@ import type { World } from '@/world';
 import { VoxelGrid } from './mesher';
 import { drawDetail, worldColours } from './worldVoxels';
 import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
-import { drawWorldRoom } from './interiorModel';
+import { furnishedRoom } from './interiorModel';
 import { drawHousePart, drawStructures } from './structureModels';
 import { boatsOf, vesselStructure } from './vesselModels';
 import { gardenPlantsOf } from './gardenPlants';
@@ -25,23 +25,23 @@ export type VoxelKind = (typeof VOXEL_KINDS)[number];
 
 /**
  * - `terrain`: 1-unit voxels; the Landmarks' structures, the Garden's
- *   plants, the House's room, the boats and the ships are ⅛-unit voxels;
- *   every other kind is ¼-unit voxels.
+ *   plants, the boats and the ships are ⅛-unit voxels; the House's room
+ *   is 1/16-unit voxels; every other kind is ¼-unit voxels.
  * - `landmarks`: the Landmark models and their Variants' structures (the
  *   House's base and lid, the Station, the Mailbox, the Dock's things, the
- *   Garden's fence), less the House's room.
+ *   Garden's fence).
  * - `plants`: the Garden's flowers and trees, one per planted Project.
  * - `decoration`: every piece of Decoration (instanced, ⅛ unit), as the
  *   full render tier shows it; the reduced tier shows half.
- * - `houseRoom`: the House Interior's room as the World shows it, at ⅛
- *   unit (`interiorModel.ts`), the developer included.
+ * - `houseRoom`: the House Interior's room as the World shows it while the
+ *   lid is up, at 1/16 unit (`furnishedRoom`), the developer included.
  * - `boats`: every Client's moored boat (instanced, so not in the grids).
  * - `ships`: every Partner's ship.
  */
 export type VoxelCounts = Record<VoxelKind, number> & {
   /** Every kind together. */
   total: number;
-  /** Voxels in the World's three meshed grids (terrain, detail and structure): all but the separate meshes (the House's lid, the instanced plants, Decoration, boats and ships). */
+  /** Voxels in the World's three meshed grids (terrain, detail and structure): all but the separate meshes (the House's lid and room, the instanced plants, Decoration, boats and ships). */
   inGrids: number;
 };
 
@@ -62,16 +62,14 @@ export function countVoxels(world: World): VoxelCounts {
   const structure = new VoxelGrid(1 / STRUCTURE);
   drawStructures(world, colours, (x, y, z, colour) => structure.set(x, y, z, colour));
   counts.landmarks += structure.count;
-  const beforeRoom = structure.count;
-  drawWorldRoom(world, colours, (x, y, z, colour) => structure.set(x, y, z, colour));
-  counts.houseRoom = structure.count - beforeRoom;
   const inGrids = counts.terrain + detail.count + structure.count;
 
-  // The separate meshes: the House's lid, which lifts, and the instanced plants, Decoration, boats and ships.
+  // The separate meshes: the House's lid, which lifts, its room at 1/16 unit, and the instanced plants, Decoration, boats and ships.
   if (world.landmarks.some((l) => l.id === 'house')) {
     const lid = new VoxelGrid(1 / STRUCTURE);
     drawHousePart(world, colours, 'lid', (x, y, z, colour) => lid.set(x, y, z, colour));
     counts.landmarks += lid.count;
+    counts.houseRoom = [...structureVoxels(furnishedRoom(world.biome.id))].length;
   }
   for (const { structure } of boatsOf(world)) counts.boats += [...structureVoxels(structure)].length;
   for (const ship of world.ships) counts.ships += [...structureVoxels(vesselStructure('ship', world.biome.id, ship.kind))].length;

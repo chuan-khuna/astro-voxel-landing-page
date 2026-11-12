@@ -24,9 +24,9 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `voxelTiers.ts` | The voxel sizes of ADR 0006, as voxels per unit: `TERRAIN` 1, `GROUND_DETAIL` 4, `STRUCTURE` 8, `INTERIOR` 16. | no |
 | `mesher.ts` | `VoxelGrid` (sparse voxel grid) and `meshVoxels` (culling, AO, greedy merge, chunking). | no |
 | `worldVoxels.ts` | `worldToVoxels(world)`: the terrain grid, the ¼-unit detail grid and the ⅛-unit structure grid with a shared colour list. `drawDetail(world, grid, colours, drawn?)`: the detail grid's parts in order (bridges, stairs, each Landmark, buoys), telling `drawn` after each. `meshWorld(world)`: the three grids meshed. | no |
-| `interiorModel.ts` | The House Interior's room, pure (see `voxel-structures.md`, "The House Interior rooms"): `furnishedRoom(biome)` (the room with the developer seated in it, 1/16 unit), `coarsen` (a structure at a coarser scale), `interiorPlacement` and `drawWorldRoom` (the room's place in the World, and the room at ⅛ unit in the structure grid), `developerBox`, `screenFace`, `roomLight`, `DEVELOPER_PARTS`, and `showsInterior` (when the Interior scene takes over). | no |
+| `interiorModel.ts` | The House Interior's room, pure (see `voxel-structures.md`, "The House Interior rooms"): `furnishedRoom(biome)` (the room with the developer seated in it, 1/16 unit), `interiorPlacement` (the room's place in the World), `developerBox`, `developerBounds` (the developer's box in world units, for their link), `screenFace`, `roomLight` and `DEVELOPER_PARTS`. | no |
 | `structureModels.ts` | Structures placed in a World (see `voxel-structures.md`): `structureColour` (a colour role's id), `drawStructure` (a structure, or one part, at a placement, turned to its door), `landmarkStructure` and `landmarkPlacement` (a placed Landmark's Variant, and where and which way it stands), `houseStructure` and `housePlacement` (the same for the House), `drawStructures` (the structure grid's contents) and `houseWindowFaces` (the lit window faces). | no |
-| `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, plants, Decoration, House room, boats, ships, buoys, bridges, stairs), the total and those in the three meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); plants are each Garden plant's structure voxels (`gardenPlantsOf`; instanced, outside the grids), the House room the House Interior's room at ⅛ unit in the structure grid (`drawWorldRoom`); the House Interior scene is not counted; the House's structure (base and lid, ⅛ unit) counts with the Landmarks; boats, ships and pieces of Decoration are each one's structure voxels (instanced, outside the grids; every piece, as the full tier shows it). About 2 ms. | no |
+| `voxelCounts.ts` | `countVoxels(world)`: voxels by kind (terrain, Landmarks, plants, Decoration, House room, boats, ships, buoys, bridges, stairs), the total and those in the three meshed grids, for the render stats overlay. Redraws the detail grid with `drawDetail` and tallies each part as it lands (a shared voxel counts once); plants are each Garden plant's structure voxels (`gardenPlantsOf`; instanced, outside the grids), the House room the House Interior's furnished room at 1/16 unit (a mesh of its own, outside the grids, drawn only while the House is open); the House's structure (base and lid, ⅛ unit) counts with the Landmarks; boats, ships and pieces of Decoration are each one's structure voxels (instanced, outside the grids; every piece, as the full tier shows it). About 2 ms. | no |
 | `frameMeter.ts` | `createFrameMeter()`: FPS and frame time from frame timestamps, smoothed (exponential, 0.1); a gap over 250 ms ends a burst and the next starts afresh; `'idle'` with no frame for 500 ms or only a lone frame. | no |
 | `landmarkModels.ts` | The ¼-unit parts of the Landmarks (the Dock's deck and jetty), and `landmarkExtent(world, landmark)`: the box a Landmark covers, measured from its ¼-unit parts, its Variant's structure and, for the Garden, its plants, and never smaller than its footprint (for the House, the House's 3×3 up to its roof). | no |
 | `gardenPlants.ts` | The Garden's plants (polish ticket 05): `plantStructure` (the Biome's tree; its flowers in turn), `gardenPlantsOf(world)` (every flower and tree with its cell and structure), `plantExtent` (a plant's box, for its link) and `plantedGarden(biome)` (a fence planted full, for the Model Gallery). | no |
@@ -53,12 +53,11 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `ambientLife.ts` | `createAmbientLife`: whether the World is seen (tab shown, canvas on screen, motion allowed) and alive (seen, at a tier that moves), the life tier watch and the clock, for `mountWorld`'s loop. | DOM only |
 | `seaMaterial.ts` | `seaMaterial(clock)`: the sea's TSL material (the soft-voxel look at 1 unit, shallow to deep colour, opacity, the bob in the vertex shader on the shared clock) and its colour uniforms. | yes |
 | `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, pure maths) and `mergeChunks`. | yes |
-| `house.ts` | `buildHouse(world)`: the House Variant's lid (⅛ unit) as a mesh and the windows' lights; `setOpening` lifts the lid, `setLights` lights the windows. | yes |
-| `interior.ts` | `buildInterior(world)`: the House Interior scene: the House's shell and ground, the room at 1/16 unit, the developer's head and hands as meshes, the screen's code shader, its own lights; `work(seconds)` animates the developer and the screen, `setTheme` lights it for Day or Night. | yes |
+| `house.ts` | `buildHouse(world, clock?)`: the House Variant's lid (⅛ unit) as a mesh, the windows' lights, and the House Interior's room at 1/16 unit (furniture, the developer's head and hands, the code screen, the Night lamp worked out in the room's material); `setOpening` lifts the lid and shows the room while it is above 0, `setLights` lights the windows and the lamp, `work(seconds)` poses the developer; `roomTriangles` and `developer` (the developer's box, for their link). | yes |
 | `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships) where it is at the clock's seconds; `setTheme` recolours the sea and lights the lamps and windows. | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships, the House's moving parts and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships, the developer) where it is at the clock's seconds; `setTheme` recolours the sea and lights the lamps and windows. | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
-| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, the render loop (continuous while Ambient Life is alive, else on demand) and the render tier, opening the House and handing over to the House Interior scene, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
+| `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, the render loop (continuous while Ambient Life is alive, else on demand) and the render tier, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
 | `cameraRig.ts` | `createCameraRig`: the camera state and the pointer, touch and wheel input that pans and zooms it (`onInput` hears that input). | yes |
 | `dataCards.ts` | `createDataCards`: lays the page's Data Cards over their Landmarks and shows the one the camera is near. | yes |
@@ -66,7 +65,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 
 Everything above `voxelMaterial.ts` is plain TypeScript; generation and
 meshing run in the Web Worker. Only geometry upload, materials, the sea,
-the instanced boats, ships, plants and Decoration, the House's lid, the House Interior scene and the Guide
+the instanced boats, ships, plants and Decoration, the House's lid and room and the Guide
 (small grids) are built on the main thread.
 
 ## Voxel grids
@@ -79,10 +78,11 @@ each in its own integer voxel coordinates (voxel `(x, y, z)` spans world
 |---|---|---|
 | terrain | 1 unit (`TERRAIN`) | Every land column from y = 0 to its height. The top voxel takes the surface colour (sand, grass, peak) or the path colour (the path's cells, and the House yard's cell in front of its door); buried voxels take their stratum's colour. |
 | detail | ¼ unit (`GROUND_DETAIL = 4` per unit) | Bridge decks (one ¼ voxel thick, planks alternating in shade), stairs (three ¼-voxel steps on the lower cell), the Dock's deck and jetty (`landmarkModels.ts`) and the buoys. |
-| structure | ⅛ unit (`STRUCTURE = 8` per unit) | Placed structures (`structureModels.ts`, `voxel-structures.md`): each Landmark's Variant: the House's base (its lid is a mesh of its own), the Station, the Mailbox, the things on the Dock's deck and the Garden's fence; and the House Interior's room coarsened to ⅛ unit (`drawWorldRoom`), seen while the lid lifts. The Garden's flowers and trees are ⅛-unit structures too, but instanced (`garden.ts`), not in this grid, and so are the boats and ships (`boats.ts`, `ships.ts`). |
+| structure | ⅛ unit (`STRUCTURE = 8` per unit) | Placed structures (`structureModels.ts`, `voxel-structures.md`): each Landmark's Variant: the House's base (its lid is a mesh of its own), the Station, the Mailbox, the things on the Dock's deck and the Garden's fence. The Garden's flowers and trees are ⅛-unit structures too, but instanced (`garden.ts`), not in this grid, and so are the boats and ships (`boats.ts`, `ships.ts`). |
 
-The House Interior's tier (`INTERIOR`, 1/16 unit) belongs to its own scene
-(`interior.ts`; see "The House and its room").
+The House Interior's tier (`INTERIOR`, 1/16 unit) is the room's own: it is
+drawn in the World at that detail while the House is open, as meshes of
+its own outside these grids (`house.ts`; see "The House and its room").
 
 Colours: each grid voxel holds a colour id into one shared list
 (`ColourTable`). Biome colours come from `world.biome`; the House and other
@@ -260,16 +260,15 @@ Variants). It stands with its door
 south or east, the way the World says (`world-generator.md`, "House
 plot"), mirrored by swapping x and z (so the front walls stay on the camera side; a chimney or side window swaps sides). Its voxels come in two parts, so the
 roof can lift off and show a room inside, like a doll's house. The room is
-the House Interior (polish ticket 04): one room per Biome at 1/16 unit
-(`voxel-structures.md`, "The House Interior rooms"), shown at ⅛ unit in the
-World and at full detail in a scene of its own:
+the House Interior (polish tickets 04 and 17): one room per Biome at 1/16
+unit (`voxel-structures.md`, "The House Interior rooms"), drawn in the World
+at that detail while the lid is up:
 
 | Part | What | Drawn |
 |---|---|---|
 | base | the structure's `base` voxels: the plinth (or stilts and a deck), the floor with a rug, and the two back walls (low x and low z), each with a window | into the World's structure grid (static) |
 | lid | the structure's `lid` voxels: the roof with its eaves and chimney (or the Biome's equivalent), and the two front walls (high x and high z: the faces the isometric camera sees) with the door, the windows, shutters and sills | its own mesh, which lifts |
-| room in the World | the Biome's furnished room (`furnishedRoom`, the developer seated in it) coarsened to ⅛ unit (`coarsen`: a 2×2×2 block becomes a voxel if at least 2 of its 8 are filled, in its most common role), in the interior box | into the World's structure grid (static; nothing moves) |
-| House Interior | the House's base again, a slab of the Biome's grass under the plot and a cell round it, the furnished room at 1/16 unit, the developer's head and hands, and the screen | a scene of its own (`interior.ts`) |
+| room | the Biome's furnished room (`furnishedRoom`, the developer seated in it) at 1/16 unit in the interior box: its still voxels as one mesh, the developer's head and hands (`DEVELOPER_PARTS`) as one mesh each, and the screen | meshes of their own (`house.ts`), shown only while the lid is lifted or lifting |
 
 Every House Variant leaves its interior box empty, covers every interior
 column from above with the lid, and keeps the base off the front sides
@@ -277,13 +276,17 @@ above the floor, so with the lid off the camera sees in
 (`structures.test.ts`); each Biome's room fits the interior space of every
 House Variant in that Biome, seats the developer at its anchor and puts the
 screen in front of them (`structures.test.ts`, `interiorModel.test.ts`). In
-the World, the base and the coarse room land in the House's 3×3 and the
-door on the face the House's `door` names (`structureModels.test.ts`).
+the World, the base alone lands in the House's 3×3 of the structure grid
+and the door on the face the House's `door` names
+(`structureModels.test.ts`).
 
-- **Meshes** (`house.ts`). The lid (⅛ unit) is meshed on the main thread
-  at the House's place in the World (whole voxels) and uses
-  `voxelMaterial(size, 'local')`, so its seams line up with the base's and
-  travel with it. It casts and receives shadows.
+- **Meshes** (`house.ts`). The lid (⅛ unit) and the room (1/16 unit) are
+  meshed on the main thread at the House's place in the World (whole
+  voxels) and use `voxelMaterial(size, 'local')`, so the lid's seams line
+  up with the base's and travel with it, and the developer's carry with
+  their head and hands. The lid and the room's furniture cast and receive
+  shadows; the head and hands only receive them, since the shadow map is
+  not redrawn as they move.
 - **Lights.** `houseWindowFaces(world)` finds every face of window glass
   (role `window`) that faces +x or +z with nothing of the House in front
   of it: on the front walls these face out, towards the camera; on the
@@ -298,65 +301,61 @@ door on the face the House's `door` names (`structureModels.test.ts`).
   the lid by up to `ROOF_LIFT` = 6 units, eased in and out: high enough
   that, in the House Interior close-up, the lid is clear of the room on
   screen (it rises out of the top of the frame). The sun's shadow map is
-  redrawn on every frame while the lid moves, then stays static.
+  redrawn on every frame while the lid moves, then stays static. The room
+  shows from the first frame the opening leaves 0 and hides on the frame
+  it is back at 0 (`setOpening`), so a shut House draws none of it.
 - **Triangles.** The House's base adds about 900–1,100 triangles to the
-  structure mesh and the coarse room about 1,000–1,200 (it replaced the ¼
-  unit room's 320); the lid is about 2,000–2,400 as its own mesh. The
-  House Interior scene is about 3,500 (`data-interior-triangles`: the
-  room 2,100–2,800 at 1/16 unit, the shell and the ground).
+  structure mesh; the lid is about 2,000–2,400 as its own mesh. The room is
+  about 2,100–2,800 (`data-room-triangles`), drawn only while the House is
+  open or opening and not counted in `data-triangles`.
 
 ### The House Interior
 
-The House Interior is a scene of its own (ADR 0006), built with each World
-(`buildInterior`, `interior.ts`), so its 1/16-unit voxels never add to the
-World's. It stands where the House stands and is drawn through the World's
-own camera, so the World hands over to it with nothing moving: the House's
-shell and ground stay put, the coarse room becomes the fine one, and the
-rest of the World gives way to the sky.
+The House Interior is part of the World (polish ticket 17, amending ADR
+0006): there is no scene of its own and no hand-over. From the moment the
+lid starts to lift until it is down again the visitor sees the same
+1/16-unit room and developer, so nothing in it changes resolution or
+texture as the House opens or shuts. The camera dives in and out of the
+House as for any other Landmark close-up.
 
-- **Entering** (`setInterior(true, ms)`, About and Team): the lid lifts in
-  the World over `ms` while the camera flies to the House Interior close-up;
-  once the lid is fully up, the camera at rest (not on a flight), close
-  enough (at least half the House Interior's zoom: the Tour stops at about
-  0.56 of it, to keep the Guide beside the House in view) and the room's
-  middle on screen (`showsInterior`), the next frame renders the Interior
-  scene instead of the World. Under reduced motion the lid and camera cut,
-  so the Interior shows on the first frame.
+- **Entering** (`setInterior(true, ms)`, About and Team): the lid lifts
+  over `ms` while the camera flies to the House Interior close-up; the room
+  shows as soon as the lid moves. Under reduced motion the lid and the
+  camera cut.
 - **Leaving:** shutting the House (`setInterior(false, ms)`: any other
-  route, the Tour moving on), zooming out past half the close-up, or panning
-  the room off screen hands back to the World on the next frame, and then
-  the lid comes down while the camera flies on: the entry reversed.
-- **In the scene:** the House's base (⅛ unit, `local` material); a 1-unit
-  slab of the Biome's grass under the House's plot and a cell round it; the
-  furnished room at 1/16 unit, its still voxels as one mesh and the
-  developer's head and hands (`DEVELOPER_PARTS`) as one mesh each; the
-  screen, a `MeshBasicNodeMaterial` plane a hair in front of the `screen`
-  voxels' +x face (`screenFace`): a 14 × 7 pixel grid with a gap round each
-  pixel, lines indented and as long as a hash of the line number says, in
-  one of three muted colours (teal, pink, white), with gaps between words
-  and the odd blank line, scrolled up 2.5 lines a second by a `uniform`
-  time.
-- **Light:** its own hemisphere light and sun, in the theme's colours and
-  from the World's sun direction, with a 1024² shadow map round the House,
-  drawn once (the developer's moving head and hands cast no shadow, so
-  nothing in it moves). At Night a warm point light (intensity 6, reach 5 units)
-  shines from the middle of the room's lamps and fires (`roomLight`), and
-  the back walls' windows glow (the base's `houseWindowFaces`). The
-  background is the theme's sky.
-- **The developer at work.** While the Interior shows, the page is visible
-  and motion is allowed, every frame advances the developer and the screen
-  (`work(seconds)`). `developerPose(seconds)`: in a 5 s cycle the developer
-  types for 3.6 s (each hand taps three times a second, in turn, never both
-  up, at most one 1/16-unit voxel; the taps fade in and out) and then
-  pauses to read the screen, the head nodding two thirds of a voxel. Smooth
-  everywhere, and the rest pose at 0. `houseMotion.test.ts` checks the
-  lift, the opening steps and the pose.
-- **The Guide** moves into whichever scene shows (an object has one
-  parent), so it stays in view beside the House on the Tour.
-- **Links:** the frame gets `data-scene="interior"` (and the canvas
-  `data-scene`), and CSS hides every hotspot but the developer's, since the
-  other Landmarks are out of sight. The developer's link covers
-  `developerBox` in world units.
+  route, the Tour moving on) lowers the lid while the camera flies on; the
+  room hides once the lid is down. Zooming out or panning away leaves the
+  House open, the room in view in the World.
+- **The screen:** a `MeshBasicNodeMaterial` plane a hair in front of the
+  `screen` voxels' +x face (`screenFace`): a 14 × 7 pixel grid with a gap
+  round each pixel, lines indented and as long as a hash of the line
+  number says, in one of three muted colours (teal, pink, white), with
+  gaps between words and the odd blank line, scrolled up 2.5 lines a second
+  by the shared clock's `time` uniform (`ambientClock.ts`), so it stops
+  with the rest of Ambient Life.
+- **Light:** the World's own sun and sky light. At Night the room's lamp or
+  fire lights it warmly: the light a three.js point light (intensity 6,
+  reach 5 units, no shadow) at the middle of the room's lamps and fires
+  (`roomLight`) would give a diffuse surface, worked out in the room's own
+  material as its emissive term (`roomLamp` in `house.ts`). Only the room's
+  furniture and the developer catch it, not the House's walls or anything
+  else in the World, and it costs nothing elsewhere: a real light in the
+  World's scene would be evaluated by every World material. The back
+  walls' windows glow (the base's `houseWindowFaces`).
+- **The developer at work.** `WorldObjects.step(seconds)` poses the
+  developer on the shared clock (`house.work`), so they work while Ambient
+  Life is alive and stop with it (reduced motion, a hidden tab, the still
+  life tier); on phones at the ambient frame rate.
+  `developerPose(seconds)`: in a 5 s cycle the developer types for 3.6 s
+  (each hand taps three times a second, in turn, never both up, at most one
+  1/16-unit voxel; the taps fade in and out) and then pauses to read the
+  screen, the head nodding two thirds of a voxel. Smooth everywhere, and
+  the rest pose at 0. `houseMotion.test.ts` checks the lift, the opening
+  steps and the pose.
+- **The Guide** stays in the World, so on the Tour's Team stop it floats
+  beside the open House in view.
+- **Links:** the developer's link covers `developerBounds(world)`; every
+  other hotspot stays as it is in the World.
 
 ## The Guide
 
@@ -550,15 +549,15 @@ camera to a Landmark (see "Landmark focus and flights").
   next: the World renders continuously and the shared clock runs. Each
   frame advances the clock by the frame's elapsed time (at most 0.1 s, so
   nothing leaps after a pause), then `objects.step(clock.seconds)` sails
-  the ships, the sea bobs from the clock's uniform, the developer works in
-  the House Interior while it shows (`work(clock.seconds)`) and the Guide
+  the ships and poses the developer in the House, the sea bobs and the
+  House's screen scrolls from the clock's uniform, and the Guide
   idles (bobbing and blinking). Otherwise the World renders on demand:
   `requestRender()` schedules at most one frame, and frames keep coming
   only while a one-off motion plays (the House's lid lifting or lowering,
   which the page cuts under reduced motion; the Guide assembling,
   dissolving or flying on the Tour). An idle World then schedules no
   `requestAnimationFrame` at all, and the clock stays where it stopped:
-  under reduced motion the House Interior renders once, the developer in
+  under reduced motion the open House renders once, the developer in
   their pose of the moment, and the Guide re-forms by a cut and keeps
   still. The tab coming back, the canvas scrolling back on screen or
   reduced motion turning off requests a frame, which starts the loop again.
@@ -591,8 +590,8 @@ camera to a Landmark (see "Landmark focus and flights").
   fallback), `data-triangles` (voxel triangle count), `data-backend`
   (`webgpu` or `webgl2`), `data-frames` (frames rendered so far),
   `data-interior` (`open`, `shut` or `moving`: the House's lid),
-  `data-scene` (`world` or `interior`: the scene on show; the frame gets it
-  too), `data-interior-triangles` (the House Interior scene's triangles),
+  `data-room-triangles` (the House Interior room's triangles, drawn only
+  while the House is open),
   `data-tier` (the render tier), `data-life` (the Ambient Life tier on
   show), `data-clock` (the shared clock's seconds, at the last frame) and
   `data-camera` (target x, target z, zoom) for checks in a browser. The page
@@ -736,10 +735,9 @@ on the isometric axis above the target.
 - **The developer's link** (ticket 11): right after the House's hotspot, the
   page renders a link to Team (`a.hotspot.developer[data-developer]`,
   `data-hotspot="house-interior"`, labelled "Meet the Team"), sized to the
-  developer's box in the House Interior (`developerBox`, in world units). It
+  developer's box in the House Interior (`developerBounds`, in world units). It
   is hidden while the House is shut and shown while it is open
-  (`setInterior`), above the House's hotspot, which covers the room. While
-  the House Interior scene shows, it is the only hotspot. On `/about/team` the page marks it with
+  (`setInterior`), above the House's hotspot, which covers the room. On `/about/team` the page marks it with
   `aria-current="page"` (an outline).
 - **Plant links** (ticket 08, polish ticket 05): right after the Garden's
   hotspot, the page renders one link per planted Project
@@ -874,7 +872,10 @@ Station's mast and the round tower's cap costing the most. Polish ticket 04
 replaced the ¼-unit room (about 320) with the House Interior's room at ⅛ unit
 (about 1,000–1,200: 982 northern, 1,144 volcanic, 1,178 autumn, 1,208
 tropical); `lanternfish` reads 11,640. The House Interior is a scene of its
-own, about 3,500 triangles, rendered instead of the World. Polish ticket 05
+own, about 3,500 triangles, rendered instead of the World (polish ticket 17
+removed both: the World now draws the 1/16-unit room, about 2,100–2,800
+triangles, only while the House is open, so a shut House costs none of
+it). Polish ticket 05
 replaced the ¼-unit Garden with its ⅛-unit fence and instanced plants: with
 the site's six Projects (three pinned: three flowers, three trees)
 `data-triangles` reads 13,732 (`42`), 14,538 (`harbour`), 14,978

@@ -8,8 +8,8 @@
  *   Garden, boats and buoys.
  * - `STRUCTURE` (⅛ unit): predefined structures (`structures/`): Landmarks,
  *   plants, boats, ships, Decoration, creatures. Particles share this size.
- * - `INTERIOR` (1/16 unit): the House Interior's rooms (`structures/room/`), a
- *   scene of its own (`interior.ts`).
+ * - `INTERIOR` (1/16 unit): the House Interior's rooms (`structures/room/`),
+ *   drawn in the World while the House is open (`house.ts`).
  *
  * The mesher and the soft-voxel material take any voxel size: seams and
  * bevels are fractions of one voxel, so they scale with it.

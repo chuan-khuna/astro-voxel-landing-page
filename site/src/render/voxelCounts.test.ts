@@ -6,6 +6,7 @@ import { plantStructure } from './gardenPlants';
 import { vesselStructure } from './vesselModels';
 import { decorationStructure } from './decorationModels';
 import { worldToVoxels } from './worldVoxels';
+import { furnishedRoom } from './interiorModel';
 
 const counts = { projects: 6, pinned: 2, clients: 5, partners: 3 };
 const world = generateWorld('harbour', counts);
@@ -46,6 +47,10 @@ describe('countVoxels', () => {
     expect(tally.decoration).toBe(world.decoration.reduce((sum, d) => sum + voxelsIn(decorationStructure(world.biome.id, d.kind)), 0));
   });
 
+  it('counts the House room as the World shows it: the Biome’s furnished room at 1/16 unit, the developer seated in it', () => {
+    expect(tally.houseRoom).toBe(voxelsIn(furnishedRoom(world.biome.id)));
+  });
+
   it('counts nothing for kinds the content leaves out', () => {
     const bare = countVoxels(generateWorld('harbour', { projects: 0, clients: 0, partners: 0 }));
     expect(bare.plants).toBe(0);
@@ -56,10 +61,10 @@ describe('countVoxels', () => {
 
   it('adds up to the voxels that are meshed, so no voxel counts twice', () => {
     const voxels = worldToVoxels(world);
-    // The boats, the ships, the Garden's plants and the House's lid are meshes of their own, outside the grids (the House Interior is a scene of its own).
+    // The boats, the ships, the Garden's plants and the House's lid and room are meshes of their own, outside the grids.
     expect(tally.inGrids).toBe(voxels.terrain.count + voxels.detail.count + voxels.structure.count);
     expect(tally.total).toBe(VOXEL_KINDS.reduce((sum, kind) => sum + tally[kind], 0));
-    expect(tally.total).toBeGreaterThan(tally.inGrids + tally.boats + tally.ships + tally.plants);
+    expect(tally.total).toBeGreaterThan(tally.inGrids + tally.boats + tally.ships + tally.plants + tally.houseRoom);
   });
 
   it('changes with the Seed', () => {

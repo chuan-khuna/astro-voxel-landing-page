@@ -11,7 +11,7 @@ The World uses four voxel sizes, each for its own kind of thing:
 | Structure | ⅛ unit | 8×8 | Landmarks, Service structures, Garden plants, fences, boats, ships, Decoration, animals, birds, fish |
 | Particle | ⅛ unit | 8×8 | leaves, butterflies, fireflies, snow, ash, foam: single-colour cubes moved in the shader, with no structure file |
 
-The House Interior becomes a scene of its own, drawn at **1/16 unit**: twice the World's structure resolution. Leaving the World for it is a camera transition, so its voxel count never adds to the World's.
+The House Interior is drawn at **1/16 unit**: twice the World's structure resolution. (Amended 2026-11-12, below: it is drawn in the World, not as a scene of its own.)
 
 Scale anchor at ⅛ unit: one storey is 16 voxels (2 units), a door 4×10, a standing person 12, a head 4×4×4.
 
@@ -25,8 +25,14 @@ We chose this because ¼ unit was too coarse for the detail the user wants on bu
 - `DETAIL = 4` splits into one constant per tier, and the mesher and soft-voxel material handle several voxel sizes (the bevel and seam width scale with the voxel).
 - `VoxelGrid` may need typed arrays instead of a `Map` for the larger grids; measure first.
 - Every structure footprint is drawn at 8 voxels per cell. Existing ¼-unit placeholders are redrawn, not upscaled.
-- The House Interior has its own scene, camera and lighting, entered after the roof lifts.
+- The House Interior's room is drawn in the World at 1/16 unit while the House is open (amended below).
 - The triangle budget in `docs/documents/rendering-and-shading.md` is measured again once the first ⅛-unit structures land.
+
+## Amendment, 2026-11-12: the House Interior stays in the World
+
+The House Interior is no longer a scene of its own (record `docs/records/2026-11-12-house-interior-in-world.md`, polish ticket 17). Polish ticket 04 built it that way: the World showed the room coarsened to ⅛ unit while the lid lifted, then the 1/16-unit Interior scene cut in, so the developer and the furniture visibly changed texture partway through.
+
+Now the World draws the room and the developer at 1/16 unit itself, as meshes of their own beside the ⅛-unit structure grid, and shows them only while the House's lid is lifted or lifting. The camera dives in as for any other Landmark close-up, under the World's own camera and lights. The 1/16-unit tier still holds only the room and the developer; a shut House costs nothing for them, and an open one about 2,100–2,800 triangles.
 
 ## Considered Options
 

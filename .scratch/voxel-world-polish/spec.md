@@ -105,7 +105,7 @@ None of it can be clicked, none of it hides a Landmark for long, and all of it s
 | Ground detail | ¼ unit | bridges, stairs, the Dock's deck and jetty |
 | Structure | ⅛ unit | Landmarks, Service structures, plants, fences, boats, ships, Decoration, creatures |
 | Particle | ⅛ unit | leaves, butterflies, fireflies, snow, ash, foam |
-| Interior | 1/16 unit | the House Interior scene |
+| Interior | 1/16 unit | the House Interior's room and developer, drawn in the World while the House is open |
 
 Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person 12.
 
@@ -182,11 +182,12 @@ Scale anchor at ⅛ unit: a storey is 16 voxels, a door 4×10, a standing person
 - The Mailbox stands in that yard. It is still the Contact Landmark with its own hotspot, but it has no footprint of its own.
 
 **House Interior**
-- The Interior is a scene of its own at 1/16 unit (ADR 0006). The roof lifts in the World, the camera dives in, and the Interior scene takes over.
+- The Interior is drawn in the World at 1/16 unit (ADR 0006, amended by ticket 17). The roof lifts, the camera dives in, and the room shows from the moment the lid starts to lift until it comes down, at the same detail all the way.
 - There is one furnished room per Biome, four in all.
 - Every House Variant in a Biome has a roof that lifts off and the same interior space, so that Biome's room fits it.
 - Every room has the developer at a computer, and clicking the developer opens Team.
 - Built in ticket 04: the rooms are `room/<biome>-1.structure` and the seated developer `developer/any-1.structure`, both at 1/16 unit. While the lid lifts, the World shows the room coarsened to ⅛ unit; once the lid is up and the camera at rest close on the House, the Interior scene (the House's shell and ground, the room at 1/16) takes over through the same camera. Shutting the House, zooming out or panning the room off screen hands back to the World, and the lid comes down.
+- Built in ticket 17 (replacing ticket 04's hand-over): there is no Interior scene. The World draws the room and the developer at 1/16 unit (`render/house.ts`), shown only while the lid is lifted or lifting; the ⅛-unit coarse room, `showsInterior` and `data-scene` are gone. The developer types and the screen scrolls on the shared clock; at Night the room's lamp or fire lights it warmly, worked out in the room's own material. An open House draws about 2,100–2,800 more triangles; a shut one none.
 
 **Model Gallery**
 - A dev-only page at `/dev/models`. It is not part of the production build.

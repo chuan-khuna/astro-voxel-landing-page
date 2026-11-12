@@ -4,17 +4,17 @@
  * voxel layer that bobs, `seaModel.ts` and `seaMaterial.ts`), the
  * Partners' sailing ships (`ships.ts`) and the Clients' moored boats
  * (`boats.ts`), both instanced, the House's moving parts (`house.ts`:
- * its lid and its lights), the Garden's plants (`garden.ts`, instanced), the
+ * its lid, its lights and the House Interior's room at 1/16 unit, shown
+ * while the lid is up), the Garden's plants (`garden.ts`, instanced), the
  * Decoration (`decoration.ts`, instanced, thinned on the reduced tier) and
- * the buoys' lamps. The House Interior is a
- * scene of its own (`interior.ts`).
+ * the buoys' lamps.
  * `setTheme` recolours the sea and lights the lamps and the House's windows
  * at Night; it never moves or adds anything.
  *
  * Everything that moves on its own runs on the shared Ambient Life clock
  * (`ambientClock.ts`): the sea bobs from its time uniform in the shader, and
- * `step(seconds)` puts what moves on the CPU (the Partners' ships) where it
- * is at the clock's `seconds`. Ambient Life parts add their own motion to
+ * `step(seconds)` puts what moves on the CPU (the Partners' ships, the
+ * developer at work in the House) where it is at the clock's `seconds`. Ambient Life parts add their own motion to
  * `step`, or read the clock's uniforms in their materials.
  */
 import * as THREE from 'three/webgpu';
@@ -38,15 +38,15 @@ import { createAmbientClock, type AmbientClock } from './ambientClock';
 
 export interface WorldObjects {
   group: THREE.Group;
-  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure and room, boats, ships, the House's lid, the Garden's plants, the Decoration the tier shows) and the sea's water and seabed. */
+  /** Triangles in the voxel meshes (terrain, bridges, stairs, Landmarks and the House's structure, boats, ships, the House's lid, the Garden's plants, the Decoration the tier shows) and the sea's water and seabed; not the House's room, drawn only while the lid is up (`house.roomTriangles`). */
   triangles: number;
   /** The Partners' ships, which sail (`step` moves them). */
   ships: Fleet;
-  /** The House's lid and its lights: `house.setOpening` lifts the lid. */
+  /** The House's lid, its lights and its room: `house.setOpening` lifts the lid and shows the room. */
   house: HouseParts;
-  /** Put everything that moves on the CPU (the ships) where it is at the shared clock's `seconds`. */
+  /** Put everything that moves on the CPU (the ships, the developer) where it is at the shared clock's `seconds`. */
   step: (seconds: number) => void;
-  /** Recolour the sea and light (or put out) the House's windows and the buoys' lamps. */
+  /** Recolour the sea and light (or put out) the House's windows and lamp and the buoys' lamps. */
   setTheme: (theme: Theme) => void;
   dispose: () => void;
 }
@@ -88,7 +88,7 @@ export function buildWorldObjects(
   group.add(sea.group);
   const ships = buildFleet(world);
   group.add(ships.group);
-  const house = buildHouse(world);
+  const house = buildHouse(world, clock);
   group.add(house.group);
   const lamps = buildLamps(world);
   group.add(lamps.group);
@@ -104,7 +104,10 @@ export function buildWorldObjects(
     triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + sea.triangles,
     ships,
     house,
-    step: (seconds) => ships.sail(seconds),
+    step: (seconds) => {
+      ships.sail(seconds);
+      house.work(seconds);
+    },
     setTheme: (theme) => {
       const tokens = THEME_TOKENS[theme].world;
       sea.setTheme(theme);

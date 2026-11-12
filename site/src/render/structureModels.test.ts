@@ -3,7 +3,6 @@ import { generateWorld, houseYard, type World } from '@/world';
 import { structureVoxels } from '@/structures/parse';
 import { drawStructure, housePlacement, houseStructure, houseWindowFaces, landmarkPlacement, landmarkStructure, turned } from './structureModels';
 import { worldColours, worldToVoxels } from './worldVoxels';
-import { coarsen, furnishedRoom } from './interiorModel';
 import { GROUND_DETAIL, STRUCTURE } from './voxelTiers';
 
 const counts = { projects: 6, clients: 3, partners: 2 };
@@ -19,21 +18,20 @@ describe('the House in the World', () => {
     }
   });
 
-  it('meshes its base and its room in the World\'s ⅛-unit structure grid, inside the House\'s 3×3 and on its ground', () => {
+  it('meshes only its base in the World\'s ⅛-unit structure grid, inside the House\'s 3×3 and on its ground', () => {
     for (const world of worlds) {
       const { structure } = worldToVoxels(world);
       const house = houseOf(world);
       const base = [...structureVoxels(houseStructure(world))].filter((v) => v.part === 'base');
-      const room = [...structureVoxels(coarsen(furnishedRoom(world.biome.id), 2))];
       expect(structure.size).toBe(1 / STRUCTURE);
-      // The House's 3×3 holds its base and the House Interior's room at ⅛ unit, nothing else (the Mailbox stands in the yard).
+      // The House's 3×3 holds its base, nothing else (the Mailbox stands in the yard; the room is drawn at 1/16 unit apart).
       const { origin } = houseYard(house).house;
       const inHouse = [...structure.voxels()].filter((v) => {
         const dx = Math.floor(v.x / STRUCTURE) - origin.x;
         const dz = Math.floor(v.z / STRUCTURE) - origin.z;
         return dx >= 0 && dx < 3 && dz >= 0 && dz < 3;
       });
-      expect(inHouse.length, world.seed).toBe(base.length + room.length);
+      expect(inHouse.length, world.seed).toBe(base.length);
       for (const v of inHouse) expect(v.y, world.seed).toBeGreaterThanOrEqual(house.y * STRUCTURE);
     }
   });

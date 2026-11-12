@@ -343,9 +343,9 @@ route on every `astro:after-swap`:
 - **About and Team open the House** (`routeView`): its lid (the roof and
   front walls) lifts off over 800 ms as the camera dives into the House
   Interior, a close-up of the room: a developer typing at a computer whose
-  screen scrolls code. Once the lid is up and the camera has landed, the
-  House Interior scene (the Biome's room at 1/16 unit) takes over from the
-  World; zooming out or panning the room off screen brings the World back.
+  screen scrolls code. The room (the Biome's room at 1/16 unit) is drawn in
+  the World from the moment the lid starts to lift until it is down again,
+  so it never changes detail as the House opens or shuts.
   About or Team opens beside it. While the House is
   open the developer has a link ("Meet the Team") that opens Team. Leaving
   for any other route (closing, Escape, Back, the menu) lowers the lid as
@@ -590,8 +590,7 @@ page does not change: the Tour is not a route.
 - About shows the House shut from outside; Team lifts its lid and looks
   into the room. The camera comes no closer than 1.3 × the close-up of the
   Landmark the Guide floats beside, so the Guide stays in view inside the
-  House too (the House Interior scene takes over there, and the Guide goes
-  with it).
+  House too.
 - Under reduced motion the camera, the Guide and the lid cut.
 
 **Controls.** Previous (inactive, `aria-disabled`, at the first step),

@@ -108,7 +108,7 @@ export type StructureRole = keyof typeof STRUCTURE_ROLES;
 
 export const isStructureRole = (role: string): role is StructureRole => Object.hasOwn(STRUCTURE_ROLES, role);
 
-/** The developer's moving parts (`developer/any-1`), each its own mesh in the House Interior scene. */
+/** The developer's moving parts (`developer/any-1`), each its own mesh in the World's open House. */
 export const DEVELOPER_PARTS = ['head', 'leftHand', 'rightHand'] as const;
 export type DeveloperPart = (typeof DEVELOPER_PARTS)[number];
 

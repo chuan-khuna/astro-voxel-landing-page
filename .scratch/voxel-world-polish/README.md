@@ -12,7 +12,7 @@
 | **detail voxel** | ¼ unit (`DETAIL = 4`) | ปัจจุบัน: ทุก structure · ต่อไป: สะพาน, บันได, พื้น Dock | ADR 0004, 0006 |
 | **structure voxel** | ⅛ unit | ต่อไป: Landmark, Service, ต้นไม้, เรือ, สัตว์, Decoration | ADR 0006 |
 | **particle voxel** | ⅛ unit | ใบไม้, ผีเสื้อ, หิ่งห้อย, หิมะ, เถ้า, ฟองคลื่น | ADR 0005, 0006 |
-| **interior voxel** | 1/16 unit | House Interior (อีก scene) | ADR 0006 |
+| **interior voxel** | 1/16 unit | House Interior (วาดใน World ตอนเปิดบ้าน) | ADR 0006 |
 | **ความสูงพื้น 1 ขั้น** | 1 unit = 4 detail voxel | ความสูงของ terrain | `terrain.ts` |
 
 แปลงหน่วย: 1 cell = 4×4 detail voxel = 8×8 structure voxel = 16×16 interior voxel
@@ -88,14 +88,14 @@ layout สำรอง (safe layout) เป็นเกาะกลมเกา�
 | **detail chunk** | ¼ unit | chunk ละ 16×16×16 unit (64³ voxel) · ใช้ grid เดียวกับ terrain chunk | ของที่อยู่กับที่ทั้งหมด: พื้นสะพาน · บันได · Station · ฐานและห้องของ House · ต้นไม้และดอกไม้ใน Garden · Dock, jetty และเสา · Mailbox (เรือ Client ย้ายไปเป็น structure ⅛ ตั้งแต่ ticket 06) | `worldVoxels.ts`, `landmarkModels.ts` |
 | **เรือ (ticket 06)** | ⅛ unit | `InstancedMesh` แบบละ 1 mesh · Boat 3 แบบ (1×1) · Ship 3 แบบ (1×3) ต่อ Biome | เรือ Client จอดที่ Dock · เรือ Partner แล่นไปตามเส้นทางรอบเกาะ · แบบเรือมาจาก hash ของ id | `boats.ts`, `ships.ts`, `vesselModels.ts` |
 | **house lid mesh** | ⅛ unit (ตั้งแต่ ticket 01) | 1 mesh | หลังคาและผนังด้านหน้า 2 ด้าน (มีประตูและหน้าต่าง) · ยกขึ้นได้เมื่อเปิดดูห้อง | `house.ts` |
-| **House Interior scene** (ticket 04) | 1/16 unit | อีก scene · mesh ห้อง 1 + หัวและมือ 3 | ห้องของ Biome พร้อม Developer · โครงบ้าน (⅛) และพื้นหญ้าใต้บ้าน · จอโค้ด · แสงของตัวเอง | `interior.ts`, `interiorModel.ts` |
+| **ห้อง House Interior** (ticket 04, 17) | 1/16 unit | อยู่ใน World · mesh ห้อง 1 + หัวและมือ 3 + จอ 1 · แสดงเฉพาะตอนฝาบ้านยกหรือกำลังยก | ห้องของ Biome พร้อม Developer · จอโค้ด · กลางคืนมีแสงอุ่นจากโคมหรือเตาผิง (คำนวณใน material ของห้อง) | `house.ts`, `interiorModel.ts` |
 | **ทะเล** (ticket 07) | 1 unit | mesh น้ำ 1 + พื้นทะเล 1 · น้ำทุก cell ใน grid และวงรอบอีก 8 cell · นอกนั้นเป็นแผ่นน้ำนิ่งกว้าง 6 เท่าของ World | น้ำ cell ละ 1 voxel ผิวบนอยู่ที่ระดับน้ำ 0.15 · ไล่สีจากตื้นริมฝั่งไปลึกที่ 6 cell · โปร่งแสงริมฝั่ง (เห็นพื้นทราย) ทึบที่ 3 cell · แต่ละ voxel โยกขึ้นลงเบาๆ ใน shader (หยุดเมื่อลดการเคลื่อนไหว) | `seaModel.ts`, `seaMaterial.ts`, `worldMeshes.ts` |
 
 **ส่วนที่ยังไม่เป็น voxel**
 
 | ส่วน | รูปแบบตอนนี้ | ที่มา |
 |---|---|---|
-| จอคอมพิวเตอร์ | ระนาบเรืองแสงที่เลื่อนแสดงโค้ด (ใน scene House Interior) | `interior.ts` |
+| จอคอมพิวเตอร์ | ระนาบเรืองแสงที่เลื่อนแสดงโค้ด (ในห้อง House Interior) | `house.ts` |
 
 **Block ที่จะเพิ่ม**
 
@@ -160,7 +160,7 @@ layout สำรอง (safe layout) เป็นเกาะกลมเกา�
 | Ground detail | ¼ unit | 4×4 | สะพาน, บันได, พื้นไม้และ jetty ของ Dock, ก้อนหิน |
 | **Structure** | **⅛ unit** | 8×8 | Landmark, Service, ต้นไม้, ดอกไม้, รั้ว, เรือ, Decoration, สัตว์ |
 | Particle | ⅛ unit | 8×8 | ใบไม้, ผีเสื้อ, หิ่งห้อย, หิมะ, เถ้า, ฟองคลื่น (ลูกบาศก์สีเดียว) |
-| **Interior** | **1/16 unit** | 16×16 | House Interior (เป็นอีก scene) |
+| **Interior** | **1/16 unit** | 16×16 | House Interior (วาดใน World ตอนเปิดบ้าน) |
 
 ### สเกลอ้างอิง
 
@@ -227,8 +227,8 @@ Garden แสดง Project ได้สูงสุด 9 รายการ ท
 
 ### House Interior (ticket 04)
 
-- เป็นอีก scene ที่ละเอียด **1/16 unit**
-- ลำดับการเข้า: ฝาบ้านยกขึ้นใน World → กล้องซูมเข้าห้อง → เปลี่ยนเป็น scene Interior · ตอนออกให้ย้อนลำดับกลับ
+- ละเอียด **1/16 unit** และวาดอยู่ใน World เอง ไม่เปลี่ยน scene (ticket 17 แทนการสลับ scene ของ ticket 04 เพราะตอนเปิดบ้านเห็น texture ของ Developer เปลี่ยน)
+- ลำดับการเข้า: ฝาบ้านยกขึ้นใน World และกล้องซูมเข้าห้อง · ห้องแสดงตั้งแต่ฝาเริ่มยกจนฝาปิดลง ที่ความละเอียดเดียวกันตลอด · ตอนออกให้ย้อนลำดับกลับ
 - ห้องคือพื้นที่ภายในของ House ที่วาดใหม่ละเอียดขึ้น 2 เท่า
 
 | ค่าอ้างอิง | 1/16 voxel |
@@ -243,7 +243,7 @@ Garden แสดง Project ได้สูงสุด 9 รายการ ท
 |---|---|---|
 | ห้อง | 32×32×31 | กล่อง interior ของ House คือ 16×18×16 ที่ ⅛ = 32×36×32 ที่ 1/16 · ผนังด้านหลังเป็นของตัวบ้าน (⅛) |
 | Developer นั่ง | 10×20×8 | หัว 6×5×6 และผม 1 ชั้น (เล็กกว่า 8×8×8 ในตาราง ให้สมส่วนกับตัว) |
-| voxel ต่อห้อง | 3,000–4,100 | สามเหลี่ยม 2,100–2,800 · scene ทั้งหมดราว 3,500 |
+| voxel ต่อห้อง | 3,000–4,100 | สามเหลี่ยม 2,100–2,800 · วาดเฉพาะตอนเปิดบ้าน (ticket 17) |
 | ห้องใน World (⅛) | 670–800 voxel | สามเหลี่ยม 1,000–1,200 · ใช้ตอนฝายกและกล้องซูม |
 
 ## Ambient Life เทียบกับ World

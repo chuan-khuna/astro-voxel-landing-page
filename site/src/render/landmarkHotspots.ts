@@ -7,7 +7,7 @@
  *
  * The developer inside the House has a link too (`data-hotspot="house-interior"`,
  * to Team), shown only while the House is open (`setInterior`), over the
- * developer in the House Interior's room (`interior.ts`).
+ * developer in the House Interior's room (`developerBounds`, `house.ts`).
  *
  * `place(camera)` re-positions them; call it whenever the camera changes.
  * Focusing a hotspot that is off screen moves the camera onto it.

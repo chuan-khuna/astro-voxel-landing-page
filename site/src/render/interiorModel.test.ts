@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { BIOME_IDS, generateWorld } from '@/world';
 import { variantsOf } from '@/structures';
 import { structureVoxels, voxelAt } from '@/structures/parse';
-import { coarsen, developerBox, furnishedRoom, interiorPlacement, roomLight, screenFace, showsInterior } from './interiorModel';
+import { developerBounds, developerBox, furnishedRoom, interiorPlacement, roomLight, screenFace } from './interiorModel';
 import { houseStructure, housePlacement } from './structureModels';
 import { INTERIOR, STRUCTURE } from './voxelTiers';
-import { worldToVoxels } from './worldVoxels';
 
 const counts = { projects: 8, clients: 6, partners: 4 };
 const worlds = Array.from({ length: 30 }, (_, i) => generateWorld(`interior-${i}`, counts));
@@ -72,31 +71,6 @@ describe('the furnished room', () => {
   });
 });
 
-describe('coarsen', () => {
-  it('halves a room to ⅛ unit: half the size, every coarse voxel from the fine voxels under it', () => {
-    for (const biome of BIOME_IDS) {
-      const room = furnishedRoom(biome);
-      const coarse = coarsen(room, 2);
-      expect(coarse.scale).toBe(STRUCTURE);
-      expect(coarse.size).toEqual({ x: Math.ceil(room.size.x / 2), y: Math.ceil(room.size.y / 2), z: Math.ceil(room.size.z / 2) });
-      const fine = [...structureVoxels(room)];
-      const voxels = [...structureVoxels(coarse)];
-      // Fewer voxels, but most of the room's volume still there.
-      expect(voxels.length).toBeLessThan(fine.length / 4);
-      expect(voxels.length * 8).toBeGreaterThan(fine.length * 0.6);
-      for (const v of voxels) {
-        const roles = new Set<string>();
-        for (let dx = 0; dx < 2; dx++) for (let dy = 0; dy < 2; dy++) for (let dz = 0; dz < 2; dz++) {
-          const f = voxelAt(room, v.x * 2 + dx, v.y * 2 + dy, v.z * 2 + dz);
-          if (f) roles.add(f.role);
-        }
-        expect(roles.has(v.role), `${biome} ${v.x},${v.y},${v.z}`).toBe(true);
-        expect(v.part).toBe('base');
-      }
-    }
-  });
-});
-
 describe('the room in the World', () => {
   it('stands in the House Variant’s interior space, whichever way the door faces', () => {
     const seen = new Set<string>();
@@ -115,40 +89,19 @@ describe('the room in the World', () => {
   });
 });
 
-describe('the room in the World’s structure grid', () => {
-  it('is the furnished room at ⅛ unit, in the House’s interior box, so it shows as the lid lifts', () => {
-    for (const world of worlds.slice(0, 8)) {
-      const { structure } = worldToVoxels(world);
-      const k = INTERIOR / STRUCTURE;
-      const coarse = coarsen(furnishedRoom(world.biome.id), k);
-      const at = interiorPlacement(world);
-      const s = houseStructure(world);
-      const box = s.interior!;
-      expect(box.max.x - box.min.x).toBeGreaterThanOrEqual(coarse.size.x);
-      for (const v of structureVoxels(coarse)) {
-        expect(structure.has(at.x / k + v.x, at.y / k + v.y, at.z / k + v.z), `${world.seed} ${v.x},${v.y},${v.z}`).toBe(true);
-      }
+describe('the developer in the World', () => {
+  it('sits inside the House’s 3×3, above its floor, the box a little over a unit tall', () => {
+    for (const world of worlds) {
+      const house = world.landmarks.find((l) => l.id === 'house')!;
+      const { min, max } = developerBounds(world);
+      const { origin } = house.footprint;
+      expect(min.x, world.seed).toBeGreaterThanOrEqual(origin.x);
+      expect(min.z, world.seed).toBeGreaterThanOrEqual(origin.z);
+      expect(max.x, world.seed).toBeLessThanOrEqual(origin.x + 3);
+      expect(max.z, world.seed).toBeLessThanOrEqual(origin.z + 3);
+      expect(min.y, world.seed).toBeGreaterThan(house.y);
+      // A seated figure about 20 voxels of 1/16 unit tall.
+      expect(max.y - min.y).toBeCloseTo(20 / 16, 0);
     }
-  });
-});
-
-describe('showsInterior', () => {
-  const settled = { open: true, opening: 1, flying: false, zoom: 4, interiorZoom: 4, room: { x: 0.2, y: -0.1 } };
-
-  it('takes over once the House is open and the camera has come to rest on it', () => {
-    expect(showsInterior(settled)).toBe(true);
-    // The Tour stops a little further out, so the Guide stays in view beside the House.
-    expect(showsInterior({ ...settled, zoom: 4 * 0.56 })).toBe(true);
-  });
-
-  it('waits for the lid to lift and the camera to land', () => {
-    expect(showsInterior({ ...settled, opening: 0.7 })).toBe(false);
-    expect(showsInterior({ ...settled, flying: true })).toBe(false);
-  });
-
-  it('hands back to the World when the House shuts, the visitor zooms out or pans the room off screen', () => {
-    expect(showsInterior({ ...settled, open: false })).toBe(false);
-    expect(showsInterior({ ...settled, zoom: 1.5 })).toBe(false);
-    expect(showsInterior({ ...settled, room: { x: 1.2, y: 0 } })).toBe(false);
   });
 });

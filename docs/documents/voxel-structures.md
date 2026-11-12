@@ -95,7 +95,7 @@ House's `lid` is its roof and its two front walls (high x and high z, the
 faces the camera sees): it lifts off as a mesh of its own, leaving the room
 open to the camera like a doll's house. The developer's `head`,
 `leftHand` and `rightHand` are their moving parts, each a mesh of its own
-in the House Interior scene.
+in the World while the House is open.
 
 ## Build-time parsing
 
@@ -146,7 +146,8 @@ biome)` lists one kind's Variants for a Biome.
   one part of the World's House Variant, and that Variant.
 - `drawStructures(world, …)`: the World's structure grid: the House's base,
   the Station, the Mailbox, the Dock's things and the Garden's fence. The House Interior's room
-  joins the grid at ⅛ unit (`drawWorldRoom`, below).
+  is not in the grid: the World draws it at its own 1/16 unit, as meshes of
+  its own (below).
 - `houseWindowFaces(world)`: the open +x and +z faces of window glass, lit
   at Night (`rendering-and-shading.md`, "The House and its room").
 
@@ -400,19 +401,19 @@ screen; their head and hands are moving parts.
 
 - `furnishedRoom(biome)`: the room with the developer merged in, one
   1/16-unit structure (cached), their moving parts kept apart.
-- `coarsen(structure, factor)`: the structure at a coarser scale: a block
-  of `factor`³ voxels becomes one if at least a quarter of it is filled, in
-  its most common role, all in `base`.
 - `interiorPlacement(world)`: where the room's min corner stands in a
   World (1/16-unit World voxels): the House Variant's interior box as
   placed. The room never turns with the door (the box is square in plan).
-- `drawWorldRoom(world, …)`: the furnished room coarsened to ⅛ unit and
-  drawn into the World's structure grid, so a room shows as the lid lifts.
-- `developerBox`, `screenFace`, `roomLight`: the developer's box (for their
-  link), the screen's face (for its glowing code) and the middle of the
+- `developerBox`, `screenFace`, `roomLight`: the developer's box in the
+  room, the screen's face (for its glowing code) and the middle of the
   lamps and fires (for the Night light).
-- `showsInterior(…)`: when the House Interior scene takes over from the
-  World (`rendering-and-shading.md`, "The House Interior").
+- `developerBounds(world)`: the developer's box in a World, in world units,
+  for their link to Team.
+
+The World draws the furnished room at 1/16 unit, only while the House's
+lid is lifted or lifting (`render/house.ts`; `rendering-and-shading.md`,
+"The House and its room"): the same room from the moment the lid starts
+to lift until it is down again (polish ticket 17).
 
 ## Data tests
 
@@ -427,8 +428,10 @@ Biome; that each fits the interior space of every House Variant in its
 Biome; that each seats the developer at its anchor, inside the room, clear
 of the furniture and on a seat; that the screen faces the developer at eye
 height; and that each has a lamp or a fire. `interiorModel.test.ts` checks
-the furnished room, `coarsen`, the room's place in the World and in its
-structure grid, and `showsInterior`.
+the furnished room, the room's place in the World and the developer's
+box in it. `structureModels.test.ts` checks that the room stays out of the
+World's structure grid, and `voxelCounts.test.ts` that the stats count it
+at 1/16 unit.
 
 For Decoration, `structures.test.ts` checks one piece of each kind per
 Biome, numbered 1; that each is 1×1, anchored on the ground and no taller
