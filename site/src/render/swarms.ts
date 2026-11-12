@@ -48,8 +48,8 @@ export const BUTTERFLY_BOB = 0.06;
 
 /**
  * What the shader adds to a particle's path at most, in world units, across
- * the ground and upwards, and half the cube, so the whole cube stays in its
- * area: a butterfly's bob, a snowflake's sway and the gusts' push.
+ * the ground and upwards, plus the cube's whole edge (more than half of it,
+ * so a turning cube stays in too), so the whole cube stays in its area: a butterfly's bob, a snowflake's sway and the gusts' push.
  */
 export const SWARM_WOBBLE: Record<ParticleKind, { across: number; up: number }> = {
   butterfly: { across: PARTICLE_SIZE, up: BUTTERFLY_BOB + PARTICLE_SIZE },

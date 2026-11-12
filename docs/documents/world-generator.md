@@ -348,8 +348,8 @@ Night. The World holds the areas of both; the renderer shows the ones out.
 `placeParticles` runs after Decoration and draws from a sequence of the
 Seed's own (`<seed>/particles`), so it never moves the layout or the
 Decoration. For each kind it shuffles the cells a swarm may be centred on
-(a flower clump's cell or one of its 8 neighbours for butterflies; grass
-cells for fireflies; any land for snow and ash) and takes them in turn
+(a flower clump's cell or one of its 8 neighbours for butterflies; any
+land for the others) and takes them in turn
 while the box fits, keeping areas of one kind 2.5 units apart, up to the
 kind's cap. A box (`PARTICLE_AREA`: butterflies 0.9 either side, 0.55–1.4
 units up, at most 6; fireflies 1.1, 0.55–1.1, 8; snow and ash 1.4,
@@ -358,6 +358,7 @@ units up, at most 6; fireflies 1.1, 0.55–1.1, 8; snow and ash 1.4,
 - is land no higher than the centre cell's ground, never a footprint, the
   Dock's jetty or a bridge, so the swarm never flies into the Landmarks or
   the ground;
+- for fireflies, is grass;
 - holds no Decoration taller than the box's floor (only grass, clumps and
   rocks, 0.5 units, may stand under a swarm);
 - lies below no Landmark sight line under the box's top
@@ -529,7 +530,7 @@ Seeds, never snapshots:
   centre's exactly), never a footprint, the jetty or a bridge, with no
   Decoration taller than its floor; no Landmark ground point hidden by any
   box's top (an independent ray march); butterflies centred on or beside a
-  clump, fireflies over grass and at most 1.25 units up;
+  clump, fireflies over grass (every cell) and at most 1.25 units up;
 
 ```sh
 cd site && bun run test

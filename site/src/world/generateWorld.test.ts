@@ -1112,7 +1112,7 @@ describe('generateWorld', { timeout: 20_000 }, () => {
       }
     });
 
-    it('lets butterflies flutter round a flower clump (on it or next to it) and fireflies hang low over grass', () => {
+    it('lets butterflies flutter round a flower clump (on it or next to it) and fireflies hang low over grass, all of it', () => {
       for (const seed of sampledSeeds) {
         const world = worldFor(seed);
         const { width, surface } = world.terrain;
@@ -1123,7 +1123,7 @@ describe('generateWorld', { timeout: 20_000 }, () => {
           const cell = { x: Math.floor(area.centre.x), z: Math.floor(area.centre.z) };
           if (area.kind === 'butterfly') expect(clumps.some((c) => Math.max(Math.abs(c.x - cell.x), Math.abs(c.z - cell.z)) <= 1), at).toBe(true);
           if (area.kind === 'firefly') {
-            expect(surface[Math.floor(area.centre.z) * width + Math.floor(area.centre.x)], at).toBe('grass');
+            for (const c of boxCells(area)) expect(surface[c.z * width + c.x], at).toBe('grass');
             expect(area.top - area.ground, at).toBeLessThanOrEqual(1.25);
           }
         }

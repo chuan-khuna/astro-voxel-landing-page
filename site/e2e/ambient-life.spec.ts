@@ -3,6 +3,7 @@
  * rock, butterflies, fireflies, snow and ash fly) in every Biome, by Day and at Night, and nothing logs an error; under reduced motion the clock stays frozen and the World never changes.
  */
 import { expect, test } from '@playwright/test';
+import { THEME_STORAGE_KEY } from '../src/lib/theme';
 import { collectErrors, worldReady } from './world';
 
 const clock = async (page: import('@playwright/test').Page) => Number(await page.locator('#world-canvas').getAttribute('data-clock'));
@@ -12,7 +13,7 @@ for (const seed of ['harbour', 'seed-1', 'seed-2', 'seed-3']) {
   for (const theme of ['day', 'night'] as const) {
     test(`Ambient Life runs on the Garden of ${seed} by ${theme} with no errors`, async ({ page }) => {
       const errors = collectErrors(page);
-      await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+      await page.addInitScript(([key, t]) => localStorage.setItem(key, t), [THEME_STORAGE_KEY, theme] as const);
       await page.goto(`/garden?seed=${seed}&life=full`);
       await worldReady(page);
       const before = await clock(page);

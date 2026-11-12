@@ -753,7 +753,7 @@ Night decides which are out (`PARTICLE_SETS`, `world/particles.ts`):
 - **Paths** (`swarms.ts`, pure, from a sequence of the Seed's own,
   `<seed>/swarms`): 3 butterflies an area, 5 fireflies, 8 snowflakes, 7
   ash flakes. Each moves about its `centre` by at most `sweep` on each axis,
-  plus `SWARM_WOBBLE` (what the shader adds, and half the cube), so it never
+  plus `SWARM_WOBBLE` (what the shader adds, and the cube's edge), so it never
   leaves its area. Butterflies and fireflies wander round a loose loop
   (`centre + sweep × (sin a, sin(1.7a + 1), sin(0.6a + 2))`, 5–9 s round for
   a butterfly, 9–15 s for a firefly). Snow and ash fall from the top of the

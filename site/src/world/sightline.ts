@@ -56,8 +56,8 @@ export function sightClearance(
         for (let k = 0; k <= SAMPLES_PER_CELL; k++) {
           forEachRayColumn(c.x + i / SAMPLES_PER_CELL, c.z + k / SAMPLES_PER_CELL, reach, (cx, cz, enter) => {
             if (cx >= 0 && cz >= 0 && cx < width && cz < depth) {
-              const i = cz * width + cx;
-              clearance[i] = Math.min(clearance[i]!, landmark.y + enter);
+              const at = cz * width + cx;
+              clearance[at] = Math.min(clearance[at]!, landmark.y + enter);
             }
             return false;
           });

@@ -16,7 +16,8 @@
  *   the box's floor;
  * - no Landmark's sight line to the camera passes below the box's top
  *   (`sightClearance`, the check Decoration uses);
- * - butterflies flutter round a flower clump (centred on it or next to it); fireflies hang low over grass;
+ * - butterflies flutter round a flower clump (centred on it or next to it);
+ *   fireflies hang low over grass, every cell under them;
  *   snow and ash drift down anywhere on the land;
  * - areas of one kind keep apart, and each kind has a cap.
  */
@@ -72,8 +73,11 @@ export function placeParticles(
 
   // Cells no box may cover: footprints, the jetty, bridges. And how tall the Decoration on each cell stands.
   const covered = new Uint8Array(width * depth);
-  for (const l of landmarks) for (const c of [...l.footprint.cells, ...l.jetty]) if (c.x >= 0 && c.z >= 0 && c.x < width && c.z < depth) covered[index(c.x, c.z)] = 1;
-  for (const b of bridges) for (const c of b.cells) covered[index(c.x, c.z)] = 1;
+  const cover = (c: { x: number; z: number }) => {
+    if (c.x >= 0 && c.z >= 0 && c.x < width && c.z < depth) covered[index(c.x, c.z)] = 1;
+  };
+  for (const l of landmarks) for (const c of [...l.footprint.cells, ...l.jetty]) cover(c);
+  for (const b of bridges) for (const c of b.cells) cover(c);
   const standing = new Float64Array(width * depth);
   for (const d of decoration) standing[index(d.cell.x, d.cell.z)] = DECORATION_HEIGHT[d.kind];
   const tallest = Math.max(...kinds.map((k) => PARTICLE_AREA[k].top));
@@ -92,6 +96,7 @@ export function placeParticles(
         const i = index(x, z);
         if (isle[i] === -1 || covered[i] || heights[i]! > ground) return null;
         if (standing[i]! > floor) return null;
+        if (kind === 'firefly' && surface[i] !== 'grass') return null;
         if (clearance[i]! < ground + top) return null;
       }
     }
@@ -105,13 +110,11 @@ export function placeParticles(
 
   const areas: ParticleArea[] = [];
   for (const kind of kinds) {
-    // Where a swarm of this kind may be centred: round a clump, over grass, or anywhere on the land.
+    // Where a swarm of this kind may be centred: round a clump, or anywhere on the land (fireflies' boxes must be all grass).
     const candidates =
       kind === 'butterfly'
         ? clumps.flatMap((d) => NEAR.map(([dx, dz]) => ({ x: d.cell.x + dx, z: d.cell.z + dz }))).filter((c) => c.x >= 0 && c.z >= 0 && c.x < width && c.z < depth && isle[index(c.x, c.z)] !== -1)
-        : kind === 'firefly'
-          ? land.filter((c) => surface[index(c.x, c.z)] === 'grass')
-          : land;
+        : land;
     // Shuffle (Fisher–Yates), so the areas spread over the whole World.
     const order = [...candidates];
     for (let i = order.length - 1; i > 0; i--) {
