@@ -12,7 +12,8 @@
  * meshed, so every copy carries them (see `voxelMaterial`).
  *
  * `softVoxelLook` is the look on its own, for materials of their own (the
- * sea, `seaMaterial.ts`).
+ * sea, `seaMaterial.ts`). Every voxel material takes the clouds' drifting
+ * shadows (`cloudShadow.ts`).
  */
 import * as THREE from 'three/webgpu';
 import {
@@ -40,6 +41,7 @@ import {
   vertexStage,
 } from 'three/tsl';
 import { LOOK } from './palette';
+import { cloudShade } from './cloudShadow';
 
 type Vec3Node = THREE.Node<'vec3'>;
 
@@ -115,7 +117,7 @@ export function voxelMaterial(
   const look = inLocal ? softVoxelLook(voxelSize, normalLocal, rest, true) : softVoxelLook(voxelSize, normalGeometry, positionWorld);
   const shade = inLocal ? softVoxelLook(voxelSize, normalGeometry, positionGeometry).shade : look.shade;
   material.normalNode = look.normalNode;
-  // Vertex colour already carries the baked AO.
-  material.colorNode = Fn(() => vec4(shade(attribute('color', 'vec3')), 1))();
+  // Vertex colour already carries the baked AO. Passing clouds shade it (`cloudShadow.ts`).
+  material.colorNode = Fn(() => vec4(shade(attribute('color', 'vec3')).mul(cloudShade(positionWorld)), 1))();
   return material;
 }

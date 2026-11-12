@@ -14,15 +14,20 @@
  *
  * Everything that moves on its own runs on the shared Ambient Life clock
  * (`ambientClock.ts`): the sea bobs, the plants sway (`windSway.ts`) and the
- * leaves fall (`leaves.ts`) and the Biome's butterflies, fireflies, snow
- * and ash fly (`particles.ts`) from its uniforms in the shader, and
+ * leaves fall (`leaves.ts`), the Biome's butterflies, fireflies, snow
+ * and ash fly (`particles.ts`) and the clouds drift over the sea
+ * (`clouds.ts`) from its uniforms in the shader, and
  * `step(seconds)` puts what moves on the CPU (the Partners' ships and the
  * Clients' boats on the swell, the developer at work in the House) where it
- * is at the clock's `seconds`. Ambient Life parts add their own motion to
+ * is at the clock's `seconds` (and the clouds' shadows, `cloudShadow.ts`,
+ * how far they have drifted). `setZoom` fades the clouds as the camera
+ * zooms in. Ambient Life parts add their own motion to
  * `step`, or read the clock's uniforms in their materials. `setLife` shows
  * as many living things as the life tier allows.
  */
 import * as THREE from 'three/webgpu';
+import { materialColor, positionWorld } from 'three/tsl';
+import { cloudShade } from './cloudShadow';
 import type { World } from '@/world';
 import { triangleCount, type ChunkMesh } from './mesher';
 import { oklchToLinear, shiftLightness } from './palette';
@@ -42,6 +47,9 @@ import { seaMaterial } from './seaMaterial';
 import { createAmbientClock, type AmbientClock } from './ambientClock';
 import { buildLeaves } from './leaves';
 import { buildParticles } from './particles';
+import { buildClouds } from './clouds';
+import { CLOUD_SHADOW } from './cloudShadow';
+import { cloudShadowDrift, cloudShadowStrength } from './cloudMath';
 import type { LifeTierName } from '@/lib/lifeTier';
 
 export interface WorldObjects {
@@ -54,9 +62,11 @@ export interface WorldObjects {
   house: HouseParts;
   /** Put everything that moves on the CPU (the ships and boats on the swell, the developer) where it is at the shared clock's `seconds`. */
   step: (seconds: number) => void;
-  /** Show as much Ambient Life as the life tier allows (the falling leaves, the Biome's particles). */
+  /** Show as much Ambient Life as the life tier allows (the falling leaves, the Biome's particles, the clouds). */
   setLife: (tier: LifeTierName) => void;
-  /** Recolour the sea, light (or put out) the House's windows and lamp and the buoys' lamps, and show the particles out by Day or at Night. */
+  /** Fade the clouds for the camera's zoom (gone in a Landmark's close-up); returns how much of them shows, 0–1. */
+  setZoom: (zoom: number) => number;
+  /** Recolour the sea, light (or put out) the House's windows and lamp and the buoys' lamps, show the particles out by Day or at Night, and colour the clouds (their shadows by Day only). */
   setTheme: (theme: Theme) => void;
   dispose: () => void;
 }
@@ -112,25 +122,33 @@ export function buildWorldObjects(
   group.add(leaves.group);
   const particles = buildParticles(world, clock);
   group.add(particles.group);
+  const clouds = buildClouds(world, clock);
+  group.add(clouds.group);
 
   return {
     group,
-    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + particles.triangles + sea.triangles,
+    triangles: triangleCount(terrain) + triangleCount(detail) + triangleCount(structure) + ships.triangles + boats.triangles + house.triangles + plants.triangles + decoration.triangles + leaves.triangles + particles.triangles + clouds.triangles + sea.triangles,
     ships,
     house,
     step: (seconds) => {
       ships.sail(seconds);
       boats.rock(seconds);
       house.work(seconds);
+      const drift = cloudShadowDrift(world.wind, seconds);
+      CLOUD_SHADOW.drift.value.set(drift.x, drift.z);
     },
     setLife: (life) => {
       leaves.setLife(life);
       particles.setLife(life);
+      clouds.setLife(life);
     },
+    setZoom: (zoom) => clouds.setZoom(zoom),
     setTheme: (theme) => {
       const tokens = THEME_TOKENS[theme].world;
       sea.setTheme(theme);
       particles.setTheme(theme);
+      clouds.setTheme(theme);
+      CLOUD_SHADOW.strength.value = cloudShadowStrength(theme);
       house.setLights(tokens);
       lamps.setLights(tokens);
     },
@@ -146,6 +164,7 @@ export function buildWorldObjects(
       decoration.dispose();
       leaves.dispose();
       particles.dispose();
+      clouds.dispose();
     },
   };
 }
@@ -233,6 +252,8 @@ function buildSea(world: World, clock: AmbientClock): {
   const water = seaMaterial(clock);
   const waterGeometry = addMesh(model.water, water.material, 'water');
   const seabedMaterial = new THREE.MeshStandardNodeMaterial({ roughness: 0.9, metalness: 0 });
+  // Passing clouds shade the seabed too (`cloudShadow.ts`).
+  seabedMaterial.colorNode = materialColor.mul(cloudShade(positionWorld));
   const seabedGeometry = addMesh(model.seabed, seabedMaterial, 'seabed');
 
   return {

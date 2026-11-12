@@ -51,6 +51,10 @@ export interface WorldTokens {
   windowLight: Oklch;
   /** The glow of a buoy's lamp. */
   buoyLight: Oklch;
+  /** The clouds' colour: white by Day, a dark grey-blue at Night. */
+  cloud: Oklch;
+  /** How much a cloud's shadow darkens the ground (0–1): none at Night. */
+  cloudShadow: number;
 }
 
 export interface ThemeTokens {
@@ -83,6 +87,8 @@ export const THEME_TOKENS: Record<Theme, ThemeTokens> = {
       lightsOn: false,
       windowLight: oklch(0.9, 0.09, 85),
       buoyLight: oklch(0.88, 0.1, 60),
+      cloud: oklch(0.99, 0.008, 240),
+      cloudShadow: 0.2,
     },
   },
   night: {
@@ -109,6 +115,8 @@ export const THEME_TOKENS: Record<Theme, ThemeTokens> = {
       lightsOn: true,
       windowLight: oklch(0.9, 0.09, 85),
       buoyLight: oklch(0.88, 0.1, 60),
+      cloud: oklch(0.45, 0.03, 265),
+      cloudShadow: 0,
     },
   },
 };

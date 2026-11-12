@@ -276,6 +276,28 @@ export interface ParticleArea {
   top: number;
 }
 
+/**
+ * A cloud (`clouds.ts`): a slightly translucent mass of 1-unit voxels that
+ * drifts high over the sea, down the wind, from `from` to `to` and again,
+ * fading in at the start and out at the end. Its body never passes over an
+ * Isle, nor between the camera and one.
+ */
+export interface Cloud {
+  /** Its voxels, 1 unit each: cells of its box, x and z across from its corner, y up from its base. */
+  voxels: Array<{ x: number; y: number; z: number }>;
+  /** Its box, in voxels: across (x), up (y), across (z). */
+  size: { x: number; y: number; z: number };
+  /** The height of its underside, in units. */
+  base: number;
+  /** Where its box's corner starts and ends a drift (world units): `to − from` runs down the wind. */
+  from: { x: number; z: number };
+  to: { x: number; z: number };
+  /** Seconds a drift from `from` to `to` takes. */
+  period: number;
+  /** How far through a drift it is at time 0, 0–1. */
+  phase: number;
+}
+
 /** The World's wind (`wind.ts`): which way it blows across the ground, a unit vector in x and z. Gusts are added at runtime. */
 export interface Wind {
   direction: { x: number; z: number };
@@ -311,6 +333,8 @@ export interface World {
   decoration: Decoration[];
   /** Where the Biome's particles live (`particles.ts`): by Day and at Night; the renderer shows the ones out. */
   particles: ParticleArea[];
+  /** The clouds (`clouds.ts`): drifting down the wind high over the sea, never over an Isle. */
+  clouds: Cloud[];
   /** The wind, from the Seed alone: Ambient Life sways and drifts with it. */
   wind: Wind;
   views: Record<ViewLandmarkId, View>;

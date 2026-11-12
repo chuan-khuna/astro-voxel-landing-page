@@ -44,6 +44,9 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `leaves.ts` | `buildLeaves(world, tier, clock)`: one `InstancedMesh` of ⅛-unit cubes moved in the vertex shader on the shared clock; `setLife(tier)` shows the tier's share. | yes |
 | `swarms.ts` | The Biome's particles, pure: `swarms(world)` (each butterfly's, firefly's, snowflake's and ash flake's path, colour and timing inside its spawn area), `particlesOut(world, theme)`, `swarmShown(total, lifeTier)` and `SWARM_WOBBLE` (see "Ambient Life: butterflies, fireflies, snow and ash"). | no |
 | `particles.ts` | `buildParticles(world, clock)`: one `InstancedMesh` of ⅛-unit cubes per particle kind, moved in the vertex shader on the shared clock and wind; `setTheme(theme)` shows the kinds out, `setLife(tier)` the tier's share. | yes |
+| `cloudMath.ts` | The clouds, pure: `cloudFade(world, zoom)` (how much of the clouds shows at a zoom: whole at the Overview, gone well before any close-up), `cloudsShown(total, lifeTier)`, `cloudShadowDrift(wind, seconds)` and `cloudShadowStrength(theme)` (see "Ambient Life: clouds and their shadows"). | no |
+| `clouds.ts` | `buildClouds(world, clock)`: every cloud meshed from its 1-unit voxels and merged into one translucent mesh, drifted in the vertex shader on the shared clock; `setTheme`, `setZoom` (the fade) and `setLife` (the tier's share). | yes |
+| `cloudShadow.ts` | `CLOUD_SHADOW` (the shared `drift` and `strength` uniforms) and `cloudShade(position)`: the clouds' soft shadows, a drifting noise mask every voxel material and the sea take into their colour. | yes |
 | `shipMotion.ts` | `sailingPath(cells)`: a ship's loop of cells smoothed into a closed path; `shipPose(path, distance)`: position and heading that far along it. | no |
 | `guideModel.ts` | The Guide's model: `guideVoxels(colours)` (a 6×6×6 ¼-unit cube centred on its origin, side fins, an antenna, the bezel on +x), `GUIDE_SCREEN` (the screen's rectangle) and `GUIDE_FACES` (a 12 × 10 pixel-eye face per mood, and a blink). | no |
 | `guideMotion.ts` | `guideSpot(world, id)` (where the Guide floats beside a placed Landmark), `voxelFlights` and `flightPoint` (the assembly), `travelPoint` (flying between spots on the Tour), `hoverPose(seconds)` (the bob) and `blinking(seconds)`. | no |
@@ -55,14 +58,14 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
 | `seaModel.ts` | The sea, pure (see "Sea"): `seaModel(world)` (the water voxels' tops and skirts, the flat water beyond them and the seabed, as typed arrays), `coastDistance` and `seaShade`, and `SEA_LEVEL`. | no |
-| `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?, { displace? })`: the TSL node material, in world space or (for instanced and moving meshes) the mesh's own space, optionally moving each vertex (a swaying plant); `softVoxelLook` is the look on its own (seams, bevel, jitter) for other materials. | yes |
+| `voxelMaterial.ts` | `voxelMaterial(voxelSize, space?, { displace? })`: the TSL node material, in world space or (for instanced and moving meshes) the mesh's own space, optionally moving each vertex (a swaying plant), shaded by the clouds' shadows (`cloudShadow.ts`); `softVoxelLook` is the look on its own (seams, bevel, jitter) for other materials. | yes |
 | `ambientClock.ts` | `createAmbientClock()`: the shared Ambient Life clock (`time`, seconds, advanced only while Ambient Life is alive) and wind (`wind`, the World's direction) uniforms; `windAt(clock, position)`: the wind at a world position in the shader, gusts rolling down the wind (see "Ambient Life: loop, clock and tiers"). | yes |
 | `ambientLife.ts` | `createAmbientLife`: whether the World is seen (tab shown, canvas on screen, motion allowed) and alive (seen, at a tier that moves), the life tier watch and the clock, for `mountWorld`'s loop. | DOM only |
 | `seaMaterial.ts` | `seaMaterial(clock)`: the sea's TSL material (the soft-voxel look at 1 unit, shallow to deep colour, opacity, the bob in the vertex shader on the shared clock) and its colour uniforms. | yes |
 | `structureMeshes.ts` | Repeated structures: `structureGeometry` (a structure meshed once, anchor at the origin), `structureInstances` (one `InstancedMesh` per structure, one instance per copy, optionally with a material of its own), `instanceMatrix` (a copy's transform: whole quarter turns about a pivot, plus an optional heave, roll and pitch for a vessel on the swell, pure maths) and `mergeChunks`. | yes |
 | `house.ts` | `buildHouse(world, clock?)`: the House Variant's lid (⅛ unit) as a mesh, the windows' lights, and the House Interior's room at 1/16 unit (furniture, the developer's head and hands, the code screen, the Night lamp worked out in the room's material); `setOpening` lifts the lid and shows the room while it is above 0, `setLights` lights the windows and the lamp, `work(seconds)` poses the developer; `roomTriangles` and `developer` (the developer's box, for their link). | yes |
 | `ships.ts` | `buildFleet(world)`: one `InstancedMesh` per ship structure, one instance per Partner of that kind, and `sail(seconds)` to move them along their loops, rocking on the swell. | yes |
-| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves, the Biome's particles and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves and particles; `setTheme` recolours the sea, lights the lamps and windows and shows the particles out by Day or at Night. | yes |
+| `worldMeshes.ts` | `buildWorldObjects(world, meshed?, tier?, clock?)`: chunk meshes plus the sea (water and seabed), the ships and boats, the House's moving parts, the Garden's plants, the Decoration, the falling leaves, the Biome's particles, the clouds and the buoys' lamps, as a `THREE.Group`; `step(seconds)` puts what moves on the CPU (the ships and boats on the swell, the developer, the clouds' shadows' drift) where it is at the clock's seconds; `setLife(tier)` shows the life tier's share of the leaves, particles and clouds; `setZoom(zoom)` fades the clouds; `setTheme` recolours the sea and the clouds, lights the lamps and windows, shows the particles out and sets the clouds' shadows (none at Night). | yes |
 | `guide.ts` | `createGuide`: the Guide's body, screen face and flying voxels, re-formed with each World (`formAt`), its idling (`step`), and its button and speech bubble over the canvas (`place`, `say`, `hush`). | yes |
 | `mountWorld.ts` | The scene runtime: renderer, camera, lights, shadows, the render loop (continuous while Ambient Life is alive, else on demand) and the render tier, opening the House, the Guide, Day and Night, swapping Worlds, `onFrame` for the stats overlay. | yes |
 | `statsOverlay.ts` | `createStatsOverlay({ dice, frame })`: the render stats toggle and card (see `site-project.md`, "Render stats"), loaded only in dev or with `?stats`; its styles are `statsOverlay.css`, imported inline. | DOM only |
@@ -783,6 +786,69 @@ Night decides which are out (`PARTICLE_SETS`, `world/particles.ts`):
   and phone, Day and Night, with no console errors
   (`e2e/ambient-life.spec.ts` runs all four by Day and at Night).
 
+### Ambient Life: clouds and their shadows
+
+Polish ticket 12 (ADR 0005). Clouds drift high over the sea round the
+Isles, and their soft shadows cross the whole World.
+
+- **Where** comes from `generateWorld` (`World.clouds`, see
+  `world-generator.md`, "Clouds"): up to 8 clouds, each a shape of 1-unit
+  voxels from the Seed (3–8 long down the wind, 2–5 wide, 2–3 high), its
+  underside 2–4 units above the tallest Landmark, and a drift of 6–14 units
+  down the wind at 0.2–0.4 units a second. All along its drift no column of
+  it is over an Isle, straight down or down the camera's view ray, so a
+  cloud never floats over an Isle nor hides one, wherever the camera goes.
+- **The body** (`clouds.ts`). Each cloud is meshed with the mesher (hidden
+  faces culled, light AO), so the translucent body shows one skin, and all
+  of them are merged into one mesh, cloud after cloud. Per vertex: its
+  cloud's start and underside, its drift and its period and phase. The
+  vertex shader moves it `fract(time / period + phase)` of the way along
+  its drift on the shared clock, and round again; it fades in over the
+  first 15% of a drift and out over the last 15%. The soft-voxel look at
+  1 unit is measured on the cloud's own voxels, so the seams ride with it.
+  It is lit, gives off 30% of its colour (so its shaded sides stay soft,
+  not stony), and is 80% opaque at most. A frozen clock holds every cloud
+  where it is.
+- **Day and Night.** `WorldTokens.cloud`: white by Day (L 0.99), a dark
+  grey-blue at Night (L 0.45, under the moon's dimmer light).
+- **Zoom** (`cloudFade`, `setZoom`, every frame). The clouds show whole up
+  to a tenth of the way (on a log scale of zoom) from the Overview to the
+  World's closest Landmark close-up, and are gone by 60% of the way, eased
+  between. They are gone in every Landmark's close-up, and in the phone
+  Story Scroll's framings (which stand back to 0.8× a close-up's zoom).
+  `canvas.dataset.clouds` says how much shows (`1.00` at the Overview,
+  `0.00` in a close-up).
+- **Tiers.** `setLife` shows the life tier's share of the clouds (all at
+  full, half rounded up at reduced and still) with a draw range over the
+  merged mesh.
+- **Shadows** (`cloudShadow.ts`). Computed in the shader, never cast into
+  the shadow map: `cloudShade(positionWorld)` is two octaves of MaterialX
+  noise (`mx_noise_float`) over the ground (blots about 11 units across),
+  thresholded softly, times `CLOUD_SHADOW.strength`. Every voxel material
+  (terrain, bridges, stairs, Landmarks, the House's lid and room, the
+  Garden's plants, Decoration, boats, ships, the Guide) and the sea's water
+  and seabed multiply their colour by it, so the shadows cross Isles and
+  sea alike. They do not follow the cloud bodies (which stay over the
+  sea). `CLOUD_SHADOW.drift` moves them down the wind at 0.3 units a second
+  (`cloudShadowDrift`), set from the clock's seconds in `objects.step`, so
+  they stop with the clock. `strength` is `WorldTokens.cloudShadow`: 0.2 by
+  Day (a shadow darkens to 80%), 0 at Night. Both uniforms are shared by
+  the page; the Model Gallery never sets them, so it has no shadows. The
+  shadow darkens the surface's colour, not just the sun's light, so the sky
+  light under a shadow dims too: it reads as a passing cloud's shade.
+- **Never in the way.** Clouds cast no shadow-map shadow, are never
+  frustum-culled (the shader moves them) and never raycast; they draw
+  after the sea (`renderOrder` 1), so the water shows through them.
+  At most 8 clouds of up to about 80 voxels; greedy merging keeps them to
+  a few hundred triangles a World (`harbour` 198 with 4 clouds, `seed-1`
+  354, `seed-2` 402; at most 538 over 100 Seeds), in `data-triangles`.
+- **Checked** in headless Chromium (SwiftShader), desktop and phone, with
+  no console errors: `harbour` and `seed-2` by Day at the Overview and
+  every Landmark's close-up, `seed-1` and `seed-3` by Day and at Night at
+  the Overview and the Garden
+  (`e2e/ambient-life.spec.ts` checks `data-clouds` at the Overview and in
+  the Garden's close-up).
+
 ## Day and Night
 
 The theme (`site-project.md`, "Day and Night") reaches the World through
@@ -798,8 +864,9 @@ page's CSS:
 | `skyLight`, `groundLight`, `skyIntensity` | the approved hemisphere, 1.1 | a dim blue hemisphere, 0.95 |
 | `waterShift` | 0 | −0.12 lightness on both water colours and the seabed |
 | `lightsOn` | off | the House's windows (`windowLight`, a warm white) and the buoys' lamps (`buoyLight`, a warm amber) glow |
+| `cloud`, `cloudShadow` | white clouds, shadows 0.2 | dark grey-blue clouds, no shadows |
 
-`setTheme` recolours the sky, the lights, the water's two colours and the seabed, shows
+`setTheme` recolours the sky, the lights, the water's two colours, the seabed and the clouds, sets the clouds' shadows, shows
 or hides the window panes and lamp boxes, sets `canvas.dataset.theme` and
 renders one frame. A new World (`show`) takes the theme in force. Nothing
 moves, nothing is added to or removed from the voxel meshes, the sun keeps
@@ -1035,4 +1102,4 @@ without; the phone tier held 29 fps.
 
 ## Not yet built
 
-Nothing in this document's scope. The other Ambient Life motions (clouds, shore waves and fish, animals and birds, including bats and seabirds) come with polish tickets 12–14.
+Nothing in this document's scope. The other Ambient Life motions (shore waves and fish, animals and birds, including bats and seabirds) come with polish tickets 13–14.

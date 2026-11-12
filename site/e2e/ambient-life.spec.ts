@@ -1,6 +1,6 @@
 /**
  * Ambient Life in the browser: with life on, the shared clock runs (the plants sway, leaves fall, boats
- * rock, butterflies, fireflies, snow and ash fly) in every Biome, by Day and at Night, and nothing logs an error; under reduced motion the clock stays frozen and the World never changes.
+ * rock, butterflies, fireflies, snow and ash fly, clouds drift) in every Biome, by Day and at Night, and nothing logs an error; under reduced motion the clock stays frozen and the World never changes. Clouds show at the Overview and are gone in a close-up.
  */
 import { expect, test } from '@playwright/test';
 import { THEME_STORAGE_KEY } from '../src/lib/theme';
@@ -35,5 +35,20 @@ test('under reduced motion nothing sways, falls or rocks', async ({ page }) => {
   await page.waitForTimeout(2000);
   expect(await clock(page)).toBe(0);
   expect((await canvas.screenshot()).equals(first)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('clouds show over the sea at the Overview and are gone in a Landmark\'s close-up', async ({ page }, info) => {
+  const errors = collectErrors(page);
+  const canvas = page.locator('#world-canvas');
+  // Phones never show the Overview (the Story Scroll starts at the Station): only the close-up is checked there.
+  if (info.project.name === 'desktop') {
+    await page.goto('/?seed=harbour&life=full');
+    await worldReady(page);
+    await expect(canvas).toHaveAttribute('data-clouds', '1.00');
+  }
+  await page.goto('/garden?seed=harbour&life=full');
+  await worldReady(page);
+  await expect(canvas).toHaveAttribute('data-clouds', '0.00');
   expect(errors).toEqual([]);
 });

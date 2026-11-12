@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { site } from '@/data/site';
-import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, generateWorld, type ContentCounts, type World } from './index';
+import { BIOME_COLOUR_ROLES, BIOME_IDS, DECORATION_HEIGHT, DECORATION_KINDS, GARDEN_HEIGHT, LANDMARK_MIN_HEIGHT, MINOR_BUILDINGS, MAX_CLOUDS, HOUSE_CELLS, LANDMARK_HEIGHT, LANDMARK_VARIANTS, MAX_BUOYS, BOAT_KINDS, SHIP_KINDS, PARTICLE_SETS, generateWorld, type ContentCounts, type World } from './index';
 
 const counts: ContentCounts = { projects: 6, clients: 5, partners: 3 };
 const PLACED = ['station', 'house', 'garden', 'dock', 'mailbox'];
@@ -1137,6 +1137,127 @@ describe('generateWorld', { timeout: 20_000 }, () => {
         autumn: { day: [], night: ['firefly'] },
         volcanic: { day: ['ash'], night: ['ash'] },
       });
+    });
+  });
+
+  describe('Clouds', () => {
+    /** Where a cloud's box corner is `u` (0–1) of the way through its drift. */
+    const along = (c: World['clouds'][number], u: number) => ({ x: c.from.x + (c.to.x - c.from.x) * u, z: c.from.z + (c.to.z - c.from.z) * u });
+
+    it('is deterministic: the same Seed and counts give the same clouds', () => {
+      expect(generateWorld('harbour', counts).clouds).toEqual(generateWorld('harbour', counts).clouds);
+      for (const seed of sampledSeeds.slice(0, 20)) expect(generateWorld(seed, counts).clouds, seed).toEqual(worldFor(seed).clouds);
+    });
+
+    it('gives nearly every World a few clouds, never more than the cap', () => {
+      let few = 0;
+      for (const seed of sampledSeeds) {
+        const n = worldFor(seed).clouds.length;
+        expect(n, seed).toBeLessThanOrEqual(MAX_CLOUDS);
+        if (n >= 3) few++;
+      }
+      expect(few).toBeGreaterThanOrEqual(sampledSeeds.length * 0.9);
+    });
+
+    it('shapes each cloud as a mass of 1-unit voxels 3–8 long, 2–5 wide and 2–3 high, its long side down the wind', () => {
+      for (const seed of sampledSeeds.slice(0, 60)) {
+        const world = worldFor(seed);
+        const { direction } = world.wind;
+        for (const cloud of world.clouds) {
+          const { size, voxels } = cloud;
+          const long = Math.max(size.x, size.z);
+          const short = Math.min(size.x, size.z);
+          expect(long, seed).toBeGreaterThanOrEqual(3);
+          expect(long, seed).toBeLessThanOrEqual(8);
+          expect(short, seed).toBeGreaterThanOrEqual(2);
+          expect(short, seed).toBeLessThanOrEqual(5);
+          expect(size.y, seed).toBeGreaterThanOrEqual(2);
+          expect(size.y, seed).toBeLessThanOrEqual(3);
+          if (Math.abs(direction.x) > Math.abs(direction.z)) expect(size.x, seed).toBeGreaterThanOrEqual(size.z);
+          else expect(size.z, seed).toBeGreaterThanOrEqual(size.x);
+          // Whole voxels inside its box, one each, filling every layer of it, its underside the biggest.
+          const keys = new Set(voxels.map((v) => `${v.x},${v.y},${v.z}`));
+          expect(keys.size, seed).toBe(voxels.length);
+          for (const v of voxels) {
+            expect(Number.isInteger(v.x) && Number.isInteger(v.y) && Number.isInteger(v.z), seed).toBe(true);
+            expect(v.x >= 0 && v.x < size.x && v.y >= 0 && v.y < size.y && v.z >= 0 && v.z < size.z, seed).toBe(true);
+          }
+          const layer = (y: number) => voxels.filter((v) => v.y === y).length;
+          for (let y = 1; y < size.y; y++) {
+            expect(layer(y), seed).toBeGreaterThan(0);
+            expect(layer(y), seed).toBeLessThanOrEqual(layer(y - 1));
+          }
+          expect(Math.max(...voxels.map((v) => v.x)) + 1, seed).toBe(size.x);
+          expect(Math.max(...voxels.map((v) => v.z)) + 1, seed).toBe(size.z);
+        }
+      }
+    });
+
+    it('drifts each cloud down the wind, higher than every Landmark, slowly', () => {
+      for (const seed of sampledSeeds.slice(0, 60)) {
+        const world = worldFor(seed);
+        const { direction } = world.wind;
+        const tallest = Math.max(...world.landmarks.map((l) => l.y + LANDMARK_HEIGHT[l.id]));
+        for (const cloud of world.clouds) {
+          const dx = cloud.to.x - cloud.from.x;
+          const dz = cloud.to.z - cloud.from.z;
+          const length = Math.hypot(dx, dz);
+          expect(length, seed).toBeGreaterThan(4);
+          // Along the wind, not against it.
+          expect((dx * direction.x + dz * direction.z) / length, seed).toBeCloseTo(1, 6);
+          expect(cloud.base, seed).toBeGreaterThanOrEqual(tallest + 2);
+          const speed = length / cloud.period;
+          expect(speed, seed).toBeGreaterThan(0.1);
+          expect(speed, seed).toBeLessThan(0.6);
+          expect(cloud.phase >= 0 && cloud.phase < 1, seed).toBe(true);
+        }
+      }
+    });
+
+    it('keeps every cloud over the sea all the way along its drift: never over an Isle, nor between the camera and one', () => {
+      for (const seed of sampledSeeds.slice(0, 60)) {
+        const world = worldFor(seed);
+        const { width, depth, isle } = world.terrain;
+        const land = (x: number, z: number) => {
+          const cx = Math.floor(x);
+          const cz = Math.floor(z);
+          return cx >= 0 && cz >= 0 && cx < width && cz < depth && isle[cz * width + cx] !== -1;
+        };
+        const over: string[] = [];
+        for (const cloud of world.clouds) {
+          const top = cloud.base + cloud.size.y;
+          // Each column of the cloud once.
+          const columns = [...new Map(cloud.voxels.map((v) => [`${v.x},${v.z}`, v])).values()];
+          for (let step = 0; step <= 20; step++) {
+            const at = along(cloud, step / 20);
+            for (const v of columns) {
+              for (const [ox, oz] of [[0.02, 0.02], [0.98, 0.02], [0.02, 0.98], [0.98, 0.98], [0.5, 0.5]] as const) {
+                // Straight down (s = 0), and down the camera's view ray (−1, −1, −1) from its top to the ground.
+                for (let s = 0; s <= top; s += 0.5) {
+                  const x = at.x + v.x + ox - s;
+                  const z = at.z + v.z + oz - s;
+                  if (land(x, z)) over.push(`cloud at ${at.x.toFixed(1)},${at.z.toFixed(1)} over ${x.toFixed(1)},${z.toFixed(1)}`);
+                }
+              }
+            }
+          }
+        }
+        expect(over.slice(0, 3), seed).toEqual([]);
+      }
+    });
+
+    it('drifts where the Overview sees it: over the sea round the Isles, not far off', () => {
+      for (const seed of sampledSeeds.slice(0, 60)) {
+        const world = worldFor(seed);
+        const { target, radius } = world.views.overview;
+        for (const cloud of world.clouds) {
+          // Where its middle is seen on the ground, half-way through its drift.
+          const mid = along(cloud, 0.5);
+          const lift = cloud.base + cloud.size.y / 2;
+          const seen = { x: mid.x + cloud.size.x / 2 - lift, z: mid.z + cloud.size.z / 2 - lift };
+          expect(Math.hypot(seen.x - target.x, seen.z - target.z), seed).toBeLessThan(radius * 1.6);
+        }
+      }
     });
   });
 });

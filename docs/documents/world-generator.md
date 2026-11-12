@@ -50,6 +50,7 @@ imports, so the generator stays pure.
 | `buoys.ts` | The buoys: sea marks just off the Isles, nearest the Dock first. |
 | `decoration.ts` | Decoration: `placeDecoration`, `DECORATION_HEIGHT` and `MINOR_BUILDINGS`: pieces of scenery on free land, each below the nearest Landmark and out of every Landmark's sight line. |
 | `particles.ts` | Particles' spawn areas: `placeParticles`, `PARTICLE_SETS` (which particles each Biome has by Day and at Night) and `PARTICLE_AREA` (each kind's box and cap). |
+| `clouds.ts` | The clouds: `placeClouds` and `MAX_CLOUDS`: masses of 1-unit voxels shaped from the Seed, drifting down the wind high over the sea, never over an Isle nor between the camera and one. |
 | `sightline.ts` | `forEachRayColumn`: the columns the camera's ray from a ground point passes through, the occlusion check shared by Landmark placement, Decoration and particles; `sightClearance`: how high anything may stand over each cell and leave every Landmark in view. |
 | `vessels.ts` | Boat and ship kinds: `BOAT_KINDS`, `SHIP_KINDS`, `vesselKind(id, kinds)` (a stable hash of the id) and the stand-in ids. |
 | `terrain.ts` | Isle layout, noise heights, surface kinds, cliff strata. |
@@ -89,6 +90,7 @@ terrain voxels (1 unit): x runs east, z south, y is height (0 = sea).
 | `buoys` | Up to 4 (`MAX_BUOYS`) sea cells, each with a buoy (its lamp glows at Night; see `rendering-and-shading.md`). Inside the grid, clear of the ships, boats, jetty and bridges. |
 | `decoration` | Decoration, in placement order (row by row): each piece's `kind` (`DECORATION_KINDS`), land `cell` and `facing` (its structure is drawn facing south; see "Decoration"). |
 | `particles` | Spawn areas of the Biome's particles, by Day and at Night: each a `kind` (`PARTICLE_KINDS`), a box of air (`centre`, `radius` across the ground, `floor` and `top` heights) over land no higher than its `ground` (see "Particles"). |
+| `clouds` | Up to 8 (`MAX_CLOUDS`) clouds: each one's `voxels` (1-unit cells of its box, `size` across, up and across, from its corner) and `base` (its underside's height), and its drift down the wind: `from` and `to` (its box's corner at the start and end), `period` (seconds a drift takes) and `phase` (0–1, how far through at time 0). See "Clouds". |
 | `wind` | The wind's `direction` across the ground, a unit vector, from the Seed alone. |
 | `views` | The two derived Landmarks, as camera views (`target`, `radius`): `overview` and `house-interior`. |
 
@@ -368,6 +370,46 @@ units up, at most 6; fireflies 1.1, 0.55–1.1, 8; snow and ash 1.4,
 Over the 200 test Seeds every World gets each of its Biome's kinds, almost
 always at the cap.
 
+### Clouds
+
+Polish ticket 12 (`clouds.ts`). Clouds are Ambient Life: slightly
+translucent masses of 1-unit voxels that drift down the wind high over the
+sea round the Isles (the renderer moves them in the shader and draws their
+soft shadows, which do cross the Isles, on its own; see
+`rendering-and-shading.md`, "Ambient Life: clouds and their shadows").
+`World.clouds` holds each cloud's shape and drift.
+
+`placeClouds` runs once the layout and views are done and draws from a
+sequence of the Seed's own (`<seed>/clouds`), so it never moves the layout.
+It tries up to 300 clouds and keeps up to 8 (`MAX_CLOUDS`):
+
+- **Shape**, from the Seed: an underside 3–8 voxels long and 2–5 wide
+  (corners cut, each 60% of the time, on 4 × 3 and bigger), then 1–2 more
+  layers, each a smaller lump of the one below (1–3 shorter, up to 1
+  narrower). Its long side lies along x or z, whichever is nearer the wind.
+- **Height**: its underside floats 2–4 units above the tallest Landmark's
+  top (`y + LANDMARK_HEIGHT`).
+- **Drift**: 6–14 units straight down the wind at 0.2–0.4 units a second
+  (15–70 s), centred where the cloud is to be seen: a point within 1.45
+  Overview radii of the Overview's centre, so it drifts where the Overview
+  shows it.
+- **Over the sea**: all the way along its drift (checked every ¼ unit),
+  every column of the cloud, straight down and down the camera's view ray
+  from its top to the ground (towards (−1, −1) one cell per unit of
+  height), meets no land nor any cell beside land. A cloud therefore never
+  floats over an Isle, nor between the camera and one, wherever the camera
+  pans or zooms (the camera never turns). A table of how far down the ray
+  the nearest land lies, worked out once per World from each cell's
+  diagonal neighbour, makes the check cheap: placing the clouds adds about
+  2 ms to a World.
+- **Apart**: clouds' drift lines are at least 4 units plus the cloud's
+  length apart across the wind, or 6 units apart along it.
+
+Over the 200 test Seeds about 70% of Worlds get all 8, and all but one at
+least 4. Since the view ray runs from a cloud towards the north-west, an
+Isle keeps clouds off a long band of sea to its south-east (a cloud there
+would be seen over the Isle).
+
 ### Buoys
 
 `buoys.ts` sets out up to 4 buoys after the ships, from the layout alone
@@ -531,6 +573,15 @@ Seeds, never snapshots:
   Decoration taller than its floor; no Landmark ground point hidden by any
   box's top (an independent ray march); butterflies centred on or beside a
   clump, fireflies over grass (every cell) and at most 1.25 units up;
+- clouds: the same Seed gives the same clouds; at least 3 on 90% of Worlds,
+  never over 8; each 3–8 long, 2–5 wide and 2–3 high in whole voxels
+  inside its box, every layer no bigger than the one below, its long side
+  down the wind; each drifts more than 4 units straight down the wind at
+  0.1–0.6 units a second, its underside 2 units or more above every
+  Landmark's top; all along its drift no column of it is over land,
+  straight down or down the view ray from its top (an independent march
+  over 60 Seeds); and it is seen within 1.6 Overview radii of the
+  Overview's centre;
 
 ```sh
 cd site && bun run test

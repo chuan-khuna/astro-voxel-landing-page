@@ -15,10 +15,12 @@
  * (`swell.ts`).
  *
  * Seams and bevels are measured at the vertex's place before the bob, so
- * they ride with the voxel.
+ * they ride with the voxel. The clouds' shadows drift across it
+ * (`cloudShadow.ts`).
  */
 import * as THREE from 'three/webgpu';
-import { attribute, hash, mix, normalGeometry, positionGeometry, positionLocal, sin, uniform, vec3 } from 'three/tsl';
+import { attribute, hash, mix, normalGeometry, positionGeometry, positionLocal, positionWorld, sin, uniform, vec3 } from 'three/tsl';
+import { cloudShade } from './cloudShadow';
 import { softVoxelLook } from './voxelMaterial';
 import { SEA_BOB, SEA_LEVEL } from './seaModel';
 import { TERRAIN } from './voxelTiers';
@@ -56,7 +58,8 @@ export function seaMaterial(clock: AmbientClock): SeaMaterial {
   const material = new THREE.MeshStandardNodeMaterial({ roughness: 0.35, metalness: 0, transparent: true });
   material.positionNode = positionLocal.add(vec3(0, bob, 0));
   material.normalNode = look.normalNode;
-  material.colorNode = look.shade(mix(shallow, deep, deepness));
+  // Passing clouds shade the water (`cloudShadow.ts`).
+  material.colorNode = look.shade(mix(shallow, deep, deepness)).mul(cloudShade(positionWorld));
   material.opacityNode = opacity;
   return { material, shallow, deep };
 }

@@ -21,7 +21,9 @@
  *   full to reduced to still on a slow device; `canvas.dataset.life` says
  *   which tier is on show. Each frame bumps `canvas.dataset.frames` and
  *   writes `canvas.dataset.clock` (the clock's seconds) and
- *   `canvas.dataset.camera` (target x, z and zoom), for checks.
+ *   `canvas.dataset.camera` (target x, z and zoom) and
+ *   `canvas.dataset.clouds` (how much of the clouds shows at that zoom,
+ *   0–1: they fade out in a Landmark's close-up), for checks.
  * - The camera rig (`cameraRig.ts`) pans and zooms within the World's bounds;
  *   Landmark hotspots (`landmarkHotspots.ts`) and Data Cards (`dataCards.ts`)
  *   follow the camera.
@@ -297,6 +299,8 @@ export async function mountWorld(
       }
       // As many leaves as the life tier allows (it may have dropped).
       objects?.setLife(life.tier());
+      // The clouds fade as the camera zooms in on a Landmark.
+      if (objects) canvas.dataset.clouds = objects.setZoom(rig.state.zoom).toFixed(2);
       if (lifting()) {
         opening = openingStep(opening, openTarget, dt, openingMs);
         objects?.house.setOpening(opening);

@@ -9,6 +9,7 @@ export { MAX_SEED_LENGTH } from './generateWorld';
 export { DECORATION_HEIGHT, MINOR_BUILDINGS } from './decoration';
 export { DECORATION_KINDS, PARTICLE_KINDS } from './types';
 export { PARTICLE_SETS } from './particles';
+export { MAX_CLOUDS } from './clouds';
 export { HOUSE_CELLS, HOUSE_PLOT, LANDMARK_HEIGHT, LANDMARK_MIN_HEIGHT, LANDMARK_VARIANTS, MAX_BOATS, MAX_FLOWERS, MAX_TREES, GARDEN_BED, GARDEN_HEIGHT, GARDEN_SIZE, gardenCounts, houseYard } from './landmarks';
 export { MAX_BUOYS } from './buoys';
 export { BOAT_KINDS, SHIP_KINDS, vesselKind } from './vessels';
