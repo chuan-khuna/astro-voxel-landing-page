@@ -42,6 +42,17 @@ Whenever you set up a Node project or add a package manager config, set a minimu
 
 In `site/`, import from another folder through the `@/` alias, which points at `site/src/` (e.g. `import { generateWorld } from '@/world'`), not a relative path climbing out of the current folder (`../../world`). A `./` import of a file in the same folder is fine. The alias is set in `site/tsconfig.json` (`paths`) and `site/vitest.config.ts` (`resolve.alias`); keep the two in step. Convert existing `../` imports when you touch a file; don't do sweeping import-only rewrites.
 
+### Browser tests
+
+Use Playwright for browser checks in `site/`, and keep its files where they belong:
+
+- **Lasting browser tests:** `site/e2e/*.spec.ts`, configured in `site/playwright.config.ts` and run with `bun run e2e`. If a check would be worth running again, write it here rather than as a one-off script.
+- **Throwaway scripts** (a one-off probe or a screenshot run): `site/.tmp/`, which is gitignored. Never leave them in `site/` itself or commit them.
+- **Screenshots for review:** `.scratch/<feature-slug>/screenshots/`, committed.
+- **Playwright output** (`test-results/`, `playwright-report/`): left where Playwright writes it, gitignored.
+
+Astro allows only one dev server per project. The e2e config serves its own build with `astro preview`; don't start a second `astro dev`.
+
 ## Project docs
 
 ### Documents
