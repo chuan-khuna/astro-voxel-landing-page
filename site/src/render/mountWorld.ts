@@ -62,6 +62,10 @@
  *   `ui.tierOverride` (`?tier=full|reduced`) picks one for measuring, and
  *   `ui.lifeOverride` (`?life=full|reduced|still`) pins a life tier;
  *   `canvas.dataset.tier` and `WorldView.tier` say which is on.
+ * - `ui.onLeaveHouse` hears the visitor zoom back out of the open House, or
+ *   pan it off screen, once the camera has been inside it (`houseLeave.ts`:
+ *   the margin keeps a camera still diving in from leaving); the page
+ *   closes the section.
  * - `ui.onExplore` hears the visitor pan, zoom or tab to a Landmark off
  *   screen: free exploration, which stops the Tour.
  * - `onFrame(listener)` hears about every frame that renders anyway (its
@@ -78,6 +82,7 @@ import { createCameraRig, type CameraRig } from './cameraRig';
 import { createLandmarkHotspots } from './landmarkHotspots';
 import { createDataCards } from './dataCards';
 import { landmarkFocus } from './landmarkFocus';
+import { insideHouse, outOfHouse } from './houseLeave';
 import { stateShowing, type CameraState } from './cameraMath';
 import { buildWorldObjects, type LifeShown, type WorldObjects } from './worldMeshes';
 import { openingStep } from './houseMotion';
@@ -201,6 +206,13 @@ export interface WorldFrame {
   guide?: { button?: HTMLElement | null; bubble?: HTMLElement | null; covers?: () => Rect[]; landmarks?: () => Rect[] };
   /** The visitor explores on their own: pans or zooms the World, or tabs to a Landmark off screen (the Tour stops for it). */
   onExplore?: () => void;
+  /**
+   * The visitor zooms back out past the open House's own close-up, or pans
+   * it off screen, after the camera has been inside it (`houseLeave.ts`):
+   * they have left it. Heard once per visit inside, on that pan or zoom,
+   * before `onExplore`; never for flights, cuts or the keyboard.
+   */
+  onLeaveHouse?: () => void;
   /** `?tier=full` or `?tier=reduced`: that render tier whatever the device (for measuring); anything else is ignored. */
   tierOverride?: string | null;
   /** `?life=full`, `?life=reduced` or `?life=still`: that Ambient Life tier, never dropped (for measuring); anything else is ignored. */
@@ -275,6 +287,12 @@ export async function mountWorld(
   let opening = 0;
   let openingMs = 0;
   const lifting = () => opening !== openTarget;
+  /** The House is open, or opening: more open than shut. */
+  const houseOpen = () => openTarget > 0.5;
+  /** The camera has been inside the open House (`houseLeave.ts`), so zooming or panning out of it leaves it. */
+  let inHouse = false;
+  /** Half the frame in frame units at zoom 1. */
+  const halfFrame = () => ({ x: camera.right, y: camera.top });
   // The Guide assembles and dissolves whenever it does; it bobs and blinks only while Ambient Life is alive.
   const moving = () => life.alive() || lifting() || guide.moving(life.alive());
   /** The time of the last frame while something moved (0 when nothing did). */
@@ -336,7 +354,23 @@ export async function mountWorld(
       if (moving()) schedule();
     });
   };
-  const rig = createCameraRig({ element: ui.frame, camera, onChange: requestRender, onInput: () => ui.onExplore?.() });
+  const rig = createCameraRig({
+    element: ui.frame,
+    camera,
+    onChange: () => {
+      // The camera has come inside the open House (a flight, a cut or the visitor): from now on it can leave it.
+      if (houseOpen() && !inHouse) inHouse = insideHouse(rig.state, landmarkFocus(current, 'house'), halfFrame());
+      requestRender();
+    },
+    onInput: () => {
+      // Zoomed or panned out of the open House: heard before `onExplore`, so the page still knows whether the Tour ran.
+      if (inHouse && outOfHouse(rig.state, landmarkFocus(current, 'house'), halfFrame())) {
+        inHouse = false;
+        ui.onLeaveHouse?.();
+      }
+      ui.onExplore?.();
+    },
+  });
   const hotspots = createLandmarkHotspots(ui.frame, ui.hotspots, (target) => {
     rig.jumpTo({ target, zoom: rig.state.zoom });
     ui.onExplore?.();
@@ -433,7 +467,9 @@ export async function mountWorld(
     frameCamera();
     lookAtViewCentre();
     hotspots.setWorld(next, objects.house.developer);
-    hotspots.setInterior(openTarget > 0.5);
+    hotspots.setInterior(houseOpen());
+    // A new World: the camera has yet to come inside its House.
+    inHouse = false;
     outlineModels = createOutlineModels({ world: next, objects, guide: guide.object, plantCell: hotspots.plantCell });
     showOutline();
     cards.setWorld(next);
@@ -477,7 +513,8 @@ export async function mountWorld(
     openTarget = amount;
     openingMs = ms;
     // The developer's link shows once the House is more open than shut.
-    hotspots.setInterior(amount > 0.5);
+    hotspots.setInterior(houseOpen());
+    if (!houseOpen()) inHouse = false;
     if (!lifting()) canvas.dataset.interior = amount === 1 ? 'open' : amount === 0 ? 'shut' : 'moving';
     requestRender();
   };

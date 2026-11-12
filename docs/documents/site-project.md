@@ -75,6 +75,13 @@ errors).
 - `ambient-life.spec.ts`: Ambient Life runs with no errors by Day and at
   Night; under reduced motion nothing moves; the clouds fade in a close-up;
   the fish, land animals and birds show as many as the life tier allows.
+- `house-leave.spec.ts`: on Team a little zoom out keeps the House open;
+  zooming out past the House's close-up goes to `/`, shuts the lid
+  (`data-interior`), hides the developer's link and leaves the camera where
+  the wheel put it, and Back opens Team again; dragging the House off
+  screen closes About; a wheel tick during the dive into the House keeps
+  About open (desktop; the phone's Story Scroll is covered by
+  `phone-scroll.spec.ts`).
 - `outline.spec.ts`: hovering the Station's link outlines its model
   (`canvas.dataset.outline` is `landmark:station`) while the link's box
   shows no outline or tint, moving away clears it, and a hotspot focused
@@ -462,6 +469,23 @@ route on every `astro:after-swap`:
   motion the lid and camera cut and
   the developer and screen keep still. A direct load of `/about` or
   `/about/team` opens the House at once.
+- **Zooming or panning out of the House closes it** (`render/houseLeave.ts`,
+  `onLeaveHouse`): on About or Team, once the camera has been inside the
+  House (1.25 times the House's own close-up or closer, the House on
+  screen), a wheel, pinch or drag that leaves the camera further back than
+  the House's own close-up (the whole House and some ground round it in
+  frame), or with the House's middle off screen, closes the section as its close link does (it clicks it: `/`, a history
+  entry, so Back opens it again). The lid comes down at once with the
+  usual 800 ms lift (a cut under reduced motion), the developer's link
+  hides, and the camera stays where the visitor took it rather than flying
+  back. The margin between the two zooms is the hysteresis: a camera
+  stopped early in its dive in (a wheel tick during the flight) has not
+  been inside, so About stays open. Zooming back in leaves the House shut:
+  only a route opens it.
+  Flights, cuts and tabbing to a Landmark never close it. On the Tour the
+  first pan or zoom only ends the Tour (the House then follows the route);
+  the next one closes it. The Story Scroll takes no pan or zoom: scrolling
+  past About and Team shuts the House there.
 - **Moving between sections** flies from one Landmark to the next. The
   World view to return to is still the one from before the first section.
 - **Opening a route directly** mounts the World and cuts the camera to the
@@ -725,7 +749,7 @@ Tour button.
 | How | What happens |
 |---|---|
 | Finish or Exit (button, Escape) | The camera flies back to where it was before the Tour, the House follows the route again, and the Guide flies back to the Station and says an `idle` line. |
-| Free exploration (a drag, pinch or wheel on the World, or tabbing to a Landmark off screen; `onExplore`) | The camera stays with the visitor; the House follows the route; the Guide flies home. |
+| Free exploration (a drag, pinch or wheel on the World, or tabbing to a Landmark off screen; `onExplore`) | The camera stays with the visitor; the House follows the route; the Guide flies home. On About or Team, a later pan or zoom out of the House closes the section (see "Routes over the World"). |
 | Any navigation (a hotspot, the menu, the card's "Open" link, the dice, Back or Forward; `astro:before-preparation`) | The route moves the camera as usual. A section opened from the Overview closes back to where the Tour began. |
 
 The Tour never touches the URL or the history, so routes and Back and

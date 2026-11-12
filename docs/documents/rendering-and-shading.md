@@ -60,6 +60,7 @@ the prototype the user approved in ticket 01 (`prototypes/look/`).
 | `storyMath.ts` | The Story Scroll on phones (polish 18): `storyPosition(scrollY, stops)` (which two sections the page is between and how far), `sectionInView`, `storyFraming` (the camera there, eased; a cut under reduced motion) and `storyOpening` (how far the House is open). Tested in `storyMath.test.ts`. See `site-project.md`, "Phones: the Story Scroll". | no |
 | `dataCardMath.ts` | Data Card maths: `nearestDataCard` (which card shows), `dataCardAnchors` (where a card stands or hangs), `dataCardTransform` and `placeDataCard` (the CSS `matrix3d`). | no |
 | `landmarkFocus.ts` | `landmarkFocus(world, id)`: the point to look at and the zoom for each of the seven Landmarks. | no |
+| `houseLeave.ts` | `insideHouse(state, house, half)`: whether the camera is inside the open House (`INSIDE_ZOOM`, 1.25 times the House's own close-up or closer, the House on screen); `outOfHouse`: whether it has left it (further back than the House's own close-up, or the House's middle off screen). Once inside, a pan or zoom out calls `ui.onLeaveHouse` (`mountWorld.ts`) and the page closes About or Team; the margin between the two keeps a camera still diving in from closing it. Tested in `houseLeave.test.ts`. | no |
 | `world.worker.ts` | The World Web Worker: `generateWorld` then `meshWorld`, posting the World and its chunk meshes back (mesh buffers transferred). | no |
 | `worldSource.ts` | `createWorldSource()`: main-thread side of the worker, with a per-Seed cache. | no |
 | `seaModel.ts` | The sea, pure (see "Sea"): `seaModel(world)` (the water voxels' tops and skirts, the flat water beyond them and the seabed, as typed arrays, with each voxel's surf data: the coast's distance and the calm at its corners), `coastDistance` (from `world/coast.ts`) and `seaShade`, and `SEA_LEVEL`. | no |
@@ -547,11 +548,11 @@ water, and rock on the same swell (polish ticket 10, `swell.ts`, see
 
 `mountWorld(canvas, world, meshed?, ui?)` returns a `WorldView`
 `{ show(world, meshed?), camera, focus(id, { at?, ms }), focusState(id, at?, zoomScale?), setViewCentre(at), setInterior(open, ms), setOpening(amount, ms), setDataCardFocus(id), setTheme(theme), guide, onFrame(listener), backend, tier, lifeTier, dispose() }`. `ui` is
-`{ frame, hotspots, cards?, theme?, guide?, onExplore?, tierOverride?, lifeOverride? }`: the element round the canvas that takes pan and zoom
+`{ frame, hotspots, cards?, theme?, guide?, onExplore?, onLeaveHouse?, tierOverride?, lifeOverride? }`: the element round the canvas that takes pan and zoom
 input, the Landmark hotspot links inside it, the Data Cards, the theme of the first frame and the Guide's
 button, speech bubble and the boxes its bubble avoids (default: the canvas's
 parent, no hotspots, no cards, Day, no Guide button or bubble). `guide` is the Guide's
-`{ formed, say(lines, { hold? }), hush(), flyTo(spot, ms) }` (see "The Guide"), and `guideSpot(id)` is its spot beside a placed Landmark of the World on show. `ui.onExplore` hears the visitor pan or zoom (`cameraRig`'s `onInput`) or tab to a Landmark off screen: free exploration, which ends the Tour. `setViewCentre(at)` says where the visitor
+`{ formed, say(lines, { hold? }), hush(), flyTo(spot, ms) }` (see "The Guide"), and `guideSpot(id)` is its spot beside a placed Landmark of the World on show. `ui.onExplore` hears the visitor pan or zoom (`cameraRig`'s `onInput`) or tab to a Landmark off screen: free exploration, which ends the Tour. `ui.onLeaveHouse` hears a pan or zoom (never a flight, cut or Tab) that leaves the open House after the camera has been inside it (`houseLeave.ts`), before `onExplore`; the page closes About or Team. `setViewCentre(at)` says where the visitor
 looks (CSS px from the frame's centre: the middle of the part the floating
 cards leave free, from `freeCentre`), which picks the Data Card shown and
 is where the pan bounds apply (`CameraLimits.at`, below). `setInterior(open, ms)`

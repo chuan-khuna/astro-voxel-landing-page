@@ -404,6 +404,8 @@ const stillAlt = site.seo.imageAlt;
     let shownLandmark: LandmarkId = 'overview';
     /** Where the camera was on the World before a section opened; closing returns there. */
     let worldState: CameraState | null = null;
+    /** The visitor zoomed or panned out of the House and its section is closing: the camera stays where they took it. */
+    let leavingHouse = false;
     /** The Seed asked for, then the World's Seed as generated (an over-long Seed falls back to the default). */
     let linkSeed = defaultSeed;
     /** Render stats: only in dev or with `?stats`, decided once per visit (links keep `?stats`). */
@@ -521,9 +523,12 @@ const stillAlt = site.seo.imageAlt;
       // About and Team open the House: its lid lifts as the camera dives in; anywhere else it comes down.
       view.setInterior(interior, roofMs(ms));
       if (id === 'overview') {
-        // A section opened directly has no earlier view of the World: go to the Overview.
-        if (worldState) void view.camera.flyTo(worldState, ms);
-        else if (fresh || shownLandmark !== 'overview') void view.focus('overview', { at, ms });
+        // Back to where the World was left. Left by zooming or panning out of the House, the camera stays where the visitor took it.
+        if (!leavingHouse) {
+          // A section opened directly has no earlier view of the World: go to the Overview.
+          if (worldState) void view.camera.flyTo(worldState, ms);
+          else if (fresh || shownLandmark !== 'overview') void view.focus('overview', { at, ms });
+        }
         worldState = null;
       } else {
         // Kept if a Tour left one (where the camera was before it): closing returns there.
@@ -531,6 +536,25 @@ const stillAlt = site.seo.imageAlt;
         void view.focus(focus, { at, ms });
       }
       shownLandmark = id;
+      leavingHouse = false;
+    };
+
+    /**
+     * The visitor zoomed back out of the open House, or panned it off screen
+     * (`render/houseLeave.ts`): About or Team closes as its close button
+     * closes it (to the World, a history entry Back returns through), the lid
+     * coming down at once rather than when the page is in, and the camera
+     * staying where the visitor took it. Not on the Tour (the pan or zoom
+     * ends it, and the House follows the route again: the next one closes
+     * it) nor on the Story Scroll (the scroll moves the lid).
+     */
+    const leaveHouse = () => {
+      if (leavingHouse || tour || story.on || !liveView || !routeView(routeLandmark()).interior) return;
+      const close = ownPanel()?.querySelector<HTMLAnchorElement>('[data-panel-close]');
+      if (!close) return;
+      leavingHouse = true;
+      liveView.setInterior(false, roofMs(flightMs()));
+      close.click();
     };
 
     /**
@@ -647,6 +671,7 @@ const stillAlt = site.seo.imageAlt;
             guide: { button: guideButton, bubble: guideBubble, covers, landmarks },
             // Free exploration stops the Tour.
             onExplore: () => endTour('explore'),
+            onLeaveHouse: leaveHouse,
             // `?tier=full|reduced` picks a render tier whatever the device, for measuring.
             tierOverride: new URL(location.href).searchParams.get('tier'),
             // `?life=full|reduced|still` pins an Ambient Life tier, for measuring.

@@ -311,3 +311,12 @@ These need your call:
 - [ ] **The outline draws over whatever stands in front of the model.** It has no depth test, so terrain never hides it. Something in front, such as the developer's chair, is drawn over too.
 - [ ] **Test seams were not agreed up front.** The TDD seams are `outlineKey` and `outlinedKeys` (`outlineTargets.test.ts`), plus `e2e/outline.spec.ts` through `canvas.dataset.outline`.
 - [ ] **Headless Chromium quirk.** Headless Chromium on macOS without `--use-angle=metal` logs WebGPU "Invalid Texture" errors and draws a blank World on screenshots. It does this even with nothing outlined, so it is not caused by this change. The e2e runs use WebGL 2 (SwiftShader) and are unaffected.
+
+## Close the House when zooming out of it
+
+- [ ] **Zooming out of the House closes About or Team, not only the lid.** Being in the House means the About or Team route with its panel, so leaving it takes the panel's own close path (`/`, a history entry; Back opens it again) and the camera stays where the visitor took it. Say if you would rather keep the panel open and only lower the lid (then Back, Close and Escape need a second meaning).
+- [ ] **Thresholds.** Inside is 1.25 × the House's own close-up or closer, with the House on screen; out is further back than the House's own close-up (the Interior's close-up is about 2.3 × it on every sampled Seed), or the House's middle off screen. The House counts as on screen even behind the side panel.
+- [ ] **Tour and an open route.** On About with the Tour at another Landmark, the first pan or zoom only ends the Tour, and the House then follows the route and opens wherever the camera is (behaviour from before this change). It does not close until the camera has been inside it again.
+- [ ] **A navigation overtaking the close.** If another link or Back is taken before the close lands, that route wins; the World view a later close returns to may be the one from before About opened. If the phone's Story Scroll turns on during the close, the camera stays put on the next return to the Overview once it turns off. Both are rare and left.
+- [ ] **Test seams were not agreed up front.** `insideHouse` and `outOfHouse` (`houseLeave.test.ts`), plus `e2e/house-leave.spec.ts` (desktop).
+
